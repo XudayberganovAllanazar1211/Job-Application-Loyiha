@@ -218,9 +218,40 @@ class DB:
     def q(self, sql, args=()):
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute(sql, args)
-        conn.commit()
-        return cursor
+        try:
+            cursor.execute(sql, args)
+            conn.commit()
+            return QueryResult(conn, cursor)
+        except Exception:
+            conn.rollback()
+            conn.close()
+            raise
+
+
+class QueryResult:
+    def __init__(self, conn, cursor):
+        self.conn = conn
+        self.cursor = cursor
+
+    def fetchone(self):
+        row = self.cursor.fetchone()
+        if row is None:
+            self.close()
+        return row
+
+    def fetchall(self):
+        rows = self.cursor.fetchall()
+        self.close()
+        return rows
+
+    @property
+    def rowcount(self):
+        return self.cursor.rowcount
+
+    def close(self):
+        if self.conn is not None:
+            self.conn.close()
+            self.conn = None
 
 
 db = DB()
@@ -318,7 +349,7 @@ def send_code():
     email_key = d["email"].strip().lower()
     pending_verifications[email_key] = {
         "code": code,
-        "data": {**d, "email": email_key, "username": d["username"].strip()},
+        "data": {**d, "email": email_key, "username": d["username"].strip(), "password": generate_password_hash(d["password"])},
         "expiry": datetime.datetime.now() + datetime.timedelta(minutes=10),
     }
 
@@ -362,7 +393,7 @@ def verify_code():
                VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 ud["username"],
-                generate_password_hash(ud["password"]),
+                ud["password"],
                 ud["first_name"],
                 ud["last_name"],
                 ud["birthday"],
