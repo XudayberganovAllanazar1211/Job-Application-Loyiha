@@ -21,6 +21,11 @@ export async function api(path, { method = "GET", body = null, token = "", signa
             data = { msg: text || "Serverdan noto'g'ri javob keldi." }
         }
 
+        if (response.status === 401 && token) {
+            localStorage.removeItem("token")
+            localStorage.removeItem("user")
+        }
+
         if (!response.ok) {
             return {
                 ...data,
