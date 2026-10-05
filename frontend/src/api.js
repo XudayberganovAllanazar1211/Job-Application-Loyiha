@@ -1,20 +1,40 @@
-const API_BASE = "http://localhost:5000"
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000"
 
-export async function api(path, { method = "GET", body = null, token = "" } = {}) {
-    const response = await fetch(API_BASE + path, {
-        method,
-        headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        body: body ? JSON.stringify(body) : null
-    })
-
-    const text = await response.text()
-
+export async function api(path, { method = "GET", body = null, token = "", signal } = {}) {
     try {
-        return text ? JSON.parse(text) : {}
-    } catch {
-        return { msg: text }
+        const response = await fetch(API_BASE + path, {
+            method,
+            headers: {
+                ...(body ? { "Content-Type": "application/json" } : {}),
+                ...(token ? { Authorization: `Bearer ${token}` } : {})
+            },
+            body: body ? JSON.stringify(body) : null,
+            signal
+        })
+
+        const text = await response.text()
+        let data = {}
+
+        try {
+            data = text ? JSON.parse(text) : {}
+        } catch {
+            data = { msg: text || "Serverdan noto'g'ri javob keldi." }
+        }
+
+        if (!response.ok) {
+            return {
+                ...data,
+                ok: false,
+                status: response.status,
+                msg: data?.msg || `Server xatosi (${response.status})`
+            }
+        }
+
+        return { ...data, ok: true, status: response.status }
+    } catch (error) {
+        if (error?.name === "AbortError") {
+            return { ok: false, msg: "So'rov bekor qilindi." }
+        }
+        return { ok: false, msg: "Server bilan bog'lanib bo'lmadi. Backend ishlayotganini tekshiring." }
     }
 }
