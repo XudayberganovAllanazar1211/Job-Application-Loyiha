@@ -546,15 +546,18 @@ def accept():
     if not job_id:
         return jsonify({"msg": "job_id ko'rsatilmadi"}), 400
 
-    job = db.q("SELECT user_id, status, worker_id FROM jobs WHERE id=?", (job_id,)).fetchone()
+    job = db.q("SELECT user_id FROM jobs WHERE id=?", (job_id,)).fetchone()
     if not job:
         return jsonify({"msg": "Job topilmadi"}), 404
     if job[0] == request.uid:
         return jsonify({"msg": "O'zingiz yaratgan ishni qabul qila olmaysiz!"}), 400
-    if job[1] != "active" or job[2] is not None:
-        return jsonify({"msg": "Ushbu ish allaqachon boshqa foydalanuvchi tomonidan qabul qilingan!"}), 400
 
-    db.q("UPDATE jobs SET worker_id=?,status='accepted' WHERE id=?", (request.uid, job_id))
+    result = db.q(
+        "UPDATE jobs SET worker_id=?,status='accepted' WHERE id=? AND status='active' AND worker_id IS NULL AND user_id!=?",
+        (request.uid, job_id, request.uid),
+    )
+    if result.rowcount != 1:
+        return jsonify({"msg": "Ushbu ish allaqachon boshqa foydalanuvchi tomonidan qabul qilingan!"}), 409
     return jsonify({"msg": "ok"})
 
 
@@ -590,6 +593,10 @@ def confirm_finish():
         return jsonify({"msg": "Job topilmadi"}), 404
     if job[0] != request.uid:
         return jsonify({"msg": "Ruxsat berilmadi"}), 403
+    if job[1] != "pending_finish":
+        return jsonify({"msg": "Bu ish hozir tasdiqlashni kutmayapti"}), 400
+    if choice not in ("yes", "no"):
+        return jsonify({"msg": "choice faqat yes yoki no bo'lishi mumkin"}), 400
 
     if choice == "yes":
         now_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -611,7 +618,7 @@ def msg():
     if not job_id or not message_text:
         return jsonify({"msg": "job_id va message maydonlari talab qilinadi"}), 400
 
-    job = db.q("SELECT user_id, worker_id FROM jobs WHERE id=?", (job_id,)).fetchone()
+    job = db.q("SELECT user_id, worker_id, status FROM jobs WHERE id=?", (job_id,)).fetchone()
     if not job:
         return jsonify({"msg": "Job topilmadi"}), 404
 
@@ -691,8 +698,16 @@ def add_rating():
     if not job:
         return jsonify({"msg": "Job topilmadi"}), 404
 
+    if job[2] != "finished":
+        return jsonify({"msg": "Ish tugamaguncha baho berib bo'lmaydi"}), 400
     if request.uid != job[0] and request.uid != job[1]:
         return jsonify({"msg": "Siz ushbu ish ishtirokchisi emassiz"}), 403
+
+    other_user = job[1] if request.uid == job[0] else job[0]
+    if to_user != other_user:
+        return jsonify({"msg": "Faqat ushbu ishdagi boshqa ishtirokchini baholashingiz mumkin"}), 400
+    if db.q("SELECT id FROM ratings WHERE job_id=? AND from_user=?", (job_id, request.uid)).fetchone():
+        return jsonify({"msg": "Bu ish uchun siz allaqachon baho bergansiz"}), 409
 
     now_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     db.q(
