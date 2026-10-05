@@ -43,8 +43,8 @@ export default function Login() {
                     <div className="brand">
                         <div className="brand-badge">JP</div>
                         <div>
-                            <div className="brand-name">Job Platform</div>
-                            <div className="helper">Professional service marketplace</div>
+                            <div className="brand-name">FinJob</div>
+                            <div className="helper">Find work. Get it done.</div>
                         </div>
                     </div>
                     <h1 className="hero-title">Tizimga kirish</h1>
