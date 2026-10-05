@@ -186,32 +186,137 @@ class DB:
         conn = self.get_connection()
         cursor = conn.cursor()
 
-        cursor.execute("SELECT COUNT(*) FROM services")
-        r = cursor.fetchone()[0]
-        if r > 0:
-            conn.close()
-            return
+        catalog = {
+            "Dasturlash": {
+                "Backend": [
+                    "Python Backend", "Django", "Flask", "FastAPI", "Node.js", "Express.js",
+                    "REST API", "GraphQL", "Microservices", "WebSocket", "API Integration",
+                    "Database Backend", "Authentication", "Payment Integration"
+                ],
+                "Frontend": [
+                    "HTML/CSS", "JavaScript", "React", "Vue.js", "Angular", "Next.js",
+                    "UI Development", "Responsive Web", "Landing Page", "Figma to HTML",
+                    "Frontend Bug Fix", "Animation", "Tailwind CSS"
+                ],
+                "Mobile": [
+                    "Android", "iOS", "Flutter", "React Native", "Kotlin", "Swift",
+                    "Mobile UI", "Mobile Bug Fix"
+                ],
+                "Desktop": [
+                    "Desktop App", "C++ App", "C# App", "Java App", "Electron"
+                ],
+                "Game Development": [
+                    "Unity", "Unreal Engine", "Godot", "Roblox Development",
+                    "2D Game", "3D Game", "Game Bug Fix"
+                ],
+                "Automation": [
+                    "Python Automation", "Web Scraping", "Browser Automation",
+                    "Data Processing", "Excel Automation", "Bot Automation"
+                ]
+            },
+            "Dizayn": {
+                "UI/UX": [
+                    "Website UI/UX", "Mobile UI/UX", "Dashboard Design",
+                    "Wireframe", "Prototype", "Design System"
+                ],
+                "Grafik": [
+                    "Logo Design", "Banner Design", "Poster Design", "Social Media Design",
+                    "Presentation Design", "Business Card", "Illustration", "Infographic"
+                ],
+                "3D": [
+                    "3D Modeling", "3D Product Design", "Blender", "3D Animation"
+                ]
+            },
+            "Media": {
+                "Video": [
+                    "Video Editing", "Short Video", "YouTube Video", "Reels/TikTok",
+                    "Motion Graphics", "Subtitle Editing", "Video Color Correction"
+                ],
+                "Audio": [
+                    "Audio Editing", "Podcast Editing", "Voice Over", "Sound Design"
+                ],
+                "Photography": [
+                    "Photo Editing", "Product Photography", "Portrait Photography",
+                    "Event Photography", "Background Removal"
+                ]
+            },
+            "Marketing": {
+                "Digital Marketing": [
+                    "SMM", "Instagram Marketing", "TikTok Marketing", "Facebook Marketing",
+                    "Google Ads", "Target Advertising", "Email Marketing"
+                ],
+                "SEO": [
+                    "SEO Optimization", "Keyword Research", "Technical SEO",
+                    "Local SEO", "SEO Content"
+                ],
+                "Content": [
+                    "Copywriting", "Blog Writing", "Product Description",
+                    "Technical Writing", "Translation", "Proofreading"
+                ]
+            },
+            "Biznes": {
+                "Business": [
+                    "Business Plan", "Market Research", "Business Consulting",
+                    "Financial Analysis", "Project Management"
+                ],
+                "Office": [
+                    "Excel", "Word", "PowerPoint", "Data Entry",
+                    "Virtual Assistant", "Document Formatting"
+                ]
+            },
+            "Ta'lim": {
+                "Fanlar": [
+                    "Matematika", "Fizika", "Kimyo", "Biologiya", "Ingliz Tili",
+                    "Ona Tili", "Tarix", "Informatika"
+                ],
+                "Dasturlash darslari": [
+                    "Python Darsi", "JavaScript Darsi", "C++ Darsi",
+                    "Web Dasturlash Darsi", "Scratch Darsi"
+                ]
+            },
+            "Uy va xizmatlar": {
+                "Uy ishlari": [
+                    "Tozalash", "General Cleaning", "Uy yig'ishtirish",
+                    "Ovqat pishirish", "Idish yuvish", "Kir yuvish"
+                ],
+                "Ta'mirlash": [
+                    "Santexnik", "Elektrik", "Bo'yoqchi", "G'isht terish",
+                    "Plitka", "Mebel ta'mirlash", "Konditsioner ta'miri"
+                ],
+                "Xizmatlar": [
+                    "Yuk tashish", "Kuryer", "Haydovchi", "Bog'bon",
+                    "Ko'chirish xizmati", "Mebel yig'ish"
+                ]
+            },
+            "Go'zallik": {
+                "Beauty": [
+                    "Sartarosh", "Soch turmagi", "Manikyur", "Pedikyur",
+                    "Makeup", "Qosh dizayni", "Kosmetolog"
+                ]
+            }
+        }
 
-        cursor.execute("INSERT INTO services(name,parent_id,created_by) VALUES('Ustalar',NULL,1)")
-        cursor.execute("INSERT INTO services(name,parent_id,created_by) VALUES('IT xizmatlar',NULL,1)")
-        cursor.execute("INSERT INTO services(name,parent_id,created_by) VALUES('Uy ishlari',NULL,1)")
+        def ensure_service(name, parent_id=None):
+            cursor.execute(
+                "SELECT id FROM services WHERE name=? AND parent_id IS ?",
+                (name, parent_id)
+            )
+            found = cursor.fetchone()
+            if found:
+                return found[0]
+            cursor.execute(
+                "INSERT INTO services(name,parent_id,created_by) VALUES(?,?,NULL)",
+                (name, parent_id)
+            )
+            return cursor.lastrowid
 
-        cursor.execute("SELECT id FROM services WHERE name='Ustalar'")
-        u = cursor.fetchone()[0]
-        cursor.execute("SELECT id FROM services WHERE name='IT xizmatlar'")
-        it = cursor.fetchone()[0]
-        cursor.execute("SELECT id FROM services WHERE name='Uy ishlari'")
-        uy = cursor.fetchone()[0]
+        for root_name, groups in catalog.items():
+            root_id = ensure_service(root_name)
+            for group_name, leaves in groups.items():
+                group_id = ensure_service(group_name, root_id)
+                for leaf_name in leaves:
+                    ensure_service(leaf_name, group_id)
 
-        cursor.execute("INSERT INTO services(name,parent_id,created_by) VALUES('Santexnik',?,1)", (u,))
-        cursor.execute("INSERT INTO services(name,parent_id,created_by) VALUES('Elektrik',?,1)", (u,))
-        cursor.execute("INSERT INTO services(name,parent_id,created_by) VALUES(?,?,1)", ("Ta'mirlash", u))
-        cursor.execute("INSERT INTO services(name,parent_id,created_by) VALUES('Web dasturlash',?,1)", (it,))
-        cursor.execute("INSERT INTO services(name,parent_id,created_by) VALUES('Telegram bot',?,1)", (it,))
-        cursor.execute("INSERT INTO services(name,parent_id,created_by) VALUES('Mobil ilova',?,1)", (it,))
-        cursor.execute("INSERT INTO services(name,parent_id,created_by) VALUES('Tozalash',?,1)", (uy,))
-        cursor.execute("INSERT INTO services(name,parent_id,created_by) VALUES('Ovqat pishirish',?,1)", (uy,))
-        cursor.execute("INSERT INTO services(name,parent_id,created_by) VALUES('Bolaga qarash',?,1)", (uy,))
         conn.commit()
         conn.close()
 
