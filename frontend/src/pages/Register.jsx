@@ -99,8 +99,8 @@ export default function Register() {
                     <div className="brand">
                         <div className="brand-badge">JP</div>
                         <div>
-                            <div className="brand-name">Job Platform</div>
-                            <div className="helper">Professional Marketplace</div>
+                            <div className="brand-name">FinJob</div>
+                            <div className="helper">Find work. Get it done.</div>
                         </div>
                     </div>
                     <h1 className="hero-title">Xavfsiz va tezkor hisob ochish</h1>
