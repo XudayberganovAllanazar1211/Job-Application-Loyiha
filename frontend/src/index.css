@@ -29,3 +29,67 @@ input[type=range]{accent-color:#2563eb}
 @media(max-width:1050px){.shell{grid-template-columns:1fr}.sidebar{position:relative;height:auto;border-right:0;border-bottom:1px solid #e7ebf2;padding:14px}.sidebar-menu{display:flex;overflow:auto;margin:12px 0}.nav-link{white-space:nowrap}.sidebar-footer{margin-top:0}.main{padding:22px}.grid-2,.stat-grid{grid-template-columns:1fr}}
 @media(max-width:700px){.auth-page{grid-template-columns:1fr}.auth-hero{padding:20px}.auth-hero:first-child{padding-bottom:4px}.auth-hero-card{padding:28px}.auth-card{padding:24px}.form-row{grid-template-columns:1fr}.topbar{flex-direction:column}.main{padding:16px}.stat-grid{grid-template-columns:1fr 1fr}.message{max-width:92%}}
 @media(max-width:460px){.stat-grid{grid-template-columns:1fr}.auth-hero-card{border-radius:22px}.card{padding:16px}}
+
+
+.service-picker {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    background: rgba(255,255,255,.025);
+}
+.service-picker-title {
+    padding: 13px 14px;
+    font-weight: 700;
+    border-bottom: 1px solid var(--border);
+}
+.service-tree {
+    max-height: 430px;
+    overflow-y: auto;
+    padding: 7px 0;
+}
+.service-tree-row {
+    display: flex;
+    align-items: center;
+    min-height: 38px;
+}
+.service-tree-toggle,
+.service-tree-spacer {
+    width: 30px;
+    min-width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.service-tree-toggle {
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 16px;
+}
+.service-tree-item {
+    flex: 1;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    text-align: left;
+    padding: 8px 12px;
+    border-radius: 9px;
+    font: inherit;
+}
+.service-tree-item:not(:disabled) {
+    cursor: pointer;
+}
+.service-tree-item:not(:disabled):hover {
+    background: rgba(255,255,255,.07);
+}
+.service-tree-item:disabled {
+    color: var(--muted);
+    font-weight: 700;
+    cursor: default;
+}
+.service-tree-item.selected {
+    background: rgba(99,102,241,.18);
+    color: #fff;
+}
