@@ -49,13 +49,13 @@ export default function CreateJob() {
 
         setLoading(false)
 
-        if (result?.msg) {
+        if (result?.msg === "ok") {
             setNotice("Job yaratildi ✅")
             setTimeout(() => navigate("/jobs"), 700)
             return
         }
 
-        setNotice("Job yaratishda xato")
+        setNotice(result?.msg || "Job yaratishda xato")
     }
 
     return (
@@ -101,9 +101,13 @@ export default function CreateJob() {
                         <div className="form-row">
                             <input
                                 className="input"
+                                type="number"
+                                min="0.01"
+                                step="0.01"
                                 placeholder="Price"
                                 value={form.price}
                                 onChange={(e) => setForm({ ...form, price: e.target.value })}
+                                required
                             />
                             <input
                                 className="input"
