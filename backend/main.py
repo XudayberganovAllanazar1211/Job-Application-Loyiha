@@ -2,6 +2,7 @@ import os
 import sqlite3
 import datetime
 import random
+import secrets
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -18,14 +19,15 @@ except ImportError:
     pass
 
 app = Flask(__name__)
-CORS(app)
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "super_secret_jwt_key_job_platform_secure_32_bytes")
+allowed_origins = os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://localhost:5174").split(",")
+CORS(app, resources={r"/*": {"origins": [origin.strip() for origin in allowed_origins if origin.strip()]}})
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
 
 # -------- E-MAIL (SMTP) SOZLAMALARI --------
 SMTP_SERVER = os.environ.get("SMTP_SERVER", "smtp.gmail.com")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", 587))
-SMTP_USER = os.environ.get("SMTP_USER", "xudayberganovallanazar5@gmail.com")
-SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "rvxxnpqochnuhanw")
+SMTP_USER = os.environ.get("SMTP_USER", "")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
 
 # Vaqtinchalik tasdiqlash kodlarini xotirada saqlash uchun lug'at:
 # email -> { "code": str, "data": dict, "expiry": datetime }
@@ -54,9 +56,8 @@ def send_email_code(to_email, code):
         print(f"!!! EMAIL YUBORISHDA XATO !!!: {e}")
         print(f"!!! DIQQAT! TASDIQLASH KODI TERMINALDA !!!")
         print(f"Email: {to_email}")
-        print(f"TASDIQLASH KODI: {code}")
         print("=" * 50 + "\n")
-        return True
+        return False
 
 
 # -------- DATABASE --------
@@ -241,18 +242,16 @@ def token(uid, role="user"):
 def auth(f):
     @wraps(f)
     def w(*a, **k):
-        t = request.headers.get("Authorization")
-        if not t:
-            return jsonify({"msg": "no token"}), 401
+        t = request.headers.get("Authorization", "")
+        parts = t.split()
+        if len(parts) != 2 or parts[0].lower() != "bearer":
+            return jsonify({"msg": "Authorization token talab qilinadi"}), 401
         try:
-            p = t.split()
-            if len(p) < 2:
-                return jsonify({"msg": "bad token"}), 401
-            d = jwt.decode(p[1], app.config["SECRET_KEY"], algorithms=["HS256"])
+            d = jwt.decode(parts[1], app.config["SECRET_KEY"], algorithms=["HS256"])
             request.uid = d["id"]
             request.user_role = d.get("role", "user")
-        except Exception as e:
-            return jsonify({"msg": "invalid token", "error": str(e)}), 401
+        except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, KeyError):
+            return jsonify({"msg": "Token yaroqsiz yoki muddati tugagan"}), 401
         return f(*a, **k)
 
     return w
@@ -323,7 +322,9 @@ def send_code():
         "expiry": datetime.datetime.now() + datetime.timedelta(minutes=10),
     }
 
-    send_email_code(email_key, code)
+    if not send_email_code(email_key, code):
+        pending_verifications.pop(email_key, None)
+        return jsonify({"msg": "Tasdiqlash emailini yuborib bo'lmadi. SMTP sozlamalarini tekshiring."}), 502
     return jsonify({"msg": "ok", "info": "Tasdiqlash kodi elektron pochtangizga yuborildi."})
 
 
