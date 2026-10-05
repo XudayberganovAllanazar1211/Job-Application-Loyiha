@@ -378,7 +378,7 @@ def verify_code():
         del pending_verifications[email]
         return jsonify({"msg": "Tasdiqlash kodining amal qilish muddati tugagan. Qaytadan so'rang."}), 400
 
-    if record["code"] != code:
+    if not code.isdigit() or len(code) != 6 or record["code"] != code:
         return jsonify({"msg": "Tasdiqlash kodi noto'g'ri!"}), 400
 
     ud = record["data"]
