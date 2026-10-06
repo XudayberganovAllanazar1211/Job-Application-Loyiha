@@ -97,7 +97,7 @@ export default function Register() {
             <section className="auth-hero">
                 <div className="auth-hero-card">
                     <div className="brand">
-                        <div className="brand-badge">JP</div>
+                        <div className="brand-badge">FJ</div>
                         <div>
                             <div className="brand-name">FinJob</div>
                             <div className="helper">Find work. Get it done.</div>
