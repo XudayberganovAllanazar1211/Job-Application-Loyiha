@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import AppLayout from "../components/AppLayout"
 import { api } from "../api"
@@ -43,6 +43,7 @@ export default function Jobs() {
     const token = localStorage.getItem("token") || ""
     const user = JSON.parse(localStorage.getItem("user") || "null")
     const navigate = useNavigate()
+    const serviceSearchRef = useRef(null)
 
     // Bajaruvchi uchun tasdiqlash so'rovi oynasini ochish/yopish holati
     const [activeConfirmJobId, setActiveConfirmJobId] = useState(null)
@@ -111,6 +112,24 @@ export default function Jobs() {
             return textMatches && serviceMatches
         })
     }, [jobs, search, selectedServices, serviceMap])
+
+    useEffect(() => {
+        if (!showServiceMenu) return
+
+        const handleOutsideClick = (event) => {
+            if (serviceSearchRef.current && !serviceSearchRef.current.contains(event.target)) {
+                setShowServiceMenu(false)
+            }
+        }
+
+        document.addEventListener("mousedown", handleOutsideClick)
+        document.addEventListener("touchstart", handleOutsideClick)
+
+        return () => {
+            document.removeEventListener("mousedown", handleOutsideClick)
+            document.removeEventListener("touchstart", handleOutsideClick)
+        }
+    }, [showServiceMenu])
 
     const addServiceFilter = (service) => {
         setSelectedServices([...selectedServices, service])
@@ -226,7 +245,7 @@ export default function Jobs() {
                             onChange={(e) => setSearch(e.target.value)}
                         />
 
-                        <div className="jobs-service-search">
+                        <div className="jobs-service-search" ref={serviceSearchRef}>
                             <div className="jobs-service-input-wrap">
                                 <input
                                     className="input"
