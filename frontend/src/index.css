@@ -363,3 +363,54 @@ input[type=range]{accent-color:#2563eb}
 .admin-nav-link{margin-top:4px}
 @media(max-width:1000px){.admin-stat-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:600px){.admin-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-stat{padding:14px}.admin-stat strong{font-size:23px}}
+
+.admin-action-select {
+    min-width: 100px;
+    padding: 7px 9px;
+    border: 1px solid #dfe5ee;
+    border-radius: 9px;
+    background: #fff;
+    color: #334155;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.admin-action-select:focus {
+    outline: none;
+    border-color: #60a5fa;
+    box-shadow: 0 0 0 3px rgba(59,130,246,.10);
+}
+.admin-action-select:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+}
+.admin-small-btn {
+    padding: 7px 10px;
+    border-radius: 9px;
+    font-size: 11px;
+    white-space: nowrap;
+}
+.admin-create-service {
+    display: grid;
+    grid-template-columns: minmax(180px, 1.3fr) minmax(180px, 1fr) auto;
+    gap: 10px;
+    padding: 16px;
+    border-bottom: 1px solid #edf0f5;
+    background: #fafbfc;
+}
+.admin-create-service .input,
+.admin-create-service .select {
+    margin: 0;
+}
+.admin-parent-select {
+    min-width: 0;
+}
+@media(max-width:800px) {
+    .admin-create-service {
+        grid-template-columns: 1fr;
+    }
+    .admin-create-service .btn {
+        width: 100%;
+    }
+}
