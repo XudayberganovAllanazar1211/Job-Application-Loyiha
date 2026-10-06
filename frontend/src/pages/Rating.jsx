@@ -88,12 +88,12 @@ export default function Rating() {
 
     return (
         <AppLayout
-            title="Rating"
+            title="Baho berish"
             subtitle="Job tugagach 1 dan 10 gacha baho bering."
         >
             <div className="grid-2">
                 <section className="card">
-                    <h2>Submit rating</h2>
+                    <h2>Bahoni yuborish</h2>
                     <p className="muted">Bajarilgan ish sifatini baholang.</p>
 
                     {notice && (
@@ -110,7 +110,7 @@ export default function Rating() {
 
                     <form className="form" onSubmit={submit}>
                         <div>
-                            <div className="helper" style={{ marginBottom: 8 }}>Baho (Score): <strong>{form.score} / 10</strong></div>
+                            <div className="helper" style={{ marginBottom: 8 }}>Baho: <strong>{form.score} / 10</strong></div>
                             <input
                                 type="range"
                                 min="1"
@@ -133,7 +133,7 @@ export default function Rating() {
                         </div>
 
                         <div>
-                            <label className="helper" style={{ display: "block", marginBottom: 4 }}>Izoh (Comment)</label>
+                            <label className="helper" style={{ display: "block", marginBottom: 4 }}>Izoh</label>
                             <textarea
                                 className="textarea"
                                 placeholder="Xizmat haqida fikringizni yozing..."
@@ -144,21 +144,21 @@ export default function Rating() {
 
                         <div className="actions">
                             <button className="btn btn-primary" disabled={!ready || loading}>
-                                {loading ? "Yuborilmoqda..." : "Submit rating"}
+                                {loading ? "Yuborilmoqda..." : "Bahoni yuborish"}
                             </button>
                             <button type="button" className="btn btn-secondary" onClick={() => navigate(-1)}>
-                                Back
+                                Orqaga
                             </button>
                         </div>
                     </form>
                 </section>
 
                 <aside className="card">
-                    <h3>Job context</h3>
+                    <h3>Ish ma’lumotlari</h3>
                     <div className="chip-row">
                         <span className="chip">Job # {jobId}</span>
-                        {job && <span className="chip">Title: {job.title}</span>}
-                        {job?.status && <span className="chip">Status: {job.status}</span>}
+                        {job && <span className="chip">Sarlavha: {job.title}</span>}
+                        {job?.status && <span className="chip">Holat: {job.status}</span>}
                     </div>
                     <div className="empty-state" style={{ marginTop: 16 }}>
                         {job
