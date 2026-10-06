@@ -13,6 +13,9 @@ export default function AppLayout({ title, subtitle, children }) {
     const isAdmin = user?.role === "admin"
     const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(" ") || user?.username || "Mehmon"
     const initials = fullName.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()
+    const avatarSrc = user?.avatar_url
+        ? (import.meta.env.VITE_API_URL || "http://localhost:5000") + user.avatar_url
+        : ""
 
     const logout = () => {
         localStorage.removeItem("token")
@@ -33,7 +36,7 @@ export default function AppLayout({ title, subtitle, children }) {
                     </button>
                     <div className="sidebar-profile">
                         <div style={{display:"flex",alignItems:"center",gap:10}}>
-                            <div className="sidebar-user-avatar">{initials}</div>
+                            <div className="sidebar-user-avatar">{avatarSrc ? <img src={avatarSrc} alt="" /> : initials}</div>
                             <div style={{minWidth:0}}>
                                 <div className="sidebar-profile-name" style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{fullName}</div>
                                 <div className="helper">{user?.email || (isAdmin ? "Administrator" : "FinJob foydalanuvchisi")}</div>
@@ -74,7 +77,7 @@ export default function AppLayout({ title, subtitle, children }) {
                         <p className="page-subtitle">{subtitle}</p>
                     </div>
                     <button className="btn btn-secondary topbar-profile-btn" onClick={() => navigate("/profile")} aria-label="Profilni ochish">
-                        <span className="topbar-avatar">{initials}</span>
+                        <span className="topbar-avatar">{avatarSrc ? <img src={avatarSrc} alt="" /> : initials}</span>
                     </button>
                 </div>
                 {children}
