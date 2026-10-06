@@ -24,6 +24,10 @@ export async function api(path, { method = "GET", body = null, token = "", signa
         if (response.status === 401 && token) {
             localStorage.removeItem("token")
             localStorage.removeItem("user")
+
+            if (!["/login", "/register"].includes(window.location.pathname)) {
+                window.location.assign("/login")
+            }
         }
 
         if (!response.ok) {
