@@ -83,13 +83,13 @@ export default function Rating() {
             return
         }
 
-        setNotice(result?.msg || "Rating xato")
+        setNotice(result?.msg || "Baho yuborishda xato")
     }
 
     return (
         <AppLayout
             title="Baho berish"
-            subtitle="Job tugagach 1 dan 10 gacha baho bering."
+            subtitle="Ish tugagach 1 dan 10 gacha baho bering."
         >
             <div className="grid-2">
                 <section className="card">
@@ -104,7 +104,7 @@ export default function Rating() {
 
                     {job && job.status !== "finished" && (
                         <div className="notice warn" style={{ marginBottom: 14 }}>
-                            Rating faqat job tugagandan keyin beriladi.
+                            Baho faqat ish tugagandan keyin beriladi.
                         </div>
                     )}
 
@@ -128,7 +128,7 @@ export default function Rating() {
                                     ? (String(job.worker_id) === String(me?.id)
                                         ? ([job.creator_first, job.creator_last].filter(Boolean).join(" ") || job.creator_username || "Foydalanuvchi")
                                         : ([job.worker_first, job.worker_last].filter(Boolean).join(" ") || job.worker_username || "Foydalanuvchi"))
-                                    : "Job ma'lumotlari yuklanmoqda..."}
+                                    : "Ish ma'lumotlari yuklanmoqda..."}
                             </div>
                         </div>
 
@@ -156,7 +156,7 @@ export default function Rating() {
                 <aside className="card">
                     <h3>Ish ma’lumotlari</h3>
                     <div className="chip-row">
-                        <span className="chip">Job # {jobId}</span>
+                        <span className="chip">Ish # {jobId}</span>
                         {job && <span className="chip">Sarlavha: {job.title}</span>}
                         {job?.status && <span className="chip">Holat: {job.status}</span>}
                     </div>
