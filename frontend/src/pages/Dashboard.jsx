@@ -346,7 +346,7 @@ export default function Dashboard() {
                                         )}
 
                                         {/* --- ISHCHINI BEKOR QILISH (Ish beruvchi uchun) --- */}
-                                        {isMyJob && (status === "accepted" || status === "pending_finish") && (
+                                        {isMyJob && status === "accepted" && (
                                             <button
                                                 className="btn btn-warn"
                                                 onClick={(e) => {
