@@ -458,11 +458,14 @@ class DB:
             return cursor.lastrowid
 
         for root_name, groups in catalog.items():
-            root_id = ensure_service(root_name)
+            translated_root = service_translations.get(root_name, root_name)
+            root_id = ensure_service(translated_root)
             for group_name, leaves in groups.items():
-                group_id = ensure_service(group_name, root_id)
+                translated_group = service_translations.get(group_name, group_name)
+                group_id = ensure_service(translated_group, root_id)
                 for leaf_name in leaves:
-                    ensure_service(leaf_name, group_id)
+                    translated_leaf = service_translations.get(leaf_name, leaf_name)
+                    ensure_service(translated_leaf, group_id)
 
         conn.commit()
         conn.close()
