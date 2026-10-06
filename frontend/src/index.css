@@ -911,3 +911,231 @@ html[data-theme="dark"] .leaderboard-count {
         align-self: flex-end;
     }
 }
+
+
+/* Global theme tokens */
+:root{
+    --primary:#2563eb;
+    --primary-soft:#eff6ff;
+    --primary-border:#bfdbfe;
+    --card:#fff;
+}
+html[data-theme="dark"]{
+    --primary:#60a5fa;
+    --primary-soft:#172554;
+    --primary-border:#315a9d;
+    --card:#111827;
+}
+
+/* Complete dark-mode coverage */
+html[data-theme="dark"] .profile-hero,
+html[data-theme="dark"] .profile-info-card,
+html[data-theme="dark"] .profile-service-picker,
+html[data-theme="dark"] .avatar-crop-modal,
+html[data-theme="dark"] .jobs-service-menu{
+    background:#111827;
+    border-color:#263244;
+    color:#e5e7eb;
+}
+html[data-theme="dark"] .profile-name-row h2,
+html[data-theme="dark"] .profile-info-row strong,
+html[data-theme="dark"] .profile-label,
+html[data-theme="dark"] .profile-section-head .section-title,
+html[data-theme="dark"] .profile-stat .stat-value,
+html[data-theme="dark"] .avatar-crop-head .section-title,
+html[data-theme="dark"] .legal-brand,
+html[data-theme="dark"] .legal-card h1,
+html[data-theme="dark"] .legal-card h2,
+html[data-theme="dark"] .admin-stat strong,
+html[data-theme="dark"] .admin-table td strong,
+html[data-theme="dark"] .admin-modal-head h3{
+    color:#f8fafc;
+}
+html[data-theme="dark"] .profile-identity-text p,
+html[data-theme="dark"] .profile-info-row span,
+html[data-theme="dark"] .profile-stat-small,
+html[data-theme="dark"] .avatar-crop-head p,
+html[data-theme="dark"] .avatar-crop-zoom-row strong,
+html[data-theme="dark"] .admin-modal-head p,
+html[data-theme="dark"] .admin-user-form label,
+html[data-theme="dark"] .admin-table td{
+    color:#94a3b8;
+}
+html[data-theme="dark"] .profile-role,
+html[data-theme="dark"] .profile-status,
+html[data-theme="dark"] .profile-stat-icon,
+html[data-theme="dark"] .profile-count,
+html[data-theme="dark"] .profile-skill,
+html[data-theme="dark"] .profile-empty{
+    background:#172033;
+    border-color:#334155;
+    color:#cbd5e1;
+}
+html[data-theme="dark"] .profile-info-row{
+    border-color:#263244;
+}
+html[data-theme="dark"] .profile-skill button{
+    background:#334155;
+    color:#cbd5e1;
+}
+html[data-theme="dark"] .avatar-crop-close{
+    background:#1e293b;
+    color:#cbd5e1;
+}
+html[data-theme="dark"] .avatar-crop-close:hover{
+    background:#334155;
+    color:#fff;
+}
+html[data-theme="dark"] .admin-tabs{
+    border-color:#263244;
+}
+html[data-theme="dark"] .admin-tab{
+    color:#94a3b8;
+}
+html[data-theme="dark"] .admin-tab:hover{
+    background:#1e293b;
+    color:#f1f5f9;
+}
+html[data-theme="dark"] .admin-tab.active{
+    background:#172554;
+    color:#93c5fd;
+}
+html[data-theme="dark"] .admin-table th{
+    background:#0f172a;
+    border-color:#263244;
+    color:#94a3b8;
+}
+html[data-theme="dark"] .admin-table td{
+    border-color:#263244;
+}
+html[data-theme="dark"] .admin-table tbody tr:hover{
+    background:#172033;
+}
+html[data-theme="dark"] .admin-action-select{
+    background:#0f172a;
+    border-color:#334155;
+    color:#e5e7eb;
+}
+html[data-theme="dark"] .admin-create-service{
+    background:#0f172a;
+    border-color:#263244;
+}
+html[data-theme="dark"] .admin-toolbar-note{
+    background:#0f172a;
+    border-color:#263244;
+    color:#94a3b8;
+}
+html[data-theme="dark"] .admin-modal .input,
+html[data-theme="dark"] .admin-modal .textarea{
+    background:#0f172a;
+}
+html[data-theme="dark"] .admin-modal-close{
+    color:#94a3b8;
+}
+html[data-theme="dark"] .legal-page{
+    background:radial-gradient(circle at 10% 0%,rgba(37,99,235,.12),transparent 30%),#0b1120;
+}
+html[data-theme="dark"] .legal-card{
+    background:#111827;
+    border-color:#263244;
+}
+html[data-theme="dark"] .legal-card p{
+    color:#cbd5e1;
+}
+html[data-theme="dark"] .legal-note{
+    background:#431f08;
+    border-color:#7c2d12;
+    color:#fdba74;
+}
+html[data-theme="dark"] .legal-footer-links a:hover{
+    background:#1e293b;
+    color:#f8fafc;
+}
+html[data-theme="dark"] .policy-check,
+html[data-theme="dark"] .auth-legal-links a{
+    color:#94a3b8;
+}
+html[data-theme="dark"] .jobs-service-menu{
+    box-shadow:0 20px 45px rgba(0,0,0,.42);
+}
+html[data-theme="dark"] .jobs-selected-services{
+    border-color:#263244;
+}
+html[data-theme="dark"] .jobs-selected-chip{
+    background:#172554;
+    border-color:#315a9d;
+    color:#bfdbfe;
+}
+html[data-theme="dark"] .jobs-service-option{
+    color:#cbd5e1;
+}
+html[data-theme="dark"] .jobs-service-option:hover{
+    background:#1e293b;
+    color:#93c5fd;
+}
+html[data-theme="dark"] .jobs-filter-note{
+    color:#94a3b8;
+}
+html[data-theme="dark"] .jobs-filter-note strong{
+    color:#f8fafc;
+}
+html[data-theme="dark"] .status-active{
+    background:#052e1b!important;
+    border-color:#166534!important;
+    color:#86efac!important;
+}
+html[data-theme="dark"] .status-accepted{
+    background:#172554!important;
+    border-color:#315a9d!important;
+    color:#93c5fd!important;
+}
+html[data-theme="dark"] .status-pending_finish{
+    background:#431f08!important;
+    border-color:#9a3412!important;
+    color:#fdba74!important;
+}
+html[data-theme="dark"] .status-finished{
+    background:#1e293b!important;
+    border-color:#334155!important;
+    color:#cbd5e1!important;
+}
+html[data-theme="dark"] .notice{
+    background:#172554;
+    border-color:#315a9d;
+    color:#bfdbfe;
+}
+html[data-theme="dark"] .notice.ok{
+    background:#052e1b;
+    border-color:#166534;
+    color:#86efac;
+}
+html[data-theme="dark"] .notice.warn{
+    background:#431f08;
+    border-color:#9a3412;
+    color:#fdba74;
+}
+html[data-theme="dark"] .empty-state{
+    border-color:#334155;
+}
+html[data-theme="dark"] .job-recommended-card{
+    background:#111827;
+}
+html[data-theme="dark"] .job-card{
+    border-color:#263244;
+}
+html[data-theme="dark"] .job-card:hover{
+    border-color:#334155;
+}
+html[data-theme="dark"] .btn-secondary{
+    box-shadow:0 2px 8px rgba(0,0,0,.18);
+}
+html[data-theme="dark"] .auth-page{
+    background:#0b1120;
+}
+html[data-theme="dark"] .auth-legal-links a:hover{
+    color:#93c5fd;
+}
+html[data-theme="dark"] .sidebar-footer{
+    color:#94a3b8;
+}
+
