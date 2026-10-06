@@ -192,7 +192,7 @@ export default function Jobs() {
                             {/* --- ADMIN BILAN BOG'LANISH OGOHLANTIRISHI --- */}
                             {adminContactJobId === job.id && (
                                 <div className="notice warn" style={{ marginBottom: 14, fontSize: 13 }}>
-                                    ⚠️ To'lov yoki ish bo'yicha muammo mavjud. Iltimos, adminlarimiz bilan bog'laning: <strong>@admin_support</strong>
+                                    ⚠️ To'lov yoki ish bo'yicha muammo mavjud. Iltimos, administratorlarimiz bilan bog‘laning: <strong>@admin_support</strong>
                                 </div>
                             )}
 
