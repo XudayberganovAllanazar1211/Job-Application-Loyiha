@@ -191,7 +191,7 @@ export default function CreateJob() {
                             </div>
                             <button
                                 type="button"
-                                className="service-select-button"
+                                className="btn btn-primary service-select-button"
                                 onClick={() => {
                                     setShowCategories((current) => !current)
                                     setServiceSearch("")
