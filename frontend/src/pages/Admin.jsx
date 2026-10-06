@@ -8,6 +8,7 @@ export default function Admin() {
     const user = JSON.parse(localStorage.getItem("user") || "null")
     const [data, setData] = useState(null)
     const [notice, setNotice] = useState("")
+    const [noticeType, setNoticeType] = useState("ok")
     const [tab, setTab] = useState("users")
     const [serviceName, setServiceName] = useState("")
     const [serviceParent, setServiceParent] = useState("")
@@ -31,9 +32,11 @@ export default function Admin() {
 
     const action = async (path, options = {}, successMessage = "O'zgarish saqlandi.") => {
         setNotice("")
+        setNoticeType("ok")
         const result = await api(path, { token, ...options })
 
         if (!result?.ok) {
+            setNoticeType("warn")
             setNotice(result?.msg || "Amal bajarilmadi.")
             return false
         }
@@ -153,7 +156,7 @@ export default function Admin() {
 
     return (
         <AppLayout title="Admin Dashboard" subtitle="FinJob platformasini to'liq boshqaring.">
-            {notice && <div className="notice warn" style={{ marginBottom: 16 }}>{notice}</div>}
+            {notice && <div className={`notice ${noticeType === "ok" ? "ok" : "warn"}`} style={{ marginBottom: 16 }}>{notice}</div>}
 
             <div className="admin-stat-grid">
                 <div className="card admin-stat"><span>Users</span><strong>{stats.users ?? 0}</strong></div>
