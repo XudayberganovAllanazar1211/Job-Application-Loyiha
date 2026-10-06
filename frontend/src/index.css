@@ -535,3 +535,208 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .job-accepted-chip{background:#ecfdf5!important;color:#15803d!important;border-color:#bbf7d0!important}
 
 .sidebar-user-avatar img,.topbar-avatar img{width:100%;height:100%;display:block;object-fit:cover;border-radius:inherit}
+
+
+html[data-theme="dark"]{
+    color-scheme:dark;
+    --text:#e5e7eb;
+    --muted:#94a3b8;
+    --border:#334155;
+}
+html[data-theme="dark"] body{
+    background:radial-gradient(circle at 5% 0%,rgba(37,99,235,.16),transparent 28%),radial-gradient(circle at 95% 5%,rgba(14,165,233,.10),transparent 25%),#0b1120;
+    color:#e5e7eb;
+}
+html[data-theme="dark"] .sidebar,
+html[data-theme="dark"] .auth-card,
+html[data-theme="dark"] .card,
+html[data-theme="dark"] .stat-card,
+html[data-theme="dark"] .service-picker,
+html[data-theme="dark"] .jobs-filter-panel{
+    background:#111827;
+    border-color:#263244;
+    color:#e5e7eb;
+}
+html[data-theme="dark"] .sidebar{
+    border-right-color:#263244;
+}
+html[data-theme="dark"] .sidebar-top,
+html[data-theme="dark"] .sidebar-profile{
+    border-color:#263244;
+}
+html[data-theme="dark"] .sidebar-profile,
+html[data-theme="dark"] .tip-item,
+html[data-theme="dark"] .empty-state{
+    background:#0f172a;
+}
+html[data-theme="dark"] .sidebar-profile-name,
+html[data-theme="dark"] .page-title,
+html[data-theme="dark"] .job-title,
+html[data-theme="dark"] .stat-value,
+html[data-theme="dark"] .card h2,
+html[data-theme="dark"] .card h3,
+html[data-theme="dark"] .tip-item strong,
+html[data-theme="dark"] .service-picker-title{
+    color:#f8fafc;
+}
+html[data-theme="dark"] .page-subtitle,
+html[data-theme="dark"] .helper,
+html[data-theme="dark"] .muted,
+html[data-theme="dark"] .job-desc,
+html[data-theme="dark"] .meta,
+html[data-theme="dark"] .stat-label,
+html[data-theme="dark"] .tip-item span{
+    color:#94a3b8;
+}
+html[data-theme="dark"] .nav-link{
+    color:#94a3b8;
+}
+html[data-theme="dark"] .nav-link:hover{
+    background:#1e293b;
+    color:#f1f5f9;
+}
+html[data-theme="dark"] .nav-link.active{
+    background:#172554;
+    color:#93c5fd;
+}
+html[data-theme="dark"] .btn-secondary{
+    background:#172033;
+    border-color:#334155;
+    color:#e2e8f0;
+}
+html[data-theme="dark"] .btn-secondary:hover{
+    background:#1e293b;
+}
+html[data-theme="dark"] .input,
+html[data-theme="dark"] .select,
+html[data-theme="dark"] .textarea{
+    background:#0f172a;
+    border-color:#334155;
+    color:#f1f5f9;
+}
+html[data-theme="dark"] .input::placeholder,
+html[data-theme="dark"] .textarea::placeholder{
+    color:#64748b;
+}
+html[data-theme="dark"] .input:disabled{
+    background:#1e293b;
+    color:#94a3b8;
+}
+html[data-theme="dark"] .chip{
+    background:#1e293b;
+    border-color:#334155;
+    color:#cbd5e1;
+}
+html[data-theme="dark"] .service-tree-item{
+    color:#cbd5e1;
+}
+html[data-theme="dark"] .service-tree-item:not(:disabled):hover,
+html[data-theme="dark"] .service-search-result:hover{
+    background:#1e293b;
+}
+html[data-theme="dark"] .service-tree-item:disabled{
+    color:#94a3b8;
+}
+html[data-theme="dark"] .service-tree-item.selected,
+html[data-theme="dark"] .selected-service-chip{
+    background:#172554;
+    border-color:#1e40af;
+    color:#bfdbfe;
+}
+html[data-theme="dark"] .selected-service-chip button{
+    background:#1e3a8a;
+    color:#dbeafe;
+}
+html[data-theme="dark"] .service-picker-title,
+html[data-theme="dark"] .service-search,
+html[data-theme="dark"] .sidebar-top{
+    border-color:#263244;
+}
+html[data-theme="dark"] .service-search-result{
+    color:#cbd5e1;
+}
+html[data-theme="dark"] .service-category-placeholder{
+    color:#94a3b8;
+}
+html[data-theme="dark"] .message{
+    background:#1e293b;
+    border-color:#334155;
+    color:#e2e8f0;
+}
+html[data-theme="dark"] .message.me{
+    background:#172554;
+    border-color:#1e40af;
+    color:#dbeafe;
+}
+html[data-theme="dark"] .message-meta{
+    color:#64748b;
+}
+html[data-theme="dark"] .legal-footer{
+    color:#94a3b8;
+}
+html[data-theme="dark"] .legal-footer a{
+    color:#cbd5e1;
+}
+html[data-theme="dark"] .theme-toggle{
+    background:#172033;
+    border-color:#334155;
+    color:#f8fafc;
+}
+html[data-theme="dark"] .jobs-filter-panel{
+    box-shadow:0 20px 45px rgba(0,0,0,.35);
+}
+html[data-theme="dark"] .auth-page{
+    background:#0b1120;
+}
+html[data-theme="dark"] .auth-card h2{
+    color:#f8fafc;
+}
+html[data-theme="dark"] .auth-card .helper{
+    color:#94a3b8;
+}
+html[data-theme="dark"] .profile-avatar{
+    box-shadow:0 0 0 5px #111827;
+}
+html[data-theme="dark"] .topbar-profile-btn{
+    background:#111827;
+}
+html[data-theme="dark"] .stat-card{
+    background:linear-gradient(145deg,#111827,#0f172a);
+}
+html[data-theme="dark"] .job-card:hover{
+    box-shadow:0 14px 30px rgba(0,0,0,.28);
+}
+
+.topbar-actions{
+    display:flex;
+    align-items:center;
+    gap:9px;
+}
+.theme-toggle{
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    min-height:42px;
+    padding:0 13px;
+    border:1px solid #dfe5ee;
+    border-radius:12px;
+    background:#fff;
+    color:#334155;
+    cursor:pointer;
+    font-size:13px;
+    font-weight:700;
+    box-shadow:0 2px 7px rgba(15,23,42,.04);
+    transition:.18s;
+}
+.theme-toggle:hover{
+    transform:translateY(-1px);
+}
+.theme-toggle span:first-child{
+    font-size:17px;
+    line-height:1;
+}
+@media(max-width:560px){
+    .topbar-actions{width:100%;justify-content:space-between}
+    .theme-toggle{flex:1}
+    .topbar-profile-btn{flex:0 0 auto}
+}
