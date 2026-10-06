@@ -163,6 +163,13 @@ export default function CreateJob() {
                                     ? services.find((service) => String(service.id) === String(form.service_id))?.name || "Xizmat"
                                     : "Xizmatni tanlang"}
                             </div>
+                            <button
+                                type="button"
+                                className="service-select-button"
+                                onClick={() => setServiceSearch("")}
+                            >
+                                Soha tanlang
+                            </button>
                             <div className="service-search">
                                 <input
                                     className="input"
