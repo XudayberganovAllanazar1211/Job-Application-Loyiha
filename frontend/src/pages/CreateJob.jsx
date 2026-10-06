@@ -62,8 +62,8 @@ export default function CreateJob() {
     const [notice, setNotice] = useState("")
     const [loading, setLoading] = useState(false)
     const [priceError, setPriceError] = useState("")
-    const [locationLoading, setManzilLoading] = useState(false)
-    const [locationError, setManzilError] = useState("")
+    const [locationLoading, setLocationLoading] = useState(false)
+    const [locationError, setLocationError] = useState("")
     const navigate = useNavigate()
     const token = localStorage.getItem("token") || ""
     const serviceTree = useMemo(() => buildServiceTree(services), [services])
@@ -98,12 +98,12 @@ export default function CreateJob() {
 
     const detectManzil = () => {
         if (!navigator.geolocation) {
-            setManzilError("Brauzeringiz joylashuvni aniqlashni qo'llab-quvvatlamaydi.")
+            setLocationError("Brauzeringiz joylashuvni aniqlashni qo'llab-quvvatlamaydi.")
             return
         }
 
-        setManzilError("")
-        setManzilLoading(true)
+        setLocationError("")
+        setLocationLoading(true)
 
         let bestPosition = null
         let finished = false
@@ -118,10 +118,10 @@ export default function CreateJob() {
             const { latitude, longitude, accuracy } = position.coords
 
             if (accuracy > 5000) {
-                setManzilError(
+                setLocationError(
                     `Kompyuter joylashuvni juda noaniq aniqladi (taxminan ${Math.round(accuracy / 100) / 10} km). Windows'da Manzil Service va Wi-Fi joylashuvini yoqing yoki joylashuvni qo'lda kiriting.`
                 )
-                setManzilLoading(false)
+                setLocationLoading(false)
                 return
             }
 
@@ -132,16 +132,16 @@ export default function CreateJob() {
 
             if (result?.ok && result.location) {
                 setForm((current) => ({ ...current, location: result.location }))
-                setManzilError(
+                setLocationError(
                     accuracy > 1000
                         ? `Joylashuv topildi, lekin aniqlik taxminan ${Math.round(accuracy)} metr.`
                         : ""
                 )
             } else {
-                setManzilError(result?.msg || "Joylashuv manzilini aniqlab bo'lmadi.")
+                setLocationError(result?.msg || "Joylashuv manzilini aniqlab bo'lmadi.")
             }
 
-            setManzilLoading(false)
+            setLocationLoading(false)
         }
 
         const handlePosition = (position) => {
@@ -165,16 +165,16 @@ export default function CreateJob() {
                 }
 
                 if (error.code === 1) {
-                    setManzilError("Joylashuvga ruxsat berilmadi. Chrome va Windows sozlamalaridan ruxsat bering.")
+                    setLocationError("Joylashuvga ruxsat berilmadi. Chrome va Windows sozlamalaridan ruxsat bering.")
                 } else if (error.code === 2) {
-                    setManzilError("Joylashuv aniqlanmadi. Windows Manzil Service va Wi-Fi'ni tekshiring.")
+                    setLocationError("Joylashuv aniqlanmadi. Windows Manzil Service va Wi-Fi'ni tekshiring.")
                 } else if (error.code === 3) {
-                    setManzilError("Joylashuvni aniqlash vaqti tugadi. Windows Manzil Service va Wi-Fi'ni tekshiring.")
+                    setLocationError("Joylashuvni aniqlash vaqti tugadi. Windows Manzil Service va Wi-Fi'ni tekshiring.")
                 } else {
-                    setManzilError("Joylashuvni aniqlashda xatolik yuz berdi.")
+                    setLocationError("Joylashuvni aniqlashda xatolik yuz berdi.")
                 }
 
-                setManzilLoading(false)
+                setLocationLoading(false)
                 if (watchId !== null) navigator.geolocation.clearWatch(watchId)
             },
             {
@@ -189,8 +189,8 @@ export default function CreateJob() {
                 if (bestPosition) {
                     finish(bestPosition)
                 } else {
-                    setManzilLoading(false)
-                    setManzilError("Aniq joylashuv olinmadi. Windows Manzil Service yoqilganini tekshiring.")
+                    setLocationLoading(false)
+                    setLocationError("Aniq joylashuv olinmadi. Windows Manzil Service yoqilganini tekshiring.")
                     if (watchId !== null) navigator.geolocation.clearWatch(watchId)
                 }
             }
@@ -419,7 +419,7 @@ export default function CreateJob() {
                                         value={form.location}
                                         onChange={(e) => {
                                             setForm({ ...form, location: e.target.value })
-                                            setManzilError("")
+                                            setLocationError("")
                                         }}
                                     />
                                     <button
