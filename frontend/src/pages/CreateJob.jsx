@@ -169,10 +169,10 @@ export default function CreateJob() {
                                 className="service-select-button"
                                 onClick={() => {
                                     setServiceSearch("")
-                                    setShowCategories(true)
+                                    setShowCategories(!showCategories)
                                 }}
                             >
-                                Soha tanlang
+                                {showCategories ? "Soha tanlashni yopish" : "Soha tanlang"}
                             </button>
                             <div className="service-search">
                                 <input
