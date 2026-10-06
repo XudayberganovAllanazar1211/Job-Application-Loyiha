@@ -146,6 +146,45 @@ class DB:
         """)
 
         cursor.execute("""
+            CREATE TABLE IF NOT EXISTS notifications(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                type TEXT NOT NULL,
+                title TEXT NOT NULL,
+                message TEXT NOT NULL,
+                link TEXT DEFAULT '',
+                is_read INTEGER DEFAULT 0,
+                created_at TEXT NOT NULL
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS reports(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                reporter_id INTEGER NOT NULL,
+                reported_user_id INTEGER,
+                job_id INTEGER,
+                reason TEXT NOT NULL,
+                details TEXT DEFAULT '',
+                status TEXT DEFAULT 'open',
+                created_at TEXT NOT NULL
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS offers(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                amount INTEGER NOT NULL,
+                message TEXT DEFAULT '',
+                status TEXT DEFAULT 'pending',
+                created_at TEXT NOT NULL,
+                UNIQUE(job_id, user_id)
+            )
+        """)
+
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS messages(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 sender_id INTEGER,
@@ -165,6 +204,9 @@ class DB:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_job ON messages(job_id, sent_at);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_ratings_to_user ON ratings(to_user);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_ratings_job ON ratings(job_id);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read, created_at);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status, created_at);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_offers_job ON offers(job_id, status);")
 
         # Dynamic migrations for any existing tables missing new columns
         cursor.execute("PRAGMA table_info(users)")
@@ -557,6 +599,142 @@ def admin_required(f):
 
 def rows(r, cols):
     return [dict(zip(cols, i)) for i in r]
+
+
+def create_notification(user_id, notification_type, title, message, link=""):
+    if not user_id:
+        return
+    now_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    db.q(
+        "INSERT INTO notifications(user_id,type,title,message,link,created_at) VALUES(?,?,?,?,?,?)",
+        (user_id, notification_type, title, message, link, now_time),
+    ).close()
+
+
+@app.route("/notifications")
+@auth
+def get_notifications():
+    items = db.q(
+        """SELECT id,type,title,message,link,is_read,created_at
+           FROM notifications WHERE user_id=? ORDER BY id DESC LIMIT 50""",
+        (request.uid,),
+    ).fetchall()
+    unread = db.q("SELECT COUNT(*) FROM notifications WHERE user_id=? AND is_read=0", (request.uid,)).fetchone()[0]
+    return jsonify({"items":[dict(zip(["id","type","title","message","link","is_read","created_at"], item)) for item in items],"unread":unread})
+
+
+@app.route("/notifications/read", methods=["POST"])
+@auth
+def read_notifications():
+    db.q("UPDATE notifications SET is_read=1 WHERE user_id=?", (request.uid,)).close()
+    return jsonify({"msg":"ok"})
+
+
+@app.route("/report", methods=["POST"])
+@auth
+def create_report():
+    d=request.json or {}
+    reason=str(d.get("reason","")).strip()
+    details=str(d.get("details","")).strip()
+    try:
+        job_id=int(d["job_id"]) if d.get("job_id") else None
+        reported_user_id=int(d["reported_user_id"]) if d.get("reported_user_id") else None
+    except (TypeError,ValueError):
+        return jsonify({"msg":"Identifikator noto‘g‘ri"}),400
+    if not reason or len(reason)>120:
+        return jsonify({"msg":"Shikoyat sababini kiriting"}),400
+    if len(details)>2000:
+        return jsonify({"msg":"Izoh 2000 belgidan oshmasligi kerak"}),400
+    if reported_user_id == request.uid:
+        return jsonify({"msg":"O‘zingiz ustingizdan shikoyat qila olmaysiz"}),400
+    if job_id and not db.q("SELECT id FROM jobs WHERE id=?",(job_id,)).fetchone():
+        return jsonify({"msg":"Ish topilmadi"}),404
+    now_time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    db.q("INSERT INTO reports(reporter_id,reported_user_id,job_id,reason,details,created_at) VALUES(?,?,?,?,?,?)",(request.uid,reported_user_id,job_id,reason,details,now_time)).close()
+    for admin in db.q("SELECT id FROM users WHERE role='admin'").fetchall():
+        create_notification(admin[0],"report","Yangi shikoyat",reason,"/admin")
+    return jsonify({"msg":"Shikoyatingiz qabul qilindi."}),201
+
+
+@app.route("/offers/<int:job_id>")
+@auth
+def get_offers(job_id):
+    job=db.q("SELECT user_id FROM jobs WHERE id=?",(job_id,)).fetchone()
+    if not job:
+        return jsonify({"msg":"Ish topilmadi"}),404
+    if job[0] == request.uid:
+        items=db.q("""SELECT o.id,o.job_id,o.user_id,o.amount,o.message,o.status,o.created_at,u.username,u.first_name,u.last_name,u.average_rating
+                      FROM offers o JOIN users u ON u.id=o.user_id WHERE o.job_id=? ORDER BY o.id DESC""",(job_id,)).fetchall()
+        cols=["id","job_id","user_id","amount","message","status","created_at","username","first_name","last_name","average_rating"]
+    else:
+        items=db.q("SELECT id,job_id,user_id,amount,message,status,created_at FROM offers WHERE job_id=? AND user_id=?",(job_id,request.uid)).fetchall()
+        cols=["id","job_id","user_id","amount","message","status","created_at"]
+    return jsonify([dict(zip(cols,x)) for x in items])
+
+
+@app.route("/offer", methods=["POST"])
+@auth
+def create_offer():
+    d=request.json or {}
+    try:
+        job_id=int(d.get("job_id"))
+        amount=int(d.get("amount"))
+    except (TypeError,ValueError):
+        return jsonify({"msg":"Ish va narx noto‘g‘ri"}),400
+    message=str(d.get("message","")).strip()
+    if amount<=0 or amount>2_000_000_000:
+        return jsonify({"msg":"Narx noto‘g‘ri"}),400
+    if len(message)>1500:
+        return jsonify({"msg":"Taklif izohi 1500 belgidan oshmasligi kerak"}),400
+    job=db.q("SELECT user_id,status,worker_id,title FROM jobs WHERE id=?",(job_id,)).fetchone()
+    if not job:
+        return jsonify({"msg":"Ish topilmadi"}),404
+    if job[0]==request.uid:
+        return jsonify({"msg":"O‘zingizning ishingizga taklif yubora olmaysiz"}),400
+    if job[1]!="active" or job[2] is not None:
+        return jsonify({"msg":"Bu ish hozir takliflar uchun yopiq"}),409
+    now_time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        db.q("INSERT INTO offers(job_id,user_id,amount,message,created_at) VALUES(?,?,?,?,?)",(job_id,request.uid,amount,message,now_time)).close()
+    except sqlite3.IntegrityError:
+        return jsonify({"msg":"Bu ishga allaqachon taklif yuborgansiz"}),409
+    create_notification(job[0],"offer","Yangi taklif",f"#{job_id} — {amount:,} UZS miqdorida yangi taklif kelib tushdi.","/jobs")
+    return jsonify({"msg":"Taklif yuborildi."}),201
+
+
+@app.route("/offer/<int:offer_id>/accept", methods=["POST"])
+@auth
+def accept_offer(offer_id):
+    offer=db.q("SELECT o.job_id,o.user_id,o.amount,j.user_id,j.status,j.worker_id,j.title FROM offers o JOIN jobs j ON j.id=o.job_id WHERE o.id=?",(offer_id,)).fetchone()
+    if not offer:
+        return jsonify({"msg":"Taklif topilmadi"}),404
+    if offer[3]!=request.uid:
+        return jsonify({"msg":"Faqat ish egasi taklifni qabul qilishi mumkin"}),403
+    if offer[4]!="active" or offer[5] is not None:
+        return jsonify({"msg":"Bu ish endi ochiq emas"}),409
+    result=db.q("UPDATE jobs SET worker_id=?,status='accepted' WHERE id=? AND status='active' AND worker_id IS NULL",(offer[1],offer[0]))
+    if result.rowcount!=1:
+        result.close()
+        return jsonify({"msg":"Ish allaqachon band qilingan"}),409
+    result.close()
+    db.q("UPDATE offers SET status='accepted' WHERE id=?",(offer_id,)).close()
+    db.q("UPDATE offers SET status='rejected' WHERE job_id=? AND id!=?",(offer[0],offer_id)).close()
+    create_notification(offer[1],"offer","Taklifingiz qabul qilindi",f'#{offer[0]} — "{offer[6]}" ishiga taklifingiz qabul qilindi.',"/chat/"+str(offer[0]))
+    return jsonify({"msg":"ok"})
+
+
+@app.route("/admin/report/<int:report_id>", methods=["PATCH"])
+@admin_required
+def update_report(report_id):
+    status=(request.json or {}).get("status")
+    if status not in ("open","reviewing","resolved","rejected"):
+        return jsonify({"msg":"Report holati noto‘g‘ri"}),400
+    result=db.q("UPDATE reports SET status=? WHERE id=?",(status,report_id))
+    if result.rowcount!=1:
+        result.close()
+        return jsonify({"msg":"Shikoyat topilmadi"}),404
+    result.close()
+    return jsonify({"msg":"Shikoyat holati yangilandi","status":status})
 
 
 # -------- ADMIN --------
@@ -1417,7 +1595,7 @@ def confirm_finish():
         return jsonify({"msg": "ok", "status": "finished"})
 
     result = db.q(
-        "UPDATE jobs SET status='accepted' WHERE id=? AND status='pending_finish' AND worker_id=?",
+        "UPDATE jobs SET status='accepted' WHERE id=? AND status='pending_finish' AND user_id=?",
         (job_id, request.uid),
     )
     updated = result.rowcount
