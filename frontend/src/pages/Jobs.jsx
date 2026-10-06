@@ -137,7 +137,7 @@ export default function Jobs() {
                             <h3 className="job-title">{job.title}</h3>
                             <p className="job-desc">{job.description || "No description"}</p>
                             <div className="meta" style={{ marginBottom: 12 }}>
-                                <span className="chip">💰 {job.price ?? "-"} UZS</span>
+                                <span className="chip">💰 {job.price ?? "-"} {job.currency || "UZS"}</span>
                                 <span className="chip">📍 {job.location || "-"}</span>
                                 <span className="chip">🧩 {serviceMap[String(job.service_id)] || job.service_name || job.service_id || "Unknown"}</span>
                                 <span className="chip" style={{
