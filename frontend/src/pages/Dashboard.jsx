@@ -165,6 +165,7 @@ export default function Dashboard() {
                             const workerName = `${job.worker_first || ""} ${job.worker_last || ""}`.trim() || job.worker_username;
                             const isMyJob = String(job.user_id) === String(user?.id);
                             const isIAccepted = String(job.worker_id) === String(user?.id);
+                            const canAccept = String(job.status || "").trim().toLowerCase() === "active" && !isMyJob && !job.worker_id;
 
                             return (
                                 <article
@@ -241,7 +242,7 @@ export default function Dashboard() {
                                         </button>
 
                                         {/* --- ACCEPT TUGMASI (Mening ishim bo'lmaganda hamma uchun) --- */}
-                                        {!isMyJob && String(job.status).toLowerCase() === "active" && (
+                                        {canAccept && (
                                             <button
                                                 className="btn btn-primary"
                                                 onClick={(e) => {
