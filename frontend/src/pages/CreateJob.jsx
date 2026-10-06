@@ -47,6 +47,7 @@ function ServiceNode({ node, level, selected, onSelect }) {
 
 export default function CreateJob() {
     const [services, setServices] = useState([])
+    const [serviceSearch, setServiceSearch] = useState("")
     const [form, setForm] = useState({
         service_id: "",
         title: "",
@@ -59,6 +60,14 @@ export default function CreateJob() {
     const navigate = useNavigate()
     const token = localStorage.getItem("token") || ""
     const serviceTree = useMemo(() => buildServiceTree(services), [services])
+
+    const filteredServices = useMemo(() => {
+        const query = serviceSearch.trim().toLowerCase()
+        if (!query) return services
+        return services.filter((service) => service.name.toLowerCase().includes(query))
+    }, [services, serviceSearch])
+
+    const filteredServiceTree = useMemo(() => buildServiceTree(filteredServices), [filteredServices])
 
     useEffect(() => {
         const load = async () => {
@@ -120,8 +129,17 @@ export default function CreateJob() {
                                     ? services.find((service) => String(service.id) === String(form.service_id))?.name || "Xizmat"
                                     : "Xizmatni tanlang"}
                             </div>
+                            <div className="service-search">
+                                <input
+                                    className="input"
+                                    type="search"
+                                    placeholder="Xizmatni qidiring..."
+                                    value={serviceSearch}
+                                    onChange={(e) => setServiceSearch(e.target.value)}
+                                />
+                            </div>
                             <div className="service-tree">
-                                {serviceTree.map((node) => (
+                                {filteredServiceTree.length ? filteredServiceTree.map((node) => (
                                     <ServiceNode
                                         key={node.id}
                                         node={node}
@@ -129,7 +147,9 @@ export default function CreateJob() {
                                         selected={form.service_id}
                                         onSelect={(node) => setForm({ ...form, service_id: String(node.id) })}
                                     />
-                                ))}
+                                )) : (
+                                    <div className="empty-state">Bunday xizmat topilmadi</div>
+                                )}
                             </div>
                         </div>
 
