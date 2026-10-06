@@ -43,6 +43,7 @@ export default function Jobs() {
     const [maxPrice, setMaxPrice] = useState("")
     const [timeFilter, setTimeFilter] = useState("all")
     const [locationFilter, setLocationFilter] = useState("")
+    const [profileSkills, setProfileSkills] = useState([])
     const [notice, setNotice] = useState("")
     const [noticeType, setNoticeType] = useState("ok")
     const token = localStorage.getItem("token") || ""
@@ -73,6 +74,12 @@ export default function Jobs() {
 
         if (profileResult?.id) {
             localStorage.setItem("user", JSON.stringify(profileResult))
+            const skills = Array.isArray(profileResult.skills)
+                ? profileResult.skills
+                : typeof profileResult.skills === "string"
+                    ? profileResult.skills.split(",")
+                    : []
+            setProfileSkills(skills.map((skill) => String(skill).trim()).filter(Boolean))
         }
     }
 
@@ -129,6 +136,37 @@ export default function Jobs() {
             return textMatches && serviceMatches && priceMatches && timeMatches && locationMatches
         })
     }, [jobs, search, selectedServices, serviceMap, minPrice, maxPrice, timeFilter, locationFilter])
+
+    const recommendationData = useMemo(() => {
+        const normalizedSkills = profileSkills.map((skill) => skill.toLowerCase().trim()).filter(Boolean)
+        const scored = filtered.map((job) => {
+            const jobServices = String(job.service_name || serviceMap[String(job.service_id)] || "")
+                .split(",")
+                .map((name) => name.trim().toLowerCase())
+                .filter(Boolean)
+            const jobText = (job.title || "") + " " + (job.description || "") + " " + jobServices.join(" ")
+            let score = 0
+            const matchedSkills = []
+            normalizedSkills.forEach((skill) => {
+                if (jobServices.some((service) => service === skill)) {
+                    score += 100
+                    matchedSkills.push(skill)
+                } else if (jobServices.some((service) => service.includes(skill) || skill.includes(service))) {
+                    score += 60
+                    matchedSkills.push(skill)
+                } else if (jobText.toLowerCase().includes(skill)) {
+                    score += 25
+                    matchedSkills.push(skill)
+                }
+            })
+            return { job, score, matchedSkills }
+        })
+        scored.sort((a, b) => b.score - a.score || new Date(String(b.job.created_at || "").replace(" ", "T")).getTime() - new Date(String(a.job.created_at || "").replace(" ", "T")).getTime())
+        return {
+            recommended: scored.filter((item) => item.score > 0).slice(0, 6),
+            ranked: scored
+        }
+    }, [filtered, profileSkills, serviceMap])
 
     useEffect(() => {
         if (!showServiceMenu && !showFilters) return
@@ -361,8 +399,47 @@ export default function Jobs() {
                 {notice && <div className={`notice ${noticeType === "ok" ? "ok" : "warn"}`} style={{ marginTop: 14 }}>{notice}</div>}
             </div>
 
+            {recommendationData.recommended.length > 0 && (
+                <section className="jobs-recommendations card">
+                    <div className="jobs-recommendations-head">
+                        <div>
+                            <span className="jobs-recommendations-kicker">Siz uchun</span>
+                            <h2>Profilingizga mos ishlar</h2>
+                            <p>Profilingizdagi sohalarga mos keladigan ishlar.</p>
+                        </div>
+                        <span className="jobs-recommendations-count">{recommendationData.recommended.length} ta mos ish</span>
+                    </div>
+                    <div className="job-grid jobs-recommendation-grid">
+                        {recommendationData.recommended.map(({ job, matchedSkills }) => (
+                            <article className="card job-card job-recommended-card" key={job.id}>
+                                <div className="job-recommended-label">★ Sizga mos</div>
+                                <h3 className="job-title">{job.title}</h3>
+                                <p className="job-desc">{job.description || "Tavsif kiritilmagan"}</p>
+                                <div className="meta" style={{ marginBottom: 12 }}>
+                                    <span className="chip job-time-chip">🕒 {formatTimeAgo(job.created_at)}</span>
+                                    <span className="chip">💰 {job.price ?? "-"} {job.currency || "UZS"}</span>
+                                    <span className="chip">📍 {job.location || "-"}</span>
+                                    <span className="chip job-service-chip">🧩 {job.service_name || serviceMap[String(job.service_id)] || job.service_id || "Noma’lum"}</span>
+                                </div>
+                                <div className="job-recommended-skills">Mos sohalar: {matchedSkills.join(", ")}</div>
+                            </article>
+                        ))}
+                    </div>
+                </section>
+            )}
+
+            <div className="jobs-results-heading">
+                <div>
+                    <h2>Barcha ishlar</h2>
+                    <p>Filtrlaringizga mos barcha mavjud ishlar.</p>
+                </div>
+                {profileSkills.length > 0 && recommendationData.recommended.length === 0 && (
+                    <span className="jobs-profile-note">Profil sohalaringizga mos yangi ish hozircha topilmadi.</span>
+                )}
+            </div>
+
             <div className="job-grid">
-                {filtered.map((job) => {
+                {recommendationData.ranked.map(({ job }) => {
                     const workerName = `${job.worker_first || ""} ${job.worker_last || ""}`.trim() || job.worker_username;
                     const status = String(job.status || "").trim().toLowerCase()
                     const isMyJob = String(job.user_id) === String(user?.id)
