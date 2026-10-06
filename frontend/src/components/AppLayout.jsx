@@ -33,10 +33,10 @@ export default function AppLayout({ title, subtitle, children }) {
                     </button>
                     <div className="sidebar-profile">
                         <div style={{display:"flex",alignItems:"center",gap:10}}>
-                            <div className="brand-badge" style={{width:38,height:38,borderRadius:12,fontSize:12}}>{initials}</div>
+                            <div className="sidebar-user-avatar">{initials}</div>
                             <div style={{minWidth:0}}>
                                 <div className="sidebar-profile-name" style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{fullName}</div>
-                                <div className="helper">{isAdmin ? "Administrator" : "FinJob member"}</div>
+                                <div className="helper">{user?.email || (isAdmin ? "Administrator" : "FinJob member")}</div>
                             </div>
                         </div>
                     </div>
@@ -44,13 +44,13 @@ export default function AppLayout({ title, subtitle, children }) {
                 <nav className="sidebar-menu">
                     {navItems.map(([to, label, icon]) => (
                         <NavLink key={to} to={to} end={to === "/"} className={({isActive}) => `nav-link ${isActive ? "active" : ""}`}>
-                            <span>{label}</span><span style={{fontWeight:800}}>{icon}</span>
+                            <span className="nav-link-icon">{icon}</span><span className="nav-link-label">{label}</span>
                         </NavLink>
                     ))}
                 </nav>
                 {isAdmin && (
                     <NavLink to="/admin" className={({isActive}) => `nav-link admin-nav-link ${isActive ? "active" : ""}`}>
-                        <span>Admin</span><span style={{fontWeight:800}}>⚙</span>
+                        <span className="nav-link-icon">⚙</span><span className="nav-link-label">Admin</span>
                     </NavLink>
                 )}
                 <div className="legal-footer">
@@ -73,8 +73,8 @@ export default function AppLayout({ title, subtitle, children }) {
                         <h1 className="page-title">{title}</h1>
                         <p className="page-subtitle">{subtitle}</p>
                     </div>
-                    <button className="btn btn-secondary" onClick={() => navigate("/profile")} style={{minWidth:44}}>
-                        {initials}
+                    <button className="btn btn-secondary topbar-profile-btn" onClick={() => navigate("/profile")} aria-label="Profilni ochish">
+                        <span className="topbar-avatar">{initials}</span>
                     </button>
                 </div>
                 {children}
