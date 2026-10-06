@@ -35,8 +35,8 @@ export default function Leaderboard() {
 
     return (
         <AppLayout
-            title="Leaderboard 🏆"
-            subtitle="Eng ko'p ish yaratgan va muvaffaqiyatli yakunlagan foydalanuvchilar (Top 10)"
+            title="Reyting jadvali 🏆
+            subtitle="Eng ko‘p ish yaratgan va muvaffaqiyatli yakunlagan foydalanuvchilar (10 talik)"
         >
             {/* TABS (Tugmalar) QISMI */}
             <div className="card" style={{ marginBottom: 18 }}>
@@ -46,14 +46,14 @@ export default function Leaderboard() {
                         style={{ flex: 1 }}
                         onClick={() => setActiveTab("creators")}
                     >
-                        ✍️ Eng ko'p ish yaratganlar
+                        ✍️ Eng ko‘p ish yaratganlar
                     </button>
                     <button
                         className={`btn ${activeTab === "workers" ? "btn-primary" : "btn-secondary"}`}
                         style={{ flex: 1 }}
                         onClick={() => setActiveTab("workers")}
                     >
-                        🛠️ Eng ko'p ish bajarganlar
+                        🛠️ Eng ko‘p ish bajarganlar
                     </button>
                 </div>
             </div>
@@ -61,7 +61,7 @@ export default function Leaderboard() {
             {/* RO'YXAT QISMI */}
             <div className="card">
                 <h3 style={{ marginBottom: 18 }}>
-                    {activeTab === "creators" ? "Ish Beruvchilar Reytingi" : "Ustalar Reytingi"}
+                    {activeTab === "creators" ? "Ish beruvchilar reytingi" : "Bajaruvchilar reytingi"}
                 </h3>
 
                 <div className="leaderboard-list">
