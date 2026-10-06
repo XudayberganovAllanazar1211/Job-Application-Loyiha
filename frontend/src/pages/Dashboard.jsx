@@ -52,8 +52,18 @@ export default function Dashboard() {
 
     const loadMessages = async (job) => {
         if (!job) return
+
+        const participant =
+            String(job.user_id) === String(user?.id) ||
+            String(job.worker_id) === String(user?.id)
+
+        if (!participant) {
+            setMessages([])
+            return
+        }
+
         const result = await api(`/messages/${job.id}`, { token })
-        if (Array.isArray(result)) setMessages(result)
+        setMessages(Array.isArray(result) ? result : [])
     }
 
     useEffect(() => {
