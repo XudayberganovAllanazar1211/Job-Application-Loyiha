@@ -250,3 +250,8 @@ input[type=range]{accent-color:#2563eb}
 @media(max-width:900px){.profile-stat-grid{grid-template-columns:1fr 1fr}.profile-content-grid{grid-template-columns:1fr}}
 @media(max-width:600px){.profile-hero{align-items:flex-start;flex-direction:column}.profile-hero-actions,.profile-hero-actions .btn{width:100%}.profile-identity{align-items:flex-start}.profile-avatar{width:62px;height:62px;flex-basis:62px;border-radius:18px;font-size:21px}.profile-name-row h2{font-size:20px}.profile-stat-grid{grid-template-columns:1fr 1fr}.profile-stat{padding:14px}.profile-stat-icon{display:none}.profile-skill-add{grid-template-columns:1fr}.profile-form-actions{flex-direction:column}}
 @media(max-width:420px){.profile-stat-grid{grid-template-columns:1fr}}
+
+.profile-service-picker{grid-column:1/-1;border:1px solid #e7ebf2;border-radius:14px;overflow:hidden;background:#fff}
+.profile-service-picker .service-search{border-bottom:1px solid #eef1f5}
+.profile-service-picker .service-tree{max-height:300px}
+.profile-skill-add .service-select-button{width:100%;margin:0}
