@@ -62,6 +62,8 @@ export default function CreateJob() {
     const [notice, setNotice] = useState("")
     const [loading, setLoading] = useState(false)
     const [priceError, setPriceError] = useState("")
+    const [locationLoading, setLocationLoading] = useState(false)
+    const [locationError, setLocationError] = useState("")
     const navigate = useNavigate()
     const token = localStorage.getItem("token") || ""
     const serviceTree = useMemo(() => buildServiceTree(services), [services])
@@ -93,6 +95,51 @@ export default function CreateJob() {
             form.location.trim(),
         [form, selectedServiceIds, customServices, priceError]
     )
+
+    const detectLocation = () => {
+        if (!navigator.geolocation) {
+            setLocationError("Brauzeringiz joylashuvni aniqlashni qo'llab-quvvatlamaydi.")
+            return
+        }
+
+        setLocationError("")
+        setLocationLoading(true)
+
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                const { latitude, longitude } = position.coords
+                const result = await api(
+                    `/reverse-geocode?lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}`,
+                    { token }
+                )
+
+                if (result?.ok && result.location) {
+                    setForm((current) => ({ ...current, location: result.location }))
+                } else {
+                    setLocationError(result?.msg || "Joylashuv manzilini aniqlab bo'lmadi.")
+                }
+
+                setLocationLoading(false)
+            },
+            (error) => {
+                if (error.code === 1) {
+                    setLocationError("Joylashuvga ruxsat berilmadi. Brauzer sozlamalaridan ruxsat bering.")
+                } else if (error.code === 2) {
+                    setLocationError("Joylashuv aniqlanmadi. GPS yoki internet aloqasini tekshiring.")
+                } else if (error.code === 3) {
+                    setLocationError("Joylashuvni aniqlash vaqti tugadi. Qaytadan urinib ko'ring.")
+                } else {
+                    setLocationError("Joylashuvni aniqlashda xatolik yuz berdi.")
+                }
+                setLocationLoading(false)
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 12000,
+                maximumAge: 60000
+            }
+        )
+    }
 
     const submit = async (e) => {
         e.preventDefault()
@@ -308,12 +355,31 @@ export default function CreateJob() {
                                 </div>
                                 {priceError && <div className="field-error">{priceError}</div>}
                             </div>
-                            <input
-                                className="input"
-                                placeholder="Location"
-                                value={form.location}
-                                onChange={(e) => setForm({ ...form, location: e.target.value })}
-                            />
+                            <div className="location-field">
+                                <div className="location-input-row">
+                                    <input
+                                        className="input"
+                                        placeholder="Location"
+                                        value={form.location}
+                                        onChange={(e) => {
+                                            setForm({ ...form, location: e.target.value })
+                                            setLocationError("")
+                                        }}
+                                    />
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary detect-location-button"
+                                        onClick={detectLocation}
+                                        disabled={locationLoading}
+                                    >
+                                        {locationLoading ? "Aniqlanmoqda..." : "Joylashuvimni aniqlash"}
+                                    </button>
+                                </div>
+                                {locationError && <div className="location-error">{locationError}</div>}
+                                <div className="location-attribution">
+                                    Manzil ma'lumoti: © OpenStreetMap contributors
+                                </div>
+                            </div>
                         </div>
 
                         <button className="btn btn-primary" disabled={!canSubmit || loading}>
