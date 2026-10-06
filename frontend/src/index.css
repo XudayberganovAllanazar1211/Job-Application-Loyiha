@@ -533,3 +533,5 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 
 .job-worker-chip{background:#f8fafc!important;color:#64748b!important;border-color:#e2e8f0!important}
 .job-accepted-chip{background:#ecfdf5!important;color:#15803d!important;border-color:#bbf7d0!important}
+
+.sidebar-user-avatar img,.topbar-avatar img{width:100%;height:100%;display:block;object-fit:cover;border-radius:inherit}
