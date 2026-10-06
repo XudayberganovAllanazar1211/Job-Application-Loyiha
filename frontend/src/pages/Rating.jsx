@@ -123,7 +123,7 @@ export default function Rating() {
 
                         <div>
                             <label className="helper" style={{ display: "block", marginBottom: 4 }}>Baho berilayotgan foydalanuvchi</label>
-                            <div className="input" style={{ background: "#f8fafc", color: "#334155" }}>
+                            <div className="input rating-user-field">
                                 {job
                                     ? (String(job.worker_id) === String(me?.id)
                                         ? ([job.creator_first, job.creator_last].filter(Boolean).join(" ") || job.creator_username || "Foydalanuvchi")
