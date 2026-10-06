@@ -519,3 +519,14 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 @media(max-width:1100px){.jobs-search-input{min-width:200px}.jobs-service-search{width:min(300px,100%)}}
 @media(max-width:850px){.jobs-toolbar{flex-wrap:wrap}.jobs-search-input,.jobs-service-search{width:100%;min-width:0}.jobs-toolbar>.btn{flex:1}}
 @media(max-width:520px){.jobs-toolbar>.btn{flex:initial;width:100%}}
+
+
+.jobs-filter-wrap{position:relative}
+.jobs-filter-panel{position:absolute;z-index:35;right:0;top:calc(100% + 8px);width:min(430px,calc(100vw - 32px));padding:16px;background:#fff;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 20px 45px rgba(15,23,42,.14)}
+.jobs-filter-title{margin-bottom:12px;font:800 14px Manrope,sans-serif;color:#172033}
+.jobs-filter-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-bottom:12px}
+.jobs-filter-grid label{display:grid;gap:6px;min-width:0;font-size:11px;font-weight:800;color:#64748b}
+.jobs-filter-grid .input{margin:0}
+.jobs-filter-panel>.btn{width:100%}
+@media(max-width:850px){.jobs-filter-wrap{width:100%}.jobs-filter-wrap>.btn{width:100%}.jobs-filter-panel{left:0;right:auto;width:100%;max-width:none}}
+@media(max-width:520px){.jobs-filter-grid{grid-template-columns:1fr}}
