@@ -80,7 +80,7 @@ export default function Jobs() {
     }
 
     // Tasdiqlash natijasini yuborish (Ha yoki Yo'q)
-    const handleConfirmYakunlash = async (jobId, choice) => {
+    const handleConfirmFinish = async (jobId, choice) => {
         const result = await api("/confirm_finish", {
             method: "POST",
             body: { job_id: jobId, choice },
@@ -156,7 +156,7 @@ export default function Jobs() {
                             <div className="meta" style={{ marginBottom: 12 }}>
                                 <span className="chip">💰 {job.price ?? "-"} {job.currency || "UZS"}</span>
                                 <span className="chip">📍 {job.location || "-"}</span>
-                                <span className="chip">🧩 {serviceMap[String(job.service_id)] || job.service_name || job.service_id || "Unknown"}</span>
+                                <span className="chip">🧩 {serviceMap[String(job.service_id)] || job.service_name || job.service_id || "Noma’lum"}</span>
                                 <span className={`chip status-chip status-${status}`}><span className="status-dot" />{statusLabel}</span>
 
                                 {isMyJob && (
@@ -179,10 +179,10 @@ export default function Jobs() {
                                         Siz ishni bajarib bo'ldingizmi va to'lovni qabul qildingizmi?
                                     </strong>
                                     <div style={{ display: "flex", gap: "8px" }}>
-                                        <button className="btn btn-success" style={{ padding: "4px 14px" }} onClick={() => handleConfirmYakunlash(job.id, "yes")}>
+                                        <button className="btn btn-success" style={{ padding: "4px 14px" }} onClick={() => handleConfirmFinish(job.id, "yes")}>
                                             Ha
                                         </button>
-                                        <button className="btn btn-warn" style={{ padding: "4px 14px", background: "#ef4444" }} onClick={() => handleConfirmYakunlash(job.id, "no")}>
+                                        <button className="btn btn-warn" style={{ padding: "4px 14px", background: "#ef4444" }} onClick={() => handleConfirmFinish(job.id, "no")}>
                                             Yo'q
                                         </button>
                                     </div>
