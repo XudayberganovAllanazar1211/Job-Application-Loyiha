@@ -333,3 +333,9 @@ input[type=range]{accent-color:#2563eb}
 .legal-footer-links a{padding:7px 8px;border-radius:9px;color:#94a3b8;font-size:12px;font-weight:600}
 .legal-footer-links a:hover{background:#f8fafc;color:#334155}
 @media(max-width:600px){.legal-page{padding:16px 10px}.legal-card{padding:22px 18px;border-radius:18px}.legal-top{align-items:flex-start}}
+
+.policy-check{display:flex;align-items:flex-start;gap:9px;color:#64748b;font-size:12px;line-height:1.5}
+.policy-check input{width:16px;height:16px;flex:0 0 16px;margin-top:1px;accent-color:#2563eb;cursor:pointer}
+.auth-legal-links{display:flex;flex-wrap:wrap;gap:12px;margin-top:14px;font-size:12px}
+.auth-legal-links a{color:#94a3b8;font-weight:600}
+.auth-legal-links a:hover{color:#2563eb}
