@@ -134,3 +134,25 @@ input[type=range]{accent-color:#2563eb}
 .service-search .input {
     margin: 0;
 }
+
+.service-search-result {
+    display: block;
+    width: 100%;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--text);
+    text-align: left;
+    padding: 10px 14px;
+    font: inherit;
+    cursor: pointer;
+}
+
+.service-search-result:hover {
+    background: rgba(255,255,255,.07);
+}
+
+.service-search-result.selected {
+    background: rgba(99,102,241,.18);
+    color: #fff;
+}
