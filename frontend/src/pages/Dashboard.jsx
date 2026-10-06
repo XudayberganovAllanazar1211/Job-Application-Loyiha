@@ -139,7 +139,7 @@ export default function Dashboard() {
             <div className="stat-grid" style={{ marginBottom: 18 }}>
                 <div className="stat-card">
                     <div className="stat-label">Active jobs</div>
-                    <div className="stat-value">{jobs.length}</div>
+                    <div className="stat-value">{jobs.filter((job) => String(job.status || "").trim().toLowerCase() === "active").length}</div>
                 </div>
                 <div className="stat-card">
                     <div className="stat-label">Services</div>
@@ -159,7 +159,7 @@ export default function Dashboard() {
                         <div className="page-head">
                             <h2 style={{ margin: 0 }}>My Workspace</h2>
                             <p className="muted" style={{ margin: 0 }}>
-                                Siz yaratgan yoki siz qabul qilgan barcha faol ishlar ro'yxati.
+                                Faol e'lonlar hamda siz yaratgan yoki qabul qilgan ishlar shu yerda ko'rinadi.
                             </p>
                         </div>
                         <div className="actions">
