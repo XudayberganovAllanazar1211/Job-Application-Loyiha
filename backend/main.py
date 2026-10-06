@@ -26,6 +26,16 @@ app = Flask(__name__)
 allowed_origins = os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://localhost:5174").split(",")
 CORS(app, resources={r"/*": {"origins": [origin.strip() for origin in allowed_origins if origin.strip()]}})
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
+app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
+
+
+@app.after_request
+def add_security_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=()"
+    return response
 
 # -------- E-MAIL (SMTP) SOZLAMALARI --------
 SMTP_SERVER = os.environ.get("SMTP_SERVER", "smtp.gmail.com")
