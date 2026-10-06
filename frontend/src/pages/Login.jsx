@@ -71,7 +71,7 @@ export default function Login() {
                     <form className="form" onSubmit={submit}>
                         <input
                             className="input"
-                            placeholder="Username yoki Email"
+                            placeholder="Foydalanuvchi nomi yoki elektron pochta"
                             value={form.username}
                             onChange={(e) => setForm({ ...form, username: e.target.value })}
                             required
@@ -79,7 +79,7 @@ export default function Login() {
                         <input
                             className="input"
                             type="password"
-                            placeholder="Password"
+                            placeholder="Parol"
                             value={form.password}
                             onChange={(e) => setForm({ ...form, password: e.target.value })}
                             required
