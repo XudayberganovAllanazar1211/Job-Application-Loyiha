@@ -199,6 +199,12 @@ class DB:
             except Exception:
                 pass
 
+        if "finished_at" not in existing_job_cols:
+            try:
+                cursor.execute("ALTER TABLE jobs ADD COLUMN finished_at TEXT")
+            except Exception:
+                pass
+
         cursor.execute("PRAGMA table_info(ratings)")
         existing_rating_cols = [row[1] for row in cursor.fetchall()]
         if "created_at" not in existing_rating_cols:
@@ -482,7 +488,7 @@ def send_code():
     if exists_e:
         return jsonify({"msg": "Ushbu Email allaqachon ro'yxatdan o'tgan!"}), 400
 
-    code = str(random.randint(100000, 999999))
+    code = str(secrets.randbelow(900000) + 100000)
     email_key = d["email"].strip().lower()
     pending_verifications[email_key] = {
         "code": code,
