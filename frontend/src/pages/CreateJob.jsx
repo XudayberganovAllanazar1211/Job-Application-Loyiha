@@ -220,19 +220,7 @@ export default function CreateJob() {
                                                 {service.name}
                                             </button>
                                         )) : (
-                                            <div>
-                                                <div className="empty-state">Bunday xizmat topilmadi</div>
-                                                <input
-                                                    className="input"
-                                                    style={{ marginTop: 10 }}
-                                                    placeholder="Boshqa soha nomini yozing..."
-                                                    value={customService}
-                                                    onChange={(e) => {
-                                                        setCustomService(e.target.value)
-                                                        setForm({ ...form, service_id: "" })
-                                                    }}
-                                                />
-                                            </div>
+                                            <div className="empty-state">Bunday xizmat topilmadi</div>
                                         )
                                     })()
                                 ) : (
