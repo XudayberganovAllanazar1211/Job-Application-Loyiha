@@ -278,6 +278,39 @@ export default function Admin() {
                     </div>
                 )}
 
+                {data && tab === "reports" && (
+                    <div className="admin-table-wrap">
+                        <table className="admin-table">
+                            <thead><tr><th>ID</th><th>Yuboruvchi</th><th>Foydalanuvchi</th><th>Sabab</th><th>Tafsilot</th><th>Sana</th><th>Holat</th></tr></thead>
+                            <tbody>
+                                {(data.reports || []).map((item) => (
+                                    <tr key={item.id}>
+                                        <td>#{item.id}</td>
+                                        <td>@{item.reporter_username || "—"}</td>
+                                        <td>@{item.reported_username || "—"}</td>
+                                        <td><strong>{item.reason}</strong></td>
+                                        <td>{item.details || "—"}</td>
+                                        <td>{item.created_at || "—"}</td>
+                                        <td>
+                                            <select className="admin-action-select" value={item.status} onChange={async (event) => {
+                                                const result = await api("/admin/report/"+item.id, { method:"PATCH", body:{status:event.target.value}, token })
+                                                if (result?.ok) load()
+                                                else { setNoticeType("warn"); setNotice(result?.msg || "Holatni o‘zgartirib bo‘lmadi.") }
+                                            }}>
+                                                <option value="open">ochiq</option>
+                                                <option value="reviewing">ko‘rib chiqilmoqda</option>
+                                                <option value="resolved">hal qilindi</option>
+                                                <option value="rejected">rad etildi</option>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        {!(data.reports || []).length && <div className="empty-state">Hozircha shikoyatlar yo‘q.</div>}
+                    </div>
+                )}
+
                 {data && tab === "ratings" && (
                     <div className="admin-table-wrap">
                         <table className="admin-table">
