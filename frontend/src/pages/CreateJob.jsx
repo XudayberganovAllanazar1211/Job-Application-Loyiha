@@ -173,16 +173,37 @@ export default function CreateJob() {
                                 />
                             </div>
                             <div className="service-tree">
-                                {filteredServiceTree.length ? filteredServiceTree.map((node) => (
-                                    <ServiceNode
-                                        key={node.id}
-                                        node={node}
-                                        level={0}
-                                        selected={form.service_id}
-                                        onSelect={(node) => setForm({ ...form, service_id: String(node.id) })}
-                                    />
-                                )) : (
-                                    <div className="empty-state">Bunday xizmat topilmadi</div>
+                                {serviceSearch.trim() ? (
+                                    (() => {
+                                        const parentIds = new Set(filteredServices.map((service) => String(service.parent_id)))
+                                        const exactServices = filteredServices.filter(
+                                            (service) => !parentIds.has(String(service.id))
+                                        )
+                                        return exactServices.length ? exactServices.map((service) => (
+                                            <button
+                                                key={service.id}
+                                                type="button"
+                                                className={String(form.service_id) === String(service.id) ? "service-search-result selected" : "service-search-result"}
+                                                onClick={() => setForm({ ...form, service_id: String(service.id) })}
+                                            >
+                                                {service.name}
+                                            </button>
+                                        )) : (
+                                            <div className="empty-state">Bunday xizmat topilmadi</div>
+                                        )
+                                    })()
+                                ) : (
+                                    filteredServiceTree.length ? filteredServiceTree.map((node) => (
+                                        <ServiceNode
+                                            key={node.id}
+                                            node={node}
+                                            level={0}
+                                            selected={form.service_id}
+                                            onSelect={(node) => setForm({ ...form, service_id: String(node.id) })}
+                                        />
+                                    )) : (
+                                        <div className="empty-state">Bunday xizmat topilmadi</div>
+                                    )
                                 )}
                             </div>
                         </div>
