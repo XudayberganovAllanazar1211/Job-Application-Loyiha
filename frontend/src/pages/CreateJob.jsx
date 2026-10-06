@@ -171,9 +171,26 @@ export default function CreateJob() {
                     <form className="form" onSubmit={submit}>
                         <div className="service-picker">
                             <div className="service-picker-title">
-                                {form.service_id
-                                    ? services.find((service) => String(service.id) === String(form.service_id))?.name || "Xizmat"
-                                    : customService || "Xizmatni tanlang"}
+                                <span>
+                                    {form.service_id
+                                        ? services.find((service) => String(service.id) === String(form.service_id))?.name || "Xizmat"
+                                        : customService || "Xizmatni tanlang"}
+                                </span>
+                                {(form.service_id || customService) && (
+                                    <button
+                                        type="button"
+                                        className="service-remove-button"
+                                        onClick={() => {
+                                            setForm({ ...form, service_id: "" })
+                                            setCustomService("")
+                                            setServiceSearch("")
+                                            setShowCategories(false)
+                                        }}
+                                        aria-label="Tanlangan sohani olib tashlash"
+                                    >
+                                        ×
+                                    </button>
+                                )}
                             </div>
                             <button
                                 type="button"
