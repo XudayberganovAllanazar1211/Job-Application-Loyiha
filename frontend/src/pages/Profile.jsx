@@ -320,7 +320,7 @@ export default function Profile() {
                                     <h2>{fullName}</h2>
                                     <span className="profile-role">{form.role === "admin" ? "Administrator" : "Foydalanuvchi"}</span>
                                 </div>
-                                <p>@{form.username || "username"}</p>
+                                <p>@{form.username || "foydalanuvchi"}</p>
                                 <span>{form.email || "Elektron pochta kiritilmagan"}</span>
                             </div>
                         </div>
@@ -442,7 +442,7 @@ export default function Profile() {
                                         value={form.bio}
                                         onChange={(e) => setForm({ ...form, bio: e.target.value })}
                                         disabled={!isEditing}
-                                        placeholder="O'zingiz, tajribangiz yoki xizmatlaringiz haqida qisqacha yozing..."
+                                        placeholder="O‘zingiz, tajribangiz yoki xizmatlaringiz haqida qisqacha yozing..."
                                     />
                                 </div>
 
@@ -547,7 +547,7 @@ export default function Profile() {
                                         <input
                                             className="input"
                                             type="text"
-                                            placeholder="Boshqa ko'nikma..."
+                                            placeholder="Boshqa ko‘nikma..."
                                             value={newSkill}
                                             onChange={(e) => setNewSkill(e.target.value)}
                                             onKeyDown={(e) => {
