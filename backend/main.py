@@ -333,6 +333,116 @@ class DB:
             }
         }
 
+        service_translations = {
+          "Backend": "Backend",
+          "Frontend": "Frontend",
+          "Mobile": "Mobil ilovalar",
+          "Desktop": "Kompyuter dasturlari",
+          "Game Development": "O‘yin yaratish",
+          "Automation": "Avtomatlashtirish",
+          "Dizayn": "Dizayn",
+          "Grafik": "Grafika",
+          "Photography": "Fotosurat",
+          "Digital Marketing": "Raqamli marketing",
+          "Content": "Kontent",
+          "Business": "Biznes xizmatlari",
+          "Office": "Ofis",
+          "Beauty": "Go‘zallik",
+          "Python Backend": "Python backend",
+          "API Integration": "API integratsiyasi",
+          "Database Backend": "Ma’lumotlar bazasi backend",
+          "Authentication": "Autentifikatsiya",
+          "Payment Integration": "To‘lov integratsiyasi",
+          "UI Development": "UI yaratish",
+          "Responsive Web": "Moslashuvchan veb-sayt",
+          "Landing Page": "Bir sahifali sayt",
+          "Figma to HTML": "Figma dizaynini HTMLga o‘tkazish",
+          "Frontend Bug Fix": "Frontend xatolarini tuzatish",
+          "Mobile UI": "Mobil UI",
+          "Mobile Bug Fix": "Mobil xatolarni tuzatish",
+          "Desktop App": "Kompyuter dasturi",
+          "C++ App": "C++ dasturi",
+          "C# App": "C# dasturi",
+          "Java App": "Java dasturi",
+          "2D Game": "2D o‘yin",
+          "3D Game": "3D o‘yin",
+          "Game Bug Fix": "O‘yin xatolarini tuzatish",
+          "Python Automation": "Python avtomatlashtirish",
+          "Web Scraping": "Veb-ma’lumot yig‘ish",
+          "Browser Automation": "Brauzerni avtomatlashtirish",
+          "Data Processing": "Ma’lumotlarni qayta ishlash",
+          "Excel Automation": "Excel avtomatlashtirish",
+          "Bot Automation": "Botlarni avtomatlashtirish",
+          "Website UI/UX": "Veb-sayt UI/UX",
+          "Mobile UI/UX": "Mobil UI/UX",
+          "Dashboard Design": "Boshqaruv paneli dizayni",
+          "Prototype": "Prototip",
+          "Design System": "Dizayn tizimi",
+          "Logo Design": "Logotip dizayni",
+          "Banner Design": "Banner dizayni",
+          "Poster Design": "Poster dizayni",
+          "Social Media Design": "Ijtimoiy tarmoq dizayni",
+          "Presentation Design": "Taqdimot dizayni",
+          "Business Card": "Vizitka dizayni",
+          "Illustration": "Illustratsiya",
+          "Infographic": "Infografika",
+          "3D Modeling": "3D modellashtirish",
+          "3D Product Design": "3D mahsulot dizayni",
+          "Blender": "Blender",
+          "3D Animation": "3D animatsiya",
+          "Video Editing": "Video montaj",
+          "Short Video": "Qisqa video",
+          "YouTube Video": "YouTube video",
+          "Reels/TikTok": "Reels/TikTok video",
+          "Motion Graphics": "Harakatli grafika",
+          "Subtitle Editing": "Subtitr tahriri",
+          "Video Color Correction": "Video ranglarini to‘g‘rilash",
+          "Audio Editing": "Audio tahriri",
+          "Podcast Editing": "Podkast tahriri",
+          "Voice Over": "Ovozli ijro",
+          "Sound Design": "Ovoz dizayni",
+          "Photo Editing": "Foto tahriri",
+          "Product Photography": "Mahsulot fotosurati",
+          "Portrait Photography": "Portret fotosurati",
+          "Event Photography": "Tadbir fotosurati",
+          "Background Removal": "Fon olib tashlash",
+          "Instagram Marketing": "Instagram marketingi",
+          "TikTok Marketing": "TikTok marketingi",
+          "Facebook Marketing": "Facebook marketingi",
+          "Google Ads": "Google reklamalari",
+          "Target Advertising": "Maqsadli reklama",
+          "Email Marketing": "Elektron pochta marketingi",
+          "SEO Optimization": "SEO optimizatsiyasi",
+          "Keyword Research": "Kalit so‘zlarni tadqiq qilish",
+          "Technical SEO": "Texnik SEO",
+          "Local SEO": "Mahalliy SEO",
+          "SEO Content": "SEO kontenti",
+          "Copywriting": "Kopirayting",
+          "Blog Writing": "Blog yozish",
+          "Product Description": "Mahsulot tavsifi",
+          "Technical Writing": "Texnik yozuv",
+          "Translation": "Tarjima",
+          "Proofreading": "Tahrir va tekshiruv",
+          "Business Plan": "Biznes reja",
+          "Market Research": "Bozor tadqiqoti",
+          "Business Consulting": "Biznes konsultatsiyasi",
+          "Financial Analysis": "Moliyaviy tahlil",
+          "Project Management": "Loyiha boshqaruvi",
+          "Data Entry": "Ma’lumot kiritish",
+          "Virtual Assistant": "Virtual yordamchi",
+          "Document Formatting": "Hujjatlarni formatlash",
+          "General Cleaning": "Umumiy tozalash",
+          "Makeup": "Pardoz",
+          "Foydalanuvchi": "Foydalanuvchi"
+}
+
+        for old_name, new_name in service_translations.items():
+            if old_name != new_name:
+                cursor.execute(
+                    "UPDATE services SET name=? WHERE name=?",
+                    (new_name, old_name)
+                )
+
         def ensure_service(name, parent_id=None):
             cursor.execute(
                 "SELECT id FROM services WHERE name=? AND parent_id IS ?",
@@ -421,13 +531,13 @@ def auth(f):
         t = request.headers.get("Authorization", "")
         parts = t.split()
         if len(parts) != 2 or parts[0].lower() != "bearer":
-            return jsonify({"msg": "Authorization token talab qilinadi"}), 401
+            return jsonify({"msg": "Kirish tokeni talab qilinadi"}), 401
         try:
             d = jwt.decode(parts[1], app.config["SECRET_KEY"], algorithms=["HS256"])
             request.uid = d["id"]
             request.user_role = d.get("role", "user")
         except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, KeyError):
-            return jsonify({"msg": "Token yaroqsiz yoki muddati tugagan"}), 401
+            return jsonify({"msg": "Kirish tokeni yaroqsiz yoki muddati tugagan"}), 401
         return f(*a, **k)
 
     return w
@@ -440,7 +550,7 @@ def admin_required(f):
         u = db.q("SELECT role FROM users WHERE id=?", (request.uid,)).fetchone()
         role = u[0] if u else "user"
         if role != "admin":
-            return jsonify({"msg": "Ruxsat berilmadi: Faqat administratorlar uchun ruxsat etilgan!"}), 403
+            return jsonify({"msg": "Ruxsat berilmadi: bu amal faqat administratorlar uchun."}), 403
         return f(*a, **k)
 
     return w
@@ -509,10 +619,10 @@ def admin_user_role():
     role = str(d.get("role", "")).strip().lower()
 
     if not user_id or role not in ("user", "admin"):
-        return jsonify({"msg": "User ID va role to'g'ri kiritilishi kerak."}), 400
+        return jsonify({"msg": "Foydalanuvchi ID raqami va roli to‘g‘ri ko‘rsatilishi kerak."}), 400
 
     if int(user_id) == int(request.uid):
-        return jsonify({"msg": "O'zingizning admin rolingizni bu yerdan o'zgartira olmaysiz."}), 400
+        return jsonify({"msg": "Bu yerdan o‘zingizning administrator rolingizni o‘zgartira olmaysiz."}), 400
 
     target = db.q("SELECT id, role FROM users WHERE id=?", (user_id,)).fetchone()
     if not target:
@@ -545,7 +655,7 @@ def admin_update_user(user_id):
     password = str(d.get("password", ""))
 
     if not username or not email:
-        return jsonify({"msg": "Username va email bo'sh bo'lishi mumkin emas."}), 400
+        return jsonify({"msg": "Foydalanuvchi nomi va elektron pochta bo‘sh bo‘lishi mumkin emas."}), 400
 
     duplicate = db.q(
         """SELECT id FROM users
@@ -554,7 +664,7 @@ def admin_update_user(user_id):
     ).fetchone()
 
     if duplicate:
-        return jsonify({"msg": "Bu username yoki email boshqa userda mavjud."}), 409
+        return jsonify({"msg": "Bu foydalanuvchi nomi yoki elektron pochta boshqa foydalanuvchida mavjud."}), 409
 
     if password:
         if len(password) < 8:
@@ -591,7 +701,7 @@ def admin_delete_user(user_id):
         return jsonify({"msg": "Foydalanuvchi topilmadi."}), 404
 
     if target[1] == "admin":
-        return jsonify({"msg": "Boshqa adminni o'chirish uchun avval uning rolini user qiling."}), 400
+        return jsonify({"msg": "Boshqa administratorni o‘chirish uchun avval uning rolini foydalanuvchiga o‘zgartiring."}), 400
 
     conn = db.get_connection()
     try:
@@ -620,17 +730,17 @@ def admin_update_job(job_id):
     allowed = {"active", "accepted", "pending_finish", "finished"}
 
     if status not in allowed:
-        return jsonify({"msg": "Noto'g'ri job statusi."}), 400
+        return jsonify({"msg": "Ish holati noto‘g‘ri."}), 400
 
     job = db.q("SELECT id FROM jobs WHERE id=?", (job_id,)).fetchone()
     if not job:
-        return jsonify({"msg": "Job topilmadi."}), 404
+        return jsonify({"msg": "Ish topilmadi."}), 404
 
     job_state = db.q("SELECT worker_id FROM jobs WHERE id=?", (job_id,)).fetchone()
     worker_id = job_state[0] if job_state else None
 
     if status in {"accepted", "pending_finish", "finished"} and not worker_id:
-        return jsonify({"msg": "Bu status uchun jobga avval bajaruvchi biriktirilishi kerak."}), 400
+        return jsonify({"msg": "Bu holatni tanlash uchun avval ishga bajaruvchi biriktirilishi kerak."}), 400
 
     if status == "active":
         db.q("UPDATE jobs SET status='active', worker_id=NULL, finished_at=NULL WHERE id=?", (job_id,)).close()
@@ -642,7 +752,7 @@ def admin_update_job(job_id):
         finished_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
         db.q("UPDATE jobs SET status='finished', finished_at=? WHERE id=?", (finished_at, job_id)).close()
 
-    return jsonify({"msg": "Job statusi yangilandi."})
+    return jsonify({"msg": "Ish holati yangilandi."})
 
 
 @app.route("/admin/job/<int:job_id>", methods=["DELETE"])
@@ -650,7 +760,7 @@ def admin_update_job(job_id):
 def admin_delete_job(job_id):
     job = db.q("SELECT id FROM jobs WHERE id=?", (job_id,)).fetchone()
     if not job:
-        return jsonify({"msg": "Job topilmadi."}), 404
+        return jsonify({"msg": "Ish topilmadi."}), 404
 
     conn = db.get_connection()
     try:
@@ -666,7 +776,7 @@ def admin_delete_job(job_id):
     finally:
         conn.close()
 
-    return jsonify({"msg": "Job o'chirildi."})
+    return jsonify({"msg": "Ish o‘chirildi."})
 
 
 @app.route("/admin/service", methods=["POST"])
@@ -705,7 +815,7 @@ def admin_create_service():
     new_id = result.lastrowid
     result.close()
 
-    return jsonify({"msg": "Xizmat qo'shildi.", "id": new_id}), 201
+    return jsonify({"msg": "Xizmat qo‘shildi.", "id": new_id}), 201
 
 
 @app.route("/admin/service/<int:service_id>", methods=["DELETE"])
@@ -727,7 +837,7 @@ def admin_delete_service(service_id):
         return jsonify({"msg": "Bu xizmat mavjud joblarda ishlatilgan, o'chirib bo'lmaydi."}), 409
 
     db.q("DELETE FROM services WHERE id=?", (service_id,)).close()
-    return jsonify({"msg": "Xizmat o'chirildi."})
+    return jsonify({"msg": "Xizmat o‘chirildi."})
 
 
 @app.route("/admin/rating/<int:rating_id>", methods=["DELETE"])
@@ -735,7 +845,7 @@ def admin_delete_service(service_id):
 def admin_delete_rating(rating_id):
     rating = db.q("SELECT id FROM ratings WHERE id=?", (rating_id,)).fetchone()
     if not rating:
-        return jsonify({"msg": "Rating topilmadi."}), 404
+        return jsonify({"msg": "Baho topilmadi."}), 404
 
     target = db.q("SELECT to_user FROM ratings WHERE id=?", (rating_id,)).fetchone()
     db.q("DELETE FROM ratings WHERE id=?", (rating_id,)).close()
@@ -747,7 +857,7 @@ def admin_delete_rating(rating_id):
         ).fetchone()[0]
         db.q("UPDATE users SET average_rating=? WHERE id=?", (round(float(average), 2), target[0])).close()
 
-    return jsonify({"msg": "Rating o'chirildi."})
+    return jsonify({"msg": "Baho o‘chirildi."})
 
 
 # -------- AUTH --------
@@ -758,7 +868,7 @@ def login():
     password = d.get("password", "")
 
     if not username_or_email or not password:
-        return jsonify({"msg": "Username/Email va parol kiritilishi shart!"}), 400
+        return jsonify({"msg": "Foydalanuvchi nomi/elektron pochta va parol kiritilishi shart!"}), 400
 
     u = db.q(
         "SELECT id, password, role FROM users WHERE username=? OR email=?",
@@ -767,7 +877,7 @@ def login():
     if u and check_password_hash(u[1], password):
         user_role = u[2] if len(u) > 2 and u[2] else "user"
         return jsonify({"token": token(u[0], role=user_role), "role": user_role})
-    return jsonify({"msg": "Username/Email yoki Parol xato!"}), 401
+    return jsonify({"msg": "Foydalanuvchi nomi/elektron pochta yoki parol xato!"}), 401
 
 
 # 1-QADAM: Emailga tasdiqlash kodini yuborish
@@ -800,7 +910,7 @@ def send_code():
 
     if not send_email_code(email_key, code):
         pending_verifications.pop(email_key, None)
-        return jsonify({"msg": "Tasdiqlash emailini yuborib bo'lmadi. SMTP sozlamalarini tekshiring."}), 502
+        return jsonify({"msg": "Tasdiqlash xatini yuborib bo‘lmadi. Elektron pochta sozlamalarini tekshiring."}), 502
     return jsonify({"msg": "ok", "info": "Tasdiqlash kodi elektron pochtangizga yuborildi."})
 
 
@@ -878,7 +988,7 @@ def add_service():
         try:
             parent_id = int(parent_id)
         except (TypeError, ValueError):
-            return jsonify({"msg": "parent_id noto'g'ri"}), 400
+            return jsonify({"msg": "Ota kategoriya identifikatori noto‘g‘ri"}), 400
 
         parent = db.q("SELECT id FROM services WHERE id=?", (parent_id,)).fetchone()
         if not parent:
@@ -1005,7 +1115,7 @@ def add_job():
             custom_services.append(custom_service)
 
     if not title or not location:
-        return jsonify({"msg": "Title va location maydonlarini to'ldiring"}), 400
+        return jsonify({"msg": "Sarlavha va manzil maydonlarini to‘ldiring"}), 400
 
     if not valid_service_ids and not custom_services:
         return jsonify({"msg": "Kamida bitta xizmat tanlang yoki yangi xizmat nomini kiriting"}), 400
@@ -1022,7 +1132,7 @@ def add_job():
         return jsonify({"msg": "Narx 0 dan katta va 100 000 000 000 dan oshmasligi kerak"}), 400
 
     if currency not in {"UZS", "USD", "EUR"}:
-        return jsonify({"msg": "Currency noto'g'ri tanlangan"}), 400
+        return jsonify({"msg": "Valyuta noto‘g‘ri tanlangan"}), 400
 
     primary_service_id = valid_service_ids[0] if valid_service_ids else None
     custom_service_text = ", ".join(custom_services)
@@ -1174,12 +1284,12 @@ def accept():
     d = request.json or {}
     job_id = d.get("job_id")
     if not job_id:
-        return jsonify({"msg": "job_id ko'rsatilmadi"}), 400
+        return jsonify({"msg": "Ish identifikatori ko‘rsatilmagan"}), 400
 
     try:
         job_id = int(job_id)
     except (TypeError, ValueError):
-        return jsonify({"msg": "job_id noto'g'ri"}), 400
+        return jsonify({"msg": "Ish identifikatori noto‘g‘ri"}), 400
 
     job = db.q("SELECT user_id, status, worker_id FROM jobs WHERE id=?", (job_id,)).fetchone()
     if not job:
@@ -1210,12 +1320,12 @@ def finish():
     d = request.json or {}
     job_id = d.get("job_id")
     if not job_id:
-        return jsonify({"msg": "job_id ko'rsatilmadi"}), 400
+        return jsonify({"msg": "Ish identifikatori ko‘rsatilmagan"}), 400
 
     try:
         job_id = int(job_id)
     except (TypeError, ValueError):
-        return jsonify({"msg": "job_id noto'g'ri"}), 400
+        return jsonify({"msg": "Ish identifikatori noto‘g‘ri"}), 400
 
     job = db.q("SELECT user_id, worker_id, status FROM jobs WHERE id=?", (job_id,)).fetchone()
     if not job:
@@ -1240,12 +1350,12 @@ def confirm_finish():
     choice = d.get("choice")
 
     if not job_id:
-        return jsonify({"msg": "job_id ko'rsatilmadi"}), 400
+        return jsonify({"msg": "Ish identifikatori ko‘rsatilmagan"}), 400
 
     try:
         job_id = int(job_id)
     except (TypeError, ValueError):
-        return jsonify({"msg": "job_id noto'g'ri"}), 400
+        return jsonify({"msg": "Ish identifikatori noto‘g‘ri"}), 400
 
     job = db.q("SELECT worker_id, status FROM jobs WHERE id=?", (job_id,)).fetchone()
     if not job:
@@ -1255,7 +1365,7 @@ def confirm_finish():
     if job[1] != "pending_finish":
         return jsonify({"msg": "Bu ish hozir tasdiqlashni kutmayapti"}), 400
     if choice not in ("yes", "no"):
-        return jsonify({"msg": "choice faqat yes yoki no bo'lishi mumkin"}), 400
+        return jsonify({"msg": "Tanlov faqat ha yoki yo‘q bo‘lishi mumkin"}), 400
 
     if choice == "yes":
         now_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -1277,7 +1387,7 @@ def msg():
     message_text = d.get("message", "").strip()
 
     if not job_id or not message_text:
-        return jsonify({"msg": "job_id va message maydonlari talab qilinadi"}), 400
+        return jsonify({"msg": "Ish identifikatori va xabar maydonlari talab qilinadi"}), 400
 
     job = db.q("SELECT user_id, worker_id, status FROM jobs WHERE id=?", (job_id,)).fetchone()
     if not job:
@@ -1340,7 +1450,7 @@ def add_rating():
     comment = d.get("comment", "").strip()
 
     if not job_id or to_user is None or score is None:
-        return jsonify({"msg": "job_id, to_user va score to'ldirilishi shart"}), 400
+        return jsonify({"msg": "Ish identifikatori, baho beriladigan foydalanuvchi va ball kiritilishi shart"}), 400
 
     try:
         score = int(score)
