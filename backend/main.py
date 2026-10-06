@@ -666,7 +666,16 @@ def admin_delete_rating(rating_id):
     if not rating:
         return jsonify({"msg": "Rating topilmadi."}), 404
 
+    target = db.q("SELECT to_user FROM ratings WHERE id=?", (rating_id,)).fetchone()
     db.q("DELETE FROM ratings WHERE id=?", (rating_id,)).close()
+
+    if target:
+        average = db.q(
+            "SELECT COALESCE(AVG(score), 0) FROM ratings WHERE to_user=?",
+            (target[0],)
+        ).fetchone()[0]
+        db.q("UPDATE users SET average_rating=? WHERE id=?", (round(float(average), 2), target[0])).close()
+
     return jsonify({"msg": "Rating o'chirildi."})
 
 
