@@ -194,9 +194,9 @@ export default function Dashboard() {
                         {filtered.map((job) => {
                             const status = String(job.status || "").trim().toLowerCase()
                             const isMyJob = String(job.user_id) === String(user?.id)
-                            const isIQabul qilished = String(job.worker_id) === String(user?.id)
-                            const isParticipant = isMyJob || isIQabul qilished
-                            const canQabul qilish = status === "active" && !isMyJob && job.worker_id == null
+                            const isIAccepted = String(job.worker_id) === String(user?.id)
+                            const isParticipant = isMyJob || isIAccepted
+                            const canAccept = status === "active" && !isMyJob && job.worker_id == null
                             const statusLabel = {
                                 active: "Faol",
                                 accepted: "Qabul qilingan",
@@ -221,7 +221,7 @@ export default function Dashboard() {
                                     </div>
 
                                     {/* --- IJROCHI TASDIQLASH SINOVI OYNASI --- */}
-                                    {isIQabul qilished && activeConfirmJobId === job.id && (
+                                    {isIAccepted && activeConfirmJobId === job.id && (
                                         <div style={{
                                             background: "rgba(245, 158, 11, 0.1)",
                                             border: "1px solid rgba(245, 158, 11, 0.3)",
@@ -275,7 +275,7 @@ export default function Dashboard() {
                                         )}
 
                                         {/* --- ACCEPT TUGMASI (Mening ishim bo'lmaganda hamma uchun) --- */}
-                                        {canQabul qilish && (
+                                        {canAccept && (
                                             <button
                                                 className="btn btn-primary"
                                                 onClick={(e) => {
@@ -288,7 +288,7 @@ export default function Dashboard() {
                                         )}
 
                                         {/* --- SIZ QABUL QILGANSIS CHIP --- */}
-                                        {isIQabul qilished && status === "accepted" && (
+                                        {isIAccepted && status === "accepted" && (
                                             <span className="chip" style={{ background: "rgba(34, 197, 94, 0.2)", color: "#4ade80" }}>
                                                 ✅ Qabul qilgansiz
                                             </span>
@@ -308,7 +308,7 @@ export default function Dashboard() {
                                         )}
 
                                         {/* --- FINISH TUGMASI (Bajaruvchi uchun) --- */}
-                                        {isIQabul qilished && status === "pending_finish" && activeConfirmJobId !== job.id && (
+                                        {isIAccepted && status === "pending_finish" && activeConfirmJobId !== job.id && (
                                             <button
                                                 className="btn btn-success"
                                                 style={{ background: "#f59e0b" }}
