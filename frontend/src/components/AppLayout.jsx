@@ -48,6 +48,14 @@ export default function AppLayout({ title, subtitle, children }) {
                         </NavLink>
                     ))}
                 </nav>
+                <div className="legal-footer">
+                    <div className="legal-footer-title">FinJob Legal</div>
+                    <div className="legal-footer-links">
+                        <NavLink to="/privacy">Privacy</NavLink>
+                        <NavLink to="/terms">Terms</NavLink>
+                        <NavLink to="/community-rules">Rules</NavLink>
+                    </div>
+                </div>
                 <div className="sidebar-footer">
                     <button className="btn btn-secondary" onClick={() => navigate("/profile")} style={{width:"100%",marginBottom:8}}>Profile</button>
                     <button className="btn btn-danger" onClick={logout} style={{width:"100%"}}>Log out</button>
