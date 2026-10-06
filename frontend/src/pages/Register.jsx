@@ -40,7 +40,7 @@ export default function Register() {
         }
 
         if (!acceptedPolicies) {
-            setNotice("Ro'yxatdan o'tishdan oldin Privacy Policy va Terms of Service'ni qabul qiling.")
+            setNotice("Ro'yxatdan o'tishdan oldin Maxfiylik siyosati va Foydalanish shartlari'ni qabul qiling.")
             return
         }
 
@@ -106,26 +106,26 @@ export default function Register() {
                         <div className="brand-badge">FJ</div>
                         <div>
                             <div className="brand-name">FinJob</div>
-                            <div className="helper">Find work. Get it done.</div>
+                            <div className="helper">Ish toping. Ishni yakunlang.</div>
                         </div>
                     </div>
                     <h1 className="hero-title">Xavfsiz va tezkor hisob ochish</h1>
                     <p className="hero-text">
-                        Elektron pochta orqali verification tizimi bilan himoyalangan va startup uslubidagi mukammal platforma.
+                        Elektron pochta orqali tasdiqlash kodi bilan himoyalangan zamonaviy platforma.
                     </p>
                     <div className="hero-points">
-                        <div className="hero-point">📧 Email orqali 2FA tasdiqlash kodi</div>
-                        <div className="hero-point">🧩 Multi-talent bitta umumiy profil</div>
-                        <div className="hero-point">📱 Mobilga mos responsive dizayn</div>
+                        <div className="hero-point">📧 Elektron pochta orqali ikki bosqichli tasdiqlash kodi</div>
+                        <div className="hero-point">🧩 Turli yo‘nalishlar uchun bitta umumiy profil</div>
+                        <div className="hero-point">📱 Mobil qurilmalarga mos dizayn</div>
                     </div>
                 </div>
             </section>
 
             <section className="auth-hero">
                 <div className="auth-card">
-                    <h2 style={{ marginTop: 0 }}>Register</h2>
+                    <h2 style={{ marginTop: 0 }}>Ro‘yxatdan o‘tish</h2>
                     <p className="muted" style={{ marginTop: 0 }}>
-                        {step === 1 ? "Ma'lumotlaringizni to'ldiring." : "Elektron pochtangizga yuborilgan kodni kiriting."}
+                        {step === 1 ? "Ma'lumotlaringizni to'ldiring." : "Elektron pochtangizga yuborilgan tasdiqlash kodini kiriting."}
                     </p>
 
                     {notice && (
@@ -140,14 +140,14 @@ export default function Register() {
                             <div className="form-row">
                                 <input
                                     className="input"
-                                    placeholder="Ism (First name)"
+                                    placeholder="Ism"
                                     value={form.first_name}
                                     onChange={(e) => setForm({ ...form, first_name: e.target.value })}
                                     required
                                 />
                                 <input
                                     className="input"
-                                    placeholder="Familiya (Last name)"
+                                    placeholder="Familiya"
                                     value={form.last_name}
                                     onChange={(e) => setForm({ ...form, last_name: e.target.value })}
                                     required
@@ -157,7 +157,7 @@ export default function Register() {
                             <input
                                 className="input"
                                 type="date"
-                                placeholder="Tug'ilgan sana (Birthday)"
+                                placeholder="Tug‘ilgan sana"
                                 value={form.birthday}
                                 onChange={(e) => setForm({ ...form, birthday: e.target.value })}
                                 required
@@ -206,12 +206,12 @@ export default function Register() {
                                     onChange={(e) => setAcceptedPolicies(e.target.checked)}
                                 />
                                 <span>
-                                    <Link className="link" to="/terms">Terms of Service</Link> va <Link className="link" to="/privacy">Privacy Policy</Link>ni o'qidim va qabul qilaman.
+                                    <Link className="link" to="/terms">Foydalanish shartlari</Link> va <Link className="link" to="/privacy">Maxfiylik siyosati</Link>ni o'qidim va qabul qilaman.
                                 </span>
                             </label>
 
                             <button className="btn btn-primary" disabled={loading}>
-                                {loading ? "Yuborilmoqda..." : "Kodni olish (Email)"}
+                                {loading ? "Yuborilmoqda..." : "Tasdiqlash kodini olish"}
                             </button>
                         </form>
                     ) : (
@@ -234,7 +234,7 @@ export default function Register() {
                             />
 
                             <button className="btn btn-success" disabled={loading}>
-                                {loading ? "Tasdiqlanmoqda..." : "Tasdiqlash & Yakunlash"}
+                                {loading ? "Tasdiqlanmoqda..." : "Tasdiqlash va yakunlash"}
                             </button>
                             <button type="button" className="btn btn-secondary" onClick={() => setStep(1)}>
                                 Orqaga qaytish
@@ -243,12 +243,12 @@ export default function Register() {
                     )}
 
                     <p style={{ marginTop: 16 }}>
-                        Allaqachon akkaunting bor? <Link className="link" to="/login">Login</Link>
+                        Allaqachon hisobingiz bormi? <Link className="link" to="/login">Kirish</Link>
                     </p>
                     <div className="auth-legal-links">
-                        <Link to="/privacy">Privacy</Link>
-                        <Link to="/terms">Terms</Link>
-                        <Link to="/community-rules">Community Rules</Link>
+                        <Link to="/privacy">Maxfiylik</Link>
+                        <Link to="/terms">Shartlar</Link>
+                        <Link to="/community-rules">Hamjamiyat qoidalari</Link>
                     </div>
                 </div>
             </section>
