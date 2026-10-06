@@ -49,7 +49,7 @@ export default function CreateJob() {
     const [services, setServices] = useState([])
     const [serviceSearch, setServiceSearch] = useState("")
     const [showCategories, setShowCategories] = useState(false)
-    const [customService, setCustomService] = useState("")
+    const [customServices, setCustomServices] = useState([])
     const [form, setForm] = useState({
         service_id: "",
         title: "",
@@ -116,8 +116,8 @@ export default function CreateJob() {
     }, [token])
 
     const canSubmit = useMemo(
-        () => (form.service_id || customService.trim()) && form.title && form.description && form.price && !priceError && form.location,
-        [form]
+        () => (form.service_id || customServices.length > 0) && form.title && form.description && form.price && !priceError && form.location,
+        [form, customServices]
     )
 
     const submit = async (e) => {
@@ -135,7 +135,7 @@ export default function CreateJob() {
             method: "POST",
             body: {
                 service_id: form.service_id ? Number(form.service_id) : null,
-                custom_service: customService.trim(),
+                custom_service: customServices.join(", "),
                 title: form.title,
                 description: form.description,
                 price,
@@ -171,26 +171,21 @@ export default function CreateJob() {
                     <form className="form" onSubmit={submit}>
                         <div className="service-picker">
                             <div className="service-picker-title">
-                                <span>
-                                    {form.service_id
-                                        ? services.find((service) => String(service.id) === String(form.service_id))?.name || "Xizmat"
-                                        : customService || "Xizmatni tanlang"}
-                                </span>
-                                {(form.service_id || customService) && (
-                                    <button
-                                        type="button"
-                                        className="service-remove-button"
-                                        onClick={() => {
-                                            setForm({ ...form, service_id: "" })
-                                            setCustomService("")
-                                            setServiceSearch("")
-                                            setShowCategories(false)
-                                        }}
-                                        aria-label="Tanlangan sohani olib tashlash"
-                                    >
-                                        ×
-                                    </button>
-                                )}
+                                <div className="selected-services">
+                                    {form.service_id && (
+                                        <span className="selected-service-chip">
+                                            {services.find((service) => String(service.id) === String(form.service_id))?.name || "Xizmat"}
+                                            <button type="button" onClick={() => setForm({ ...form, service_id: "" })} aria-label="Sohani olib tashlash">×</button>
+                                        </span>
+                                    )}
+                                    {customServices.map((service, index) => (
+                                        <span className="selected-service-chip" key={service}>
+                                            {service}
+                                            <button type="button" onClick={() => setCustomServices(customServices.filter((_, i) => i !== index))} aria-label="Sohani olib tashlash">×</button>
+                                        </span>
+                                    ))}
+                                    {!form.service_id && !customServices.length && <span>Xizmatni tanlang</span>}
+                                </div>
                             </div>
                             <button
                                 type="button"
@@ -246,7 +241,7 @@ export default function CreateJob() {
                                                     className="btn btn-secondary"
                                                     style={{ marginTop: 10, width: "100%" }}
                                                     onClick={() => {
-                                                        setCustomService(serviceSearch.trim())
+                                                        setCustomServices([...customServices, serviceSearch.trim()])
                                                         setForm({ ...form, service_id: "" })
                                                         setServiceSearch("")
                                                         setShowCategories(false)
