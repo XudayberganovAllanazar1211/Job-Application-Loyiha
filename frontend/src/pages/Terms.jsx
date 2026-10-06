@@ -10,12 +10,12 @@ export default function Terms() {
                 </div>
 
                 <article className="legal-card">
-                    <span className="legal-eyebrow">FINJOB / LEGAL</span>
-                    <h1>Terms of Service</h1>
+                    <span className="legal-eyebrow">FINJOB / HUQUQIY</span>
+                    <h1>Foydalanish shartlari</h1>
                     <p className="legal-updated">Kuchga kirish sanasi: 6-oktabr, 2026</p>
 
                     <h2>1. Platforma haqida</h2>
-                    <p>FinJob foydalanuvchilarga ish va xizmat e'lonlarini joylashtirish, mos mutaxassislarni topish, job bo'yicha muloqot qilish va bajarilgan ishlar uchun rating qoldirish imkonini beruvchi platformadir.</p>
+                    <p>FinJob foydalanuvchilarga ish va xizmat e'lonlarini joylashtirish, mos mutaxassislarni topish, ish bo'yicha muloqot qilish va bajarilgan ishlar uchun baho qoldirish imkonini beruvchi platformadir.</p>
 
                     <h2>2. Hisob</h2>
                     <p>Foydalanuvchi ro'yxatdan o'tishda haqqoniy ma'lumot berishi va akkaunt ma'lumotlarini himoya qilishi kerak. Boshqa shaxs nomidan akkaunt yaratish, login yoki tasdiqlash kodidan ruxsatsiz foydalanish taqiqlanadi.</p>
@@ -27,16 +27,16 @@ export default function Terms() {
                     <p>Jobni qabul qilish foydalanuvchi bilan ish yaratuvchisi o'rtasidagi kelishuv jarayonining bir qismi hisoblanadi. FinJob platformasi bajariladigan ishning sifati, natijasi yoki foydalanuvchilar o'rtasidagi kelishuvni alohida shartnoma bilan kafolatlamaydi.</p>
 
                     <h2>5. To'lovlar</h2>
-                    <p>FinJobning hozirgi versiyasida ko'rsatilgan price/valyuta ma'lumotlari job shartlarini ifodalaydi. Foydalanuvchilar o'rtasida haqiqiy to'lovni amalga oshirish tartibi ular o'rtasidagi qonuniy kelishuvga bog'liq. FinJob alohida payment processor sifatida ko'rsatilmagan.</p>
+                    <p>FinJobning hozirgi versiyasida ko'rsatilgan narx/valyuta ma'lumotlari ish shartlarini ifodalaydi. Foydalanuvchilar o'rtasida haqiqiy to'lovni amalga oshirish tartibi ular o'rtasidagi qonuniy kelishuvga bog'liq. FinJob alohida to‘lov operatori sifatida ko'rsatilmagan.</p>
 
                     <h2>6. Chat va kontent</h2>
-                    <p>Foydalanuvchi chat, profil, job va rating orqali yuborgan kontent uchun javobgardir. Spam, tahdid, firibgarlik, zararli kod yoki boshqa noqonuniy kontent tarqatish taqiqlanadi.</p>
+                    <p>Foydalanuvchi chat, profil, ish va baho orqali yuborgan kontent uchun javobgardir. Spam, tahdid, firibgarlik, zararli kod yoki boshqa noqonuniy kontent tarqatish taqiqlanadi.</p>
 
                     <h2>7. Rating</h2>
-                    <p>Rating haqiqiy ish tajribasini adolatli aks ettirishi kerak. Soxta, manipulyativ yoki qasos sifatidagi ratinglardan foydalanmaslik kerak.</p>
+                    <p>Rating haqiqiy ish tajribasini adolatli aks ettirishi kerak. Soxta, manipulyativ yoki qasos sifatidagi baholardan foydalanmaslik kerak.</p>
 
                     <h2>8. Joylashuv</h2>
-                    <p>Avtomatik location funksiyasidan foydalanish ixtiyoriy. Foydalanuvchi aniqlangan manzilni job yuborilishidan oldin tekshirishi va zarur bo'lsa o'zgartirishi kerak.</p>
+                    <p>Avtomatik manzil funksiyasidan foydalanish ixtiyoriy. Foydalanuvchi aniqlangan manzilni ish yuborilishidan oldin tekshirishi va zarur bo'lsa o'zgartirishi kerak.</p>
 
                     <h2>9. Akkauntni cheklash</h2>
                     <p>FinJob xavfsizlik yoki qoidabuzarlik sabab akkaunt yoki kontentga nisbatan choralar ko'rishi mumkin. Qonunchilik va texnik imkoniyatlar doirasida foydalanuvchiga tegishli ma'lumotlar saqlanishi yoki o'chirilishi mumkin.</p>
@@ -48,7 +48,7 @@ export default function Terms() {
                     <p>Ushbu shartlar platforma funksiyalari yoki qonunchilikdagi o'zgarishlar sabab yangilanishi mumkin. Yangilangan sana sahifada ko'rsatiladi.</p>
 
                     <div className="legal-note">
-                        Ushbu Terms of Service umumiy loyiha shabloni hisoblanadi. FinJobni tijoriy ishga tushirishdan oldin mahalliy yurist tomonidan yakuniy tekshiruvdan o'tkazilishi kerak.
+                        Ushbu Foydalanish shartlari umumiy loyiha shabloni hisoblanadi. FinJobni tijoriy ishga tushirishdan oldin mahalliy yurist tomonidan yakuniy tekshiruvdan o'tkazilishi kerak.
                     </div>
                 </article>
             </div>
