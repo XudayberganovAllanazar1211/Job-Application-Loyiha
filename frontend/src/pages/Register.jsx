@@ -219,7 +219,7 @@ export default function Register() {
                         <form className="form" onSubmit={confirmVerification}>
                             <div style={{ textAlign: "center", marginBottom: 10 }}>
                                 <p style={{ fontSize: 13 }} className="muted">
-                                    Kod yuborilgan manzil: <strong style={{ color: "#172033" }}>{form.email}</strong>
+                                    Kod yuborilgan manzil: <strong className="register-email">{form.email}</strong>
                                 </p>
                             </div>
                             <input
