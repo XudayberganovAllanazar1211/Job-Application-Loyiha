@@ -17,6 +17,7 @@ export default function Register() {
     const [verificationCode, setVerificationCode] = useState("")
     const [notice, setNotice] = useState("")
     const [loading, setLoading] = useState(false)
+    const [acceptedPolicies, setAcceptedPolicies] = useState(false)
     const navigate = useNavigate()
 
     // 1-QADAM: Emailga kod yuborishni so'rash
@@ -35,6 +36,11 @@ export default function Register() {
         // Parollar mosligini tekshirish
         if (form.password !== form.confirm_password) {
             setNotice("Kiritilgan parollar mos kelmadi!")
+            return
+        }
+
+        if (!acceptedPolicies) {
+            setNotice("Ro'yxatdan o'tishdan oldin Privacy Policy va Terms of Service'ni qabul qiling.")
             return
         }
 
@@ -193,6 +199,17 @@ export default function Register() {
                                 />
                             </div>
 
+                            <label className="policy-check">
+                                <input
+                                    type="checkbox"
+                                    checked={acceptedPolicies}
+                                    onChange={(e) => setAcceptedPolicies(e.target.checked)}
+                                />
+                                <span>
+                                    <Link className="link" to="/terms">Terms of Service</Link> va <Link className="link" to="/privacy">Privacy Policy</Link>ni o'qidim va qabul qilaman.
+                                </span>
+                            </label>
+
                             <button className="btn btn-primary" disabled={loading}>
                                 {loading ? "Yuborilmoqda..." : "Kodni olish (Email)"}
                             </button>
@@ -228,6 +245,11 @@ export default function Register() {
                     <p style={{ marginTop: 16 }}>
                         Allaqachon akkaunting bor? <Link className="link" to="/login">Login</Link>
                     </p>
+                    <div className="auth-legal-links">
+                        <Link to="/privacy">Privacy</Link>
+                        <Link to="/terms">Terms</Link>
+                        <Link to="/community-rules">Community Rules</Link>
+                    </div>
                 </div>
             </section>
         </div>
