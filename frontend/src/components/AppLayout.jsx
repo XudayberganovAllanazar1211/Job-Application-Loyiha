@@ -48,6 +48,11 @@ export default function AppLayout({ title, subtitle, children }) {
                         </NavLink>
                     ))}
                 </nav>
+                {isAdmin && (
+                    <NavLink to="/admin" className={({isActive}) => `nav-link admin-nav-link ${isActive ? "active" : ""}`}>
+                        <span>Admin</span><span style={{fontWeight:800}}>⚙</span>
+                    </NavLink>
+                )}
                 <div className="legal-footer">
                     <div className="legal-footer-title">FinJob Legal</div>
                     <div className="legal-footer-links">
