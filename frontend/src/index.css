@@ -124,3 +124,13 @@ input[type=range]{accent-color:#2563eb}
     font-size: 13px;
     line-height: 1.55;
 }
+
+
+.service-search {
+    padding: 10px;
+    border-bottom: 1px solid var(--border);
+}
+
+.service-search .input {
+    margin: 0;
+}
