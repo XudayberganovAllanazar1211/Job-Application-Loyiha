@@ -330,7 +330,23 @@ export default function Jobs() {
                             )}
                         </div>
 
-                        <div className="jobs-filter-wrap" ref={filterRef}>\n                            <button className="btn btn-secondary" type="button" onClick={() => setShowFilters(!showFilters)}>Filtrlash</button>\n                            {showFilters && (\n                                <div className="jobs-filter-panel">\n                                    <div className="jobs-filter-title">Ishlarni filtrlash</div>\n                                    <div className="jobs-filter-grid">\n                                        <label><span>Minimal narx</span><input className="input" type="number" min="0" placeholder="Masalan: 100000" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} /></label>\n                                        <label><span>Maksimal narx</span><input className="input" type="number" min="0" placeholder="Masalan: 500000" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} /></label>\n                                        <label><span>Joylashuv</span><input className="input" placeholder="Masalan: Toshkent" value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)} /></label>\n                                        <label><span>Vaqt</span><select className="input" value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}><option value="all">Barchasi</option><option value="today">Bugun</option><option value="three_days">Oxirgi 3 kun</option><option value="week">Oxirgi hafta</option><option value="month">Oxirgi oy</option></select></label>\n                                    </div>\n                                    <button className="btn btn-secondary" type="button" onClick={clearAllFilters}>Filtrlarni tozalash</button>\n                                </div>\n                            )}\n                        </div>\n\n                        <button className="btn btn-secondary" onClick={load}>Yangilash</button>
+                        <div className="jobs-filter-wrap" ref={filterRef}>
+                            <button className="btn btn-secondary" type="button" onClick={() => setShowFilters(!showFilters)}>Filtrlash</button>
+                            {showFilters && (
+                                <div className="jobs-filter-panel">
+                                    <div className="jobs-filter-title">Ishlarni filtrlash</div>
+                                    <div className="jobs-filter-grid">
+                                        <label><span>Minimal narx</span><input className="input" type="number" min="0" placeholder="Masalan: 100000" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} /></label>
+                                        <label><span>Maksimal narx</span><input className="input" type="number" min="0" placeholder="Masalan: 500000" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} /></label>
+                                        <label><span>Joylashuv</span><input className="input" placeholder="Masalan: Toshkent" value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)} /></label>
+                                        <label><span>Vaqt</span><select className="input" value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}><option value="all">Barchasi</option><option value="today">Bugun</option><option value="three_days">Oxirgi 3 kun</option><option value="week">Oxirgi hafta</option><option value="month">Oxirgi oy</option></select></label>
+                                    </div>
+                                    <button className="btn btn-secondary" type="button" onClick={clearAllFilters}>Filtrlarni tozalash</button>
+                                </div>
+                            )}
+                        </div>
+
+                        <button className="btn btn-secondary" onClick={load}>Yangilash</button>
                         <button className="btn btn-primary" onClick={() => navigate("/create")}>
                             Ish yaratish
                         </button>
