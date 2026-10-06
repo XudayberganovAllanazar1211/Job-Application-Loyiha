@@ -113,6 +113,7 @@ class DB:
                 title TEXT,
                 description TEXT,
                 price INTEGER,
+                currency TEXT DEFAULT 'UZS',
                 location TEXT,
                 worker_id INTEGER,
                 status TEXT,
@@ -158,6 +159,7 @@ class DB:
         cursor.execute("PRAGMA table_info(users)")
         existing_user_cols = [row[1] for row in cursor.fetchall()]
         migrations = [
+            ("currency", "ALTER TABLE jobs ADD COLUMN currency TEXT DEFAULT 'UZS'"),
             ("bio", "ALTER TABLE users ADD COLUMN bio TEXT DEFAULT ''"),
             ("skills", "ALTER TABLE users ADD COLUMN skills TEXT DEFAULT ''"),
             ("created_at", "ALTER TABLE users ADD COLUMN created_at TEXT"),
@@ -548,20 +550,33 @@ def add_job():
     if not d.get("service_id") or not d.get("title") or not d.get("price") or not d.get("location"):
         return jsonify({"msg": "Barcha maydonlarni to'ldiring"}), 400
 
+    try:
+        price = float(d["price"])
+    except (TypeError, ValueError):
+        return jsonify({"msg": "Narx noto'g'ri kiritilgan"}), 400
+
+    if price <= 0 or price > 100000000000:
+        return jsonify({"msg": "Narx 0 dan katta va 100 000 000 000 dan oshmasligi kerak"}), 400
+
+    currency = str(d.get("currency", "UZS")).upper()
+    if currency not in {"UZS", "USD", "EUR"}:
+        return jsonify({"msg": "Currency noto'g'ri tanlangan"}), 400
+
     now_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     db.q(
         """INSERT INTO jobs(user_id,service_id,title,description,price,location,worker_id,status,created_at)
-           VALUES(?,?,?,?,?,?,?,?,?)""",
+           VALUES(?,?,?,?,?,?,?,?,?,?)""",
         (
             request.uid,
             d["service_id"],
             d["title"].strip(),
             d.get("description", "").strip(),
-            d["price"],
+            price,
             d["location"].strip(),
             None,
             "active",
             now_time,
+            currency,
         ),
     )
     return jsonify({"msg": "ok"})
