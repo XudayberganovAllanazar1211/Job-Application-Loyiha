@@ -56,11 +56,6 @@ export default function Jobs() {
     const [activeConfirmJobId, setActiveConfirmJobId] = useState(null)
     // Bajaruvchi "Yo'q" tugmasini bossa, ekranda chiqadigan admin xabari
     const [adminContactJobId, setAdminContactJobId] = useState(null)
-    const [offerJobId, setOfferJobId] = useState(null)
-    const [offerAmount, setOfferAmount] = useState("")
-    const [offerMessage, setOfferMessage] = useState("")
-    const [offersJobId, setOffersJobId] = useState(null)
-    const [jobOffers, setJobOffers] = useState([])
     const [reportJobId, setReportJobId] = useState(null)
     const [reportReason, setReportReason] = useState("")
     const [reportDetails, setReportDetails] = useState("")
@@ -290,50 +285,7 @@ export default function Jobs() {
     const submitOffer = async (jobId) => {
         const result = await api("/offer", { method: "POST", body: { job_id: jobId, amount: Number(offerAmount), message: offerMessage }, token })
         if (result?.status === 201 || result?.msg === "Taklif yuborildi.") {
-            setNoticeType("ok")
-            setNotice("Taklif muvaffaqiyatli yuborildi.")
-            setOfferJobId(null)
-            setOfferAmount("")
-            setOfferMessage("")
-        } else {
-            setNoticeType("warn")
-            setNotice(result?.msg || "Taklif yuborilmadi.")
-        }
-    }
-
-    const loadOffers = async (jobId) => {
-        const result = await api("/offers/"+jobId, { token })
-        if (Array.isArray(result)) {
-            setJobOffers(result)
-            setOffersJobId(jobId)
-        } else {
-            setNoticeType("warn")
-            setNotice(result?.msg || "Takliflarni yuklab bo‘lmadi.")
-        }
-    }
-
-    const acceptOffer = async (offerId, jobId) => {
-        const result = await api("/offer/"+offerId+"/accept", { method: "POST", token })
-        if (result?.msg === "ok") {
-            setNoticeType("ok")
-            setNotice("Taklif qabul qilindi. Bajaruvchi biriktirildi.")
-            setOffersJobId(null)
-            load()
-        } else {
-            setNoticeType("warn")
-            setNotice(result?.msg || "Taklifni qabul qilib bo‘lmadi.")
-        }
-    }
-
-    const handleConfirmFinish = async (jobId, choice) => {
-        const result = await api("/confirm_finish", {
-            method: "POST",
-            body: { job_id: jobId, choice },
-            token
-        })
-
-        if (result?.msg === "ok") {
-            setNoticeType("ok")
+        pe("ok")
             setNotice("Ish muvaffaqiyatli yakunlandi va yopildi")
             setAdminContactJobId(null)
             setActiveConfirmJobId(null)
@@ -506,7 +458,6 @@ export default function Jobs() {
                     const isIAccepted = String(job.worker_id) === String(user?.id)
                     const isParticipant = isMyJob || isIAccepted
                     const canAccept = status === "active" && !isMyJob && job.worker_id == null
-                    const canBid = status === "active" && !isMyJob
                     const statusLabel = {
                         active: "Faol",
                         accepted: "Qabul qilingan",
@@ -589,71 +540,7 @@ export default function Jobs() {
                                         <button
                                             type="button"
                                             className="btn btn-primary"
-                                            disabled={!offerAmount || Number(offerAmount) <= 0}
-                                            onClick={() => submitOffer(job.id)}
-                                        >
-                                            Taklifni yuborish
-                                        </button>
-                                        <button type="button" className="btn btn-secondary" onClick={() => setOfferJobId(null)}>
-                                            Bekor qilish
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-
-                            {offersJobId === job.id && isMyJob && (
-                                <div className="offers-panel">
-                                    <div className="offers-panel-head">
-                                        <strong>Kelgan takliflar</strong>
-                                        <button type="button" className="btn btn-secondary" onClick={() => setOffersJobId(null)}>
-                                            Yopish
-                                        </button>
-                                    </div>
-                                    {jobOffers.length ? jobOffers.map((offer) => (
-                                        <div className="offer-row" key={offer.id}>
-                                            <div>
-                                                <strong>@{offer.username}</strong>
-                                                <span>{Number(offer.average_rating || 0).toFixed(1)} ⭐</span>
-                                                <p>{offer.message || "Izoh kiritilmagan"}</p>
-                                            </div>
-                                            <div>
-                                                <strong>{Number(offer.amount).toLocaleString()} UZS</strong>
-                                                {offer.status === "pending" && (
-                                                    <button type="button" className="btn btn-success" onClick={() => acceptOffer(offer.id, job.id)}>
-                                                        Qabul qilish
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )) : <div className="empty-state">Hozircha taklif kelmagan.</div>}
-                                </div>
-                            )}
-
-                            {reportJobId === job.id && !isMyJob && (
-                                <div className="report-panel">
-                                    <strong>Shikoyat yuborish</strong>
-                                    <select
-                                        className="select"
-                                        value={reportReason}
-                                        onChange={(e) => setReportReason(e.target.value)}
-                                    >
-                                        <option value="">Sababni tanlang</option>
-                                        <option value="Firibgarlik yoki aldov">Firibgarlik yoki aldov</option>
-                                        <option value="Noto‘g‘ri yoki yolg‘on e’lon">Noto‘g‘ri yoki yolg‘on e’lon</option>
-                                        <option value="Haqorat yoki nomaqbul xatti-harakat">Haqorat yoki nomaqbul xatti-harakat</option>
-                                        <option value="Spam">Spam</option>
-                                        <option value="Boshqa">Boshqa</option>
-                                    </select>
-                                    <textarea
-                                        className="textarea"
-                                        maxLength={2000}
-                                        placeholder="Qo‘shimcha tafsilot..."
-                                        value={reportDetails}
-                                        onChange={(e) => setReportDetails(e.target.value)}
-                                    />
-                                    <div className="actions">
-                                        <button
-                                            type="button"
+                              ="button"
                                             className="btn btn-danger"
                                             disabled={!reportReason}
                                             onClick={() => submitReport(job)}
@@ -740,4 +627,8 @@ export default function Jobs() {
             </div>
         </AppLayout>
     )
-}
+}                                {canAccept && (
+                                    <button className="btn btn-primary" onClick={() => acceptJob(job)}>
+                                        Ishni qabul qilish
+                                    </button>
+                                )}
