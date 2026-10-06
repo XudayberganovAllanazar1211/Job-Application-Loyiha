@@ -19,6 +19,19 @@ export default function Rating() {
     const [loading, setLoading] = useState(false)
 
     useEffect(() => {
+        if (!job) return
+
+        const targetId = String(job.worker_id) === String(me?.id)
+            ? job.user_id
+            : job.worker_id
+
+        if (targetId && String(targetId) !== String(me?.id)) {
+            const nextTarget = String(targetId)
+            setForm((prev) => prev.to_user === nextTarget ? prev : { ...prev, to_user: nextTarget })
+        }
+    }, [job, me?.id])
+
+    useEffect(() => {
         const fetchJob = async () => {
             if (!job && jobId) {
                 const jobData = await api(`/jobs/${jobId}`, { token })
