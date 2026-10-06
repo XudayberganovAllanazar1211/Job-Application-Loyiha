@@ -432,6 +432,7 @@ export default function Profile() {
         .join("") || "U"
 
     return (
+        <>
         <AppLayout
             title="Profil"
             subtitle="Shaxsiy ma'lumotlaringiz, ko'nikmalaringiz va FinJob faoliyatingiz"
@@ -727,7 +728,7 @@ export default function Profile() {
                 </div>
             )}
         </AppLayout>
-            {cropImageUrl && (
+        {cropImageUrl && (
                 <div className="avatar-crop-backdrop" role="dialog" aria-modal="true" aria-label="Profil rasmini kesish">
                     <div className="avatar-crop-modal">
                         <div className="avatar-crop-head">
@@ -797,7 +798,8 @@ export default function Profile() {
                         </div>
                     </div>
                 </div>
-            )}
+        )}
 
+        </>
     )
 }
