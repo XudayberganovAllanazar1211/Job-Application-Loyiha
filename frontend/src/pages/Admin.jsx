@@ -193,8 +193,11 @@ export default function Admin() {
                                         <td>{Number(item.average_rating || 0).toFixed(1)}</td>
                                         <td>{item.created_at || "—"}</td>
                                         <td>
-                                            <button className="btn btn-danger admin-small-btn" disabled={item.id === user.id || item.role === "admin"} onClick={() => deleteUser(item)}>
+                                            <button className="btn btn-secondary admin-small-btn" onClick={() => editUser(item)}>
                                                 Tahrirlash
+                                            </button>
+                                            <button className="btn btn-danger admin-small-btn" disabled={item.id === user.id || item.role === "admin"} onClick={() => deleteUser(item)}>
+                                                O'chirish
                                             </button>
                                         </td>
                                     </tr>
