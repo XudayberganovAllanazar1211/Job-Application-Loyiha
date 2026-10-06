@@ -56,11 +56,6 @@ export default function Jobs() {
     const [activeConfirmJobId, setActiveConfirmJobId] = useState(null)
     // Bajaruvchi "Yo'q" tugmasini bossa, ekranda chiqadigan admin xabari
     const [adminContactJobId, setAdminContactJobId] = useState(null)
-    const [offerJobId, setOfferJobId] = useState(null)
-    const [offerAmount, setOfferAmount] = useState("")
-    const [offerMessage, setOfferMessage] = useState("")
-    const [offersJobId, setOffersJobId] = useState(null)
-    const [jobOffers, setJobOffers] = useState([])
     const [reportJobId, setReportJobId] = useState(null)
     const [reportReason, setReportReason] = useState("")
     const [reportDetails, setReportDetails] = useState("")
@@ -287,44 +282,6 @@ export default function Jobs() {
         }
     }
 
-    const submitOffer = async (jobId) => {
-        const result = await api("/offer", { method: "POST", body: { job_id: jobId, amount: Number(offerAmount), message: offerMessage }, token })
-        if (result?.status === 201 || result?.msg === "Taklif yuborildi.") {
-            setNoticeType("ok")
-            setNotice("Taklif muvaffaqiyatli yuborildi.")
-            setOfferJobId(null)
-            setOfferAmount("")
-            setOfferMessage("")
-        } else {
-            setNoticeType("warn")
-            setNotice(result?.msg || "Taklif yuborilmadi.")
-        }
-    }
-
-    const loadOffers = async (jobId) => {
-        const result = await api("/offers/"+jobId, { token })
-        if (Array.isArray(result)) {
-            setJobOffers(result)
-            setOffersJobId(jobId)
-        } else {
-            setNoticeType("warn")
-            setNotice(result?.msg || "Takliflarni yuklab bo‘lmadi.")
-        }
-    }
-
-    const acceptOffer = async (offerId, jobId) => {
-        const result = await api("/offer/"+offerId+"/accept", { method: "POST", token })
-        if (result?.msg === "ok") {
-            setNoticeType("ok")
-            setNotice("Taklif qabul qilindi. Bajaruvchi biriktirildi.")
-            setOffersJobId(null)
-            load()
-        } else {
-            setNoticeType("warn")
-            setNotice(result?.msg || "Taklifni qabul qilib bo‘lmadi.")
-        }
-    }
-
     const handleConfirmFinish = async (jobId, choice) => {
         const result = await api("/confirm_finish", {
             method: "POST",
@@ -506,7 +463,6 @@ export default function Jobs() {
                     const isIAccepted = String(job.worker_id) === String(user?.id)
                     const isParticipant = isMyJob || isIAccepted
                     const canAccept = status === "active" && !isMyJob && job.worker_id == null
-                    const canBid = status === "active" && !isMyJob
                     const statusLabel = {
                         active: "Faol",
                         accepted: "Qabul qilingan",
@@ -562,73 +518,6 @@ export default function Jobs() {
                                 </div>
                             )}
 
-                            {offerJobId === job.id && canBid && (
-                                <div className="offer-panel">
-                                    <div>
-                                        <strong>O‘z taklifingizni yuboring</strong>
-                                        <p className="muted">Ish egasiga narx va qisqa rejangizni yuboring.</p>
-                                    </div>
-                                    <div className="offer-form-grid">
-                                        <input
-                                            className="input"
-                                            type="number"
-                                            min="1"
-                                            placeholder="Narx (UZS)"
-                                            value={offerAmount}
-                                            onChange={(e) => setOfferAmount(e.target.value)}
-                                        />
-                                        <input
-                                            className="input"
-                                            maxLength={1500}
-                                            placeholder="Masalan: 2 kunda topshiraman"
-                                            value={offerMessage}
-                                            onChange={(e) => setOfferMessage(e.target.value)}
-                                        />
-                                    </div>
-                                    <div className="actions">
-                                        <button
-                                            type="button"
-                                            className="btn btn-primary"
-                                            disabled={!offerAmount || Number(offerAmount) <= 0}
-                                            onClick={() => submitOffer(job.id)}
-                                        >
-                                            Taklifni yuborish
-                                        </button>
-                                        <button type="button" className="btn btn-secondary" onClick={() => setOfferJobId(null)}>
-                                            Bekor qilish
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-
-                            {offersJobId === job.id && isMyJob && (
-                                <div className="offers-panel">
-                                    <div className="offers-panel-head">
-                                        <strong>Kelgan takliflar</strong>
-                                        <button type="button" className="btn btn-secondary" onClick={() => setOffersJobId(null)}>
-                                            Yopish
-                                        </button>
-                                    </div>
-                                    {jobOffers.length ? jobOffers.map((offer) => (
-                                        <div className="offer-row" key={offer.id}>
-                                            <div>
-                                                <strong>@{offer.username}</strong>
-                                                <span>{Number(offer.average_rating || 0).toFixed(1)} ⭐</span>
-                                                <p>{offer.message || "Izoh kiritilmagan"}</p>
-                                            </div>
-                                            <div>
-                                                <strong>{Number(offer.amount).toLocaleString()} UZS</strong>
-                                                {offer.status === "pending" && (
-                                                    <button type="button" className="btn btn-success" onClick={() => acceptOffer(offer.id, job.id)}>
-                                                        Qabul qilish
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )) : <div className="empty-state">Hozircha taklif kelmagan.</div>}
-                                </div>
-                            )}
-
                             {reportJobId === job.id && !isMyJob && (
                                 <div className="report-panel">
                                     <strong>Shikoyat yuborish</strong>
@@ -679,18 +568,9 @@ export default function Jobs() {
                                     </button>
                                 )}
 
-                                {/* Faol ishlar endi taklif orqali qabul qilinadi. */}
-                                {canBid && (
-                                    <button
-                                        type="button"
-                                        className="btn btn-secondary"
-                                        onClick={() => {
-                                            setOfferJobId(offerJobId === job.id ? null : job.id)
-                                            setOfferAmount(String(job.price || ""))
-                                            setOfferMessage("")
-                                        }}
-                                    >
-                                        💼 Taklif yuborish
+                                {canAccept && (
+                                    <button className="btn btn-primary" onClick={() => acceptJob(job)}>
+                                        Ishni qabul qilish
                                     </button>
                                 )}
                                 {isMyJob && status === "active" && (
