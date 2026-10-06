@@ -208,7 +208,10 @@ export default function CreateJob() {
                                                 key={service.id}
                                                 type="button"
                                                 className={String(form.service_id) === String(service.id) ? "service-search-result selected" : "service-search-result"}
-                                                onClick={() => setForm({ ...form, service_id: String(service.id) })}
+                                                onClick={() => {
+                                                    setForm({ ...form, service_id: String(service.id) })
+                                                    setShowCategories(false)
+                                                }}
                                             >
                                                 {service.name}
                                             </button>
@@ -223,7 +226,10 @@ export default function CreateJob() {
                                             node={node}
                                             level={0}
                                             selected={form.service_id}
-                                            onSelect={(node) => setForm({ ...form, service_id: String(node.id) })}
+                                            onSelect={(node) => {
+                                                setForm({ ...form, service_id: String(node.id) })
+                                                setShowCategories(false)
+                                            }}
                                         />
                                     )) : (
                                         <div className="empty-state">Bunday xizmat topilmadi</div>
