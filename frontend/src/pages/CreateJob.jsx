@@ -62,8 +62,8 @@ export default function CreateJob() {
     const [notice, setNotice] = useState("")
     const [loading, setLoading] = useState(false)
     const [priceError, setPriceError] = useState("")
-    const [locationLoading, setLocationLoading] = useState(false)
-    const [locationError, setLocationError] = useState("")
+    const [locationLoading, setManzilLoading] = useState(false)
+    const [locationError, setManzilError] = useState("")
     const navigate = useNavigate()
     const token = localStorage.getItem("token") || ""
     const serviceTree = useMemo(() => buildServiceTree(services), [services])
@@ -85,7 +85,7 @@ export default function CreateJob() {
         load()
     }, [token])
 
-    const canSubmit = useMemo(
+    const canJoylashtirish = useMemo(
         () =>
             (selectedServiceIds.length > 0 || customServices.length > 0) &&
             form.title.trim() &&
@@ -96,14 +96,14 @@ export default function CreateJob() {
         [form, selectedServiceIds, customServices, priceError]
     )
 
-    const detectLocation = () => {
+    const detectManzil = () => {
         if (!navigator.geolocation) {
-            setLocationError("Brauzeringiz joylashuvni aniqlashni qo'llab-quvvatlamaydi.")
+            setManzilError("Brauzeringiz joylashuvni aniqlashni qo'llab-quvvatlamaydi.")
             return
         }
 
-        setLocationError("")
-        setLocationLoading(true)
+        setManzilError("")
+        setManzilLoading(true)
 
         let bestPosition = null
         let finished = false
@@ -118,10 +118,10 @@ export default function CreateJob() {
             const { latitude, longitude, accuracy } = position.coords
 
             if (accuracy > 5000) {
-                setLocationError(
-                    `Kompyuter joylashuvni juda noaniq aniqladi (taxminan ${Math.round(accuracy / 100) / 10} km). Windows'da Location Service va Wi-Fi joylashuvini yoqing yoki joylashuvni qo'lda kiriting.`
+                setManzilError(
+                    `Kompyuter joylashuvni juda noaniq aniqladi (taxminan ${Math.round(accuracy / 100) / 10} km). Windows'da Manzil Service va Wi-Fi joylashuvini yoqing yoki joylashuvni qo'lda kiriting.`
                 )
-                setLocationLoading(false)
+                setManzilLoading(false)
                 return
             }
 
@@ -132,16 +132,16 @@ export default function CreateJob() {
 
             if (result?.ok && result.location) {
                 setForm((current) => ({ ...current, location: result.location }))
-                setLocationError(
+                setManzilError(
                     accuracy > 1000
                         ? `Joylashuv topildi, lekin aniqlik taxminan ${Math.round(accuracy)} metr.`
                         : ""
                 )
             } else {
-                setLocationError(result?.msg || "Joylashuv manzilini aniqlab bo'lmadi.")
+                setManzilError(result?.msg || "Joylashuv manzilini aniqlab bo'lmadi.")
             }
 
-            setLocationLoading(false)
+            setManzilLoading(false)
         }
 
         const handlePosition = (position) => {
@@ -165,16 +165,16 @@ export default function CreateJob() {
                 }
 
                 if (error.code === 1) {
-                    setLocationError("Joylashuvga ruxsat berilmadi. Chrome va Windows sozlamalaridan ruxsat bering.")
+                    setManzilError("Joylashuvga ruxsat berilmadi. Chrome va Windows sozlamalaridan ruxsat bering.")
                 } else if (error.code === 2) {
-                    setLocationError("Joylashuv aniqlanmadi. Windows Location Service va Wi-Fi'ni tekshiring.")
+                    setManzilError("Joylashuv aniqlanmadi. Windows Manzil Service va Wi-Fi'ni tekshiring.")
                 } else if (error.code === 3) {
-                    setLocationError("Joylashuvni aniqlash vaqti tugadi. Windows Location Service va Wi-Fi'ni tekshiring.")
+                    setManzilError("Joylashuvni aniqlash vaqti tugadi. Windows Manzil Service va Wi-Fi'ni tekshiring.")
                 } else {
-                    setLocationError("Joylashuvni aniqlashda xatolik yuz berdi.")
+                    setManzilError("Joylashuvni aniqlashda xatolik yuz berdi.")
                 }
 
-                setLocationLoading(false)
+                setManzilLoading(false)
                 if (watchId !== null) navigator.geolocation.clearWatch(watchId)
             },
             {
@@ -189,8 +189,8 @@ export default function CreateJob() {
                 if (bestPosition) {
                     finish(bestPosition)
                 } else {
-                    setLocationLoading(false)
-                    setLocationError("Aniq joylashuv olinmadi. Windows Location Service yoqilganini tekshiring.")
+                    setManzilLoading(false)
+                    setManzilError("Aniq joylashuv olinmadi. Windows Manzil Service yoqilganini tekshiring.")
                     if (watchId !== null) navigator.geolocation.clearWatch(watchId)
                 }
             }
@@ -237,17 +237,17 @@ export default function CreateJob() {
 
     return (
         <AppLayout
-            title="Create Job"
-            subtitle="Xizmat kategoriyasini tanlab, yangi ish joylang."
+            title="Ish yaratish"
+            subtitle="Xizmat kategoriyasini tanlab, yangi ish e’lon qiling."
         >
             <div className="grid-2">
                 <section className="card">
-                    <h2>Job form</h2>
+                    <h2>Ish e’loni formasi</h2>
                     <p className="muted">Barcha maydonlarni to‘ldiring.</p>
 
                     {notice && <div className="notice ok" style={{ marginBottom: 14 }}>{notice}</div>}
 
-                    <form className="form" onSubmit={submit}>
+                    <form className="form" onJoylashtirish={submit}>
                         <div className="service-picker">
                             <div className="service-picker-title">
                                 <div className="selected-services">
@@ -282,7 +282,7 @@ export default function CreateJob() {
                                         autoFocus
                                         className="input"
                                         type="search"
-                                        placeholder="Xizmatni qidiring..."
+                                        placeholder="Xizmat qidiring..."
                                         value={serviceSearch}
                                         onChange={(e) => setServiceSearch(e.target.value)}
                                     />
@@ -338,7 +338,7 @@ export default function CreateJob() {
                                                         setShowCategories(false)
                                                     }}
                                                 >
-                                                    “{serviceSearch.trim()}” sohasini qo'shish
+                                                    “{serviceSearch.trim()}” xizmatini qo‘shish
                                                 </button>
                                             </div>
                                         )
@@ -364,14 +364,14 @@ export default function CreateJob() {
 
                         <input
                             className="input"
-                            placeholder="Title"
+                            placeholder="Sarlavha"
                             value={form.title}
                             onChange={(e) => setForm({ ...form, title: e.target.value })}
                         />
 
                         <textarea
                             className="textarea"
-                            placeholder="Description"
+                            placeholder="Tavsif"
                             value={form.description}
                             onChange={(e) => setForm({ ...form, description: e.target.value })}
                         />
@@ -404,9 +404,9 @@ export default function CreateJob() {
                                         value={form.currency}
                                         onChange={(e) => setForm({ ...form, currency: e.target.value })}
                                     >
-                                        <option value="UZS">UZS — So'm</option>
-                                        <option value="USD">USD — Dollar</option>
-                                        <option value="EUR">EUR — Euro</option>
+                                        <option value="UZS">UZS — So‘m</option>
+                                        <option value="USD">USD — AQSh dollari</option>
+                                        <option value="EUR">EUR — Yevro</option>
                                     </select>
                                 </div>
                                 {priceError && <div className="field-error">{priceError}</div>}
@@ -415,17 +415,17 @@ export default function CreateJob() {
                                 <div className="location-input-row">
                                     <input
                                         className="input"
-                                        placeholder="Location"
+                                        placeholder="Manzil"
                                         value={form.location}
                                         onChange={(e) => {
                                             setForm({ ...form, location: e.target.value })
-                                            setLocationError("")
+                                            setManzilError("")
                                         }}
                                     />
                                     <button
                                         type="button"
                                         className="btn btn-secondary detect-location-button"
-                                        onClick={detectLocation}
+                                        onClick={detectManzil}
                                         disabled={locationLoading}
                                     >
                                         {locationLoading ? "Aniqlanmoqda..." : "Joylashuvimni aniqlash"}
@@ -433,48 +433,48 @@ export default function CreateJob() {
                                 </div>
                                 {locationError && <div className="location-error">{locationError}</div>}
                                 <div className="location-attribution">
-                                    Manzil ma'lumoti: © OpenStreetMap contributors
+                                    Manzil ma’lumoti: © OpenStreetMap hissadorlari
                                 </div>
                             </div>
                         </div>
 
-                        <button className="btn btn-primary" disabled={!canSubmit || loading}>
-                            {loading ? "Yuborilmoqda..." : "Submit"}
+                        <button className="btn btn-primary" disabled={!canJoylashtirish || loading}>
+                            {loading ? "Yuborilmoqda..." : "Joylashtirish"}
                         </button>
                     </form>
                 </section>
 
                 <aside className="card job-tips-card">
-                    <h3>Tips</h3>
-                    <p className="muted">Yaxshi job e’lonini yaratish uchun foydali maslahatlar.</p>
+                    <h3>Maslahatlar</h3>
+                    <p className="muted">Yaxshi ish e’lonini yaratish uchun foydali maslahatlar.</p>
                     <div className="tips-list">
                         <div className="tip-item">
                             <strong>🎯 Aniq sarlavha yozing</strong>
-                            <span>Job title qisqa va tushunarli bo‘lsin. Masalan: “React landing page yaratish”.</span>
+                            <span>Ish sarlavhasi qisqa va tushunarli bo‘lsin. Masalan: “React bir sahifali sayt yaratish”.</span>
                         </div>
                         <div className="tip-item">
                             <strong>📝 Vazifani batafsil tushuntiring</strong>
                             <span>Nima kerakligini, qanday natija kutayotganingizni va muhim talablarni yozing.</span>
                         </div>
                         <div className="tip-item">
-                            <strong>🛠️ To‘g‘ri service tanlang</strong>
-                            <span>Jobingizga eng mos xizmatni tanlash kerakli mutaxassislarni topishni osonlashtiradi.</span>
+                            <strong>🛠️ To‘g‘ri xizmatni tanlang</strong>
+                            <span>Ishingizga eng mos xizmatni tanlash kerakli mutaxassisni topishni osonlashtiradi.</span>
                         </div>
                         <div className="tip-item">
                             <strong>💰 Realistik narx belgilang</strong>
                             <span>Ish hajmi va murakkabligiga mos narx qo‘yish ko‘proq yaxshi takliflarni jalb qiladi.</span>
                         </div>
                         <div className="tip-item">
-                            <strong>📍 Location’ni ko‘rsating</strong>
-                            <span>Offline ish bo‘lsa, ish bajariladigan joyni aniq yozing.</span>
+                            <strong>📍 Manzil’ni ko‘rsating</strong>
+                            <span>Oflayn ish bo‘lsa, ish bajariladigan joyni aniq yozing.</span>
                         </div>
                         <div className="tip-item">
                             <strong>⏱️ Muddatni ayting</strong>
-                            <span>Kerak bo‘lsa, description ichida ish qachongacha tugashi kerakligini ko‘rsating.</span>
+                            <span>Kerak bo‘lsa, tavsif ichida ish qachongacha tugashi kerakligini ko‘rsating.</span>
                         </div>
                         <div className="tip-item">
                             <strong>💬 Muhim tafsilotlarni yozing</strong>
-                            <span>Kerakli skill, texnologiya, fayl yoki boshqa shartlarni oldindan belgilang.</span>
+                            <span>Kerakli ko‘nikma, texnologiya, fayl yoki boshqa shartlarni oldindan belgilang.</span>
                         </div>
                     </div>
                 </aside>
