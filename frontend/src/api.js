@@ -35,6 +35,12 @@ export async function api(path, { method = "GET", body = null, token = "", signa
             }
         }
 
+        if (Array.isArray(data)) {
+            data.ok = true
+            data.status = response.status
+            return data
+        }
+
         return { ...data, ok: true, status: response.status }
     } catch (error) {
         if (error?.name === "AbortError") {
