@@ -4,6 +4,10 @@ import datetime
 import secrets
 import smtplib
 import uuid
+import json
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
+from urllib.request import Request as URLRequest, urlopen
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from functools import wraps
@@ -599,6 +603,54 @@ def add_service():
 def get_services():
     r = db.q("SELECT id,name,parent_id FROM services").fetchall()
     return jsonify(rows(r, ["id", "name", "parent_id"]))
+
+
+# -------- REVERSE GEOCODING --------
+@app.route("/reverse-geocode")
+@auth
+def reverse_geocode():
+    try:
+        latitude = float(request.args.get("lat", ""))
+        longitude = float(request.args.get("lon", ""))
+    except (TypeError, ValueError):
+        return jsonify({"msg": "Joylashuv koordinatalari noto'g'ri"}), 400
+
+    if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+        return jsonify({"msg": "Joylashuv koordinatalari noto'g'ri"}), 400
+
+    query = urlencode({
+        "format": "jsonv2",
+        "lat": latitude,
+        "lon": longitude,
+        "zoom": 18,
+        "addressdetails": 1,
+        "accept-language": "uz,ru,en",
+    })
+    geocoder_url = f"https://nominatim.openstreetmap.org/reverse?{query}"
+
+    try:
+        geocoder_request = URLRequest(
+            geocoder_url,
+            headers={
+                "User-Agent": "FinJob/1.0 (+https://github.com/XudayberganovAllanazar1211/Job-Application-Loyiha)",
+                "Accept": "application/json",
+            },
+        )
+        with urlopen(geocoder_request, timeout=6) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except (HTTPError, URLError, TimeoutError, ValueError):
+        return jsonify({"msg": "Joylashuv manzilini aniqlab bo'lmadi"}), 502
+
+    location = str(data.get("display_name", "")).strip()
+    if not location:
+        return jsonify({"msg": "Bu joy uchun manzil topilmadi"}), 404
+
+    return jsonify({
+        "msg": "ok",
+        "location": location,
+        "latitude": latitude,
+        "longitude": longitude,
+    })
 
 
 # -------- JOBS --------
