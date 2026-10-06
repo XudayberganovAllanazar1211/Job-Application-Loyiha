@@ -131,6 +131,7 @@ export default function Jobs() {
                     const workerName = `${job.worker_first || ""} ${job.worker_last || ""}`.trim() || job.worker_username;
                     const isMyJob = String(job.user_id) === String(user?.id); // Men yaratgan ishmi?
                     const isIAccepted = String(job.worker_id) === String(user?.id); // Men qabul qilgan ishmi?
+                    const canAccept = String(job.status || "").trim().toLowerCase() === "active" && !isMyJob && !job.worker_id;
 
                     return (
                         <article className="card job-card" key={job.id}>
@@ -193,9 +194,9 @@ export default function Jobs() {
                                 </button>
 
                                 {/* --- ACCEPT TUGMASI (Mening ishim bo'lmasa va bo'sh bo'lsa hamma ko'ra oladi) --- */}
-                                {!isMyJob && String(job.status).toLowerCase() === "active" && (
+                                {canAccept && (
                                     <button className="btn btn-primary" onClick={() => acceptJob(job)}>
-                                        Accept job
+                                        Accept Job
                                     </button>
                                 )}
 
