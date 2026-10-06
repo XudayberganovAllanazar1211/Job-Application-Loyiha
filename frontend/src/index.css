@@ -1160,6 +1160,8 @@ html[data-theme="dark"] .register-email{
 .notification-item{width:100%;display:grid;gap:4px;text-align:left;padding:13px 16px;background:#fff;border:0;border-bottom:1px solid #f1f5f9;cursor:pointer}
 .notification-item:hover,.notification-item.unread{background:#f8fbff}
 .notification-item strong{color:#172033}.notification-item span{color:#64748b;font-size:13px;line-height:1.45}.notification-item small{color:#94a3b8;font-size:11px}.notification-empty{padding:30px 18px;text-align:center;color:#94a3b8}
+.job-grid{align-items:start}
+.job-card{align-self:start}
 .offer-panel,.offers-panel,.report-panel{display:grid;gap:12px;padding:14px;margin-bottom:12px;border:1px solid #dbe5f0;border-radius:15px;background:#f8fafc}
 .offer-form-grid{display:grid;grid-template-columns:180px 1fr;gap:10px}.offers-panel-head{display:flex;justify-content:space-between;align-items:center}.offer-row{display:flex;justify-content:space-between;gap:14px;align-items:center;padding:12px;border-radius:12px;background:#fff;border:1px solid #e2e8f0}.offer-row>div:first-child{display:grid;gap:4px}.offer-row p{margin:0;color:#64748b;font-size:13px}.offer-row span{color:#f59e0b;font-size:12px}.offer-row>div:last-child{display:grid;gap:6px;text-align:right}.report-panel strong{font-family:Manrope,sans-serif}
 html[data-theme="dark"] .notification-button{background:#0f172a;border-color:#334155;color:#e2e8f0}
