@@ -106,7 +106,7 @@ export default function Dashboard() {
         setActiveConfirmJobId(jobId)
     }
 
-    const handleConfirmYakunlash = async (jobId, choice) => {
+    const handleConfirmFinish = async (jobId, choice) => {
         const result = await api("/confirm_finish", {
             method: "POST",
             body: { job_id: jobId, choice },
@@ -147,14 +147,14 @@ export default function Dashboard() {
             <div className="stat-grid" style={{ marginBottom: 18 }}>
                 <div className="stat-card">
                     <div className="stat-card-icon">01</div>
-                    <div className="stat-card-kicker">Workspace</div>
+                    <div className="stat-card-kicker">Ish maydoni</div>
                     <div className="stat-label">Faol ishlar</div>
                     <div className="stat-value">{jobs.filter((job) => String(job.status || "").trim().toLowerCase() === "active").length}</div>
                 </div>
                 <div className="stat-card">
                     <div className="stat-card-icon">02</div>
-                    <div className="stat-card-kicker">Catalog</div>
-                    <div className="stat-label">Services</div>
+                    <div className="stat-card-kicker">Katalog</div>
+                    <div className="stat-label">Xizmatlar</div>
                     <div className="stat-value">{services.length}</div>
                 </div>
                 <div className="stat-card">
@@ -233,10 +233,10 @@ export default function Dashboard() {
                                                 Ishni tugatib, to'lovni qabul qildingizmi?
                                             </strong>
                                             <div style={{ display: "flex", gap: "8px" }}>
-                                                <button className="btn btn-success" style={{ padding: "2px 10px", fontSize: 12 }} onClick={() => handleConfirmYakunlash(job.id, "yes")}>
+                                                <button className="btn btn-success" style={{ padding: "2px 10px", fontSize: 12 }} onClick={() => handleConfirmFinish(job.id, "yes")}>
                                                     Ha
                                                 </button>
-                                                <button className="btn btn-warn" style={{ padding: "2px 10px", fontSize: 12, background: "#ef4444" }} onClick={() => handleConfirmYakunlash(job.id, "no")}>
+                                                <button className="btn btn-warn" style={{ padding: "2px 10px", fontSize: 12, background: "#ef4444" }} onClick={() => handleConfirmFinish(job.id, "no")}>
                                                     Yo'q
                                                 </button>
                                             </div>
@@ -332,7 +332,7 @@ export default function Dashboard() {
                 <aside className="card chat-wrap">
                     <div className="topbar" style={{ marginBottom: 0 }}>
                         <div className="page-head">
-                            <h2 style={{ margin: 0 }}>Suhbat preview</h2>
+                            <h2 style={{ margin: 0 }}>Suhbat ko‘rinishi</h2>
                             <p className="muted" style={{ margin: 0 }}>
                                 Tanlangan ish bo‘yicha oxirgi xabarlar.
                             </p>
@@ -368,7 +368,7 @@ export default function Dashboard() {
                             </div>
                         </>
                     ) : (
-                        <div className="empty-state">Suhbat ko‘rish uchun job tanla.</div>
+                        <div className="empty-state">Suhbatni ko‘rish uchun ish tanlang.</div>
                     )}
                 </aside>
             </div>
