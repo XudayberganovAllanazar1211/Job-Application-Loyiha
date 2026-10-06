@@ -289,6 +289,7 @@ export default function Jobs() {
                             Ish yaratish
                         </button>
                     </div>
+                </div>
                 <div className="jobs-filter-note">
                     {selectedServices.length
                         ? <><strong>{selectedServices.length}</strong> ta soha tanlangan • <strong>{filtered.length}</strong> ta ish ko‘rsatilmoqda</>
