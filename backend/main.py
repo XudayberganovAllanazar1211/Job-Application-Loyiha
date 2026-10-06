@@ -4,10 +4,11 @@ import datetime
 import random
 import secrets
 import smtplib
+import uuid
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from functools import wraps
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 import jwt
@@ -92,7 +93,8 @@ class DB:
                 skills TEXT DEFAULT '',
                 created_at TEXT,
                 average_rating REAL DEFAULT 0.0,
-                role TEXT DEFAULT 'user'
+                role TEXT DEFAULT 'user',
+                avatar_url TEXT DEFAULT ''
             )
         """)
 
@@ -164,6 +166,7 @@ class DB:
             ("created_at", "ALTER TABLE users ADD COLUMN created_at TEXT"),
             ("average_rating", "ALTER TABLE users ADD COLUMN average_rating REAL DEFAULT 0.0"),
             ("role", "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'"),
+            ("avatar_url", "ALTER TABLE users ADD COLUMN avatar_url TEXT DEFAULT ''"),
         ]
         for col_name, sql in migrations:
             if col_name not in existing_user_cols:
@@ -884,13 +887,62 @@ def get_leaderboard():
     return jsonify({"creators": creators, "workers": workers})
 
 
+# -------- PROFILE PHOTO --------
+PROFILE_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads", "profile_pictures")
+os.makedirs(PROFILE_UPLOAD_DIR, exist_ok=True)
+ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
+MAX_PROFILE_IMAGE_SIZE = 5 * 1024 * 1024
+
+
+@app.route("/profile/avatar", methods=["POST"])
+@auth
+def upload_profile_avatar():
+    image = request.files.get("image")
+    if not image or not image.filename:
+        return jsonify({"msg": "Rasm tanlanmadi"}), 400
+
+    extension = image.filename.rsplit(".", 1)[-1].lower() if "." in image.filename else ""
+    if extension not in ALLOWED_IMAGE_EXTENSIONS:
+        return jsonify({"msg": "Faqat PNG, JPG, JPEG yoki WEBP rasm yuklash mumkin"}), 400
+
+    image.seek(0, os.SEEK_END)
+    size = image.tell()
+    image.seek(0)
+    if size > MAX_PROFILE_IMAGE_SIZE:
+        return jsonify({"msg": "Rasm hajmi 5 MB dan oshmasligi kerak"}), 400
+
+    filename = f"{request.uid}_{uuid.uuid4().hex}.{extension}"
+    filepath = os.path.join(PROFILE_UPLOAD_DIR, filename)
+    image.save(filepath)
+
+    avatar_url = f"/uploads/profile_pictures/{filename}"
+    old_avatar = db.q("SELECT avatar_url FROM users WHERE id=?", (request.uid,)).fetchone()
+    old_url = old_avatar[0] if old_avatar else ""
+    db.q("UPDATE users SET avatar_url=? WHERE id=?", (avatar_url, request.uid))
+
+    if old_url and old_url.startswith("/uploads/profile_pictures/"):
+        old_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), old_url.lstrip("/").replace("/", os.sep))
+        if os.path.isfile(old_path) and old_path != filepath:
+            try:
+                os.remove(old_path)
+            except OSError:
+                pass
+
+    return jsonify({"msg": "ok", "avatar_url": avatar_url})
+
+
+@app.route("/uploads/profile_pictures/<path:filename>")
+def profile_avatar(filename):
+    return send_from_directory(PROFILE_UPLOAD_DIR, filename)
+
+
 # -------- PROFILE --------
 @app.route("/profile", methods=["GET", "PUT"])
 @auth
 def profile():
     if request.method == "GET":
         u = db.q(
-            "SELECT id, username, first_name, last_name, email, birthday, bio, skills, created_at, average_rating, role FROM users WHERE id=?",
+            "SELECT id, username, first_name, last_name, email, birthday, bio, skills, created_at, average_rating, role, avatar_url FROM users WHERE id=?",
             (request.uid,),
         ).fetchone()
         if not u:
@@ -904,6 +956,7 @@ def profile():
         rating_res = db.q("SELECT AVG(score) FROM ratings WHERE to_user=?", (request.uid,)).fetchone()[0]
         avg_rating = round(rating_res, 1) if rating_res is not None else 0.0
         user_role = u[10] if len(u) > 10 and u[10] else "user"
+        avatar_url = u[11] if len(u) > 11 and u[11] else ""
 
         return jsonify({
             "id": u[0],
@@ -920,6 +973,7 @@ def profile():
             "created_jobs_count": created_jobs_count,
             "completed_jobs_count": completed_jobs_count,
             "avg_rating": avg_rating,
+            "avatar_url": avatar_url,
         })
 
     elif request.method == "PUT":
