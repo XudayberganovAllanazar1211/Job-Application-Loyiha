@@ -245,7 +245,7 @@ export default function Dashboard() {
                                         <span className="chip job-time-chip">🕒 {formatTimeAgo(job.created_at)}</span>
                                         <span className="chip">💰 {job.price ?? "-"} {job.currency || "UZS"}</span>
                                         <span className="chip">📍 {job.location || "-"}</span>
-                                        <span className="chip">🧩 {serviceMap[String(job.service_id)] || job.service_name || job.service_id || "Noma’lum"}</span>
+                                        <span className="chip job-service-chip">🧩 {job.service_name || serviceMap[String(job.service_id)] || job.service_id || "Noma’lum"}</span>
                                         <span className={`chip status-chip status-${status}`}><span className="status-dot" />{statusLabel}</span>
                                     </div>
 
