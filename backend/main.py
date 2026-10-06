@@ -557,19 +557,8 @@ def get_services():
 @auth
 def add_job():
     d = request.json or {}
-    custom_service = str(d.get("custom_service", "")).strip()
-    if not d.get("service_id") and not custom_service:
-        return jsonify({"msg": "Xizmatni tanlang yoki boshqa soha nomini kiriting"}), 400
-    if not d.get("title") or not d.get("price") or not d.get("location"):
+    if not d.get("service_id") or not d.get("title") or not d.get("price") or not d.get("location"):
         return jsonify({"msg": "Barcha maydonlarni to'ldiring"}), 400
-
-    service_id = d.get("service_id")
-    if not service_id and custom_service:
-        db.q(
-            "INSERT INTO services(name,parent_id,created_by) VALUES(?,?,?)",
-            (custom_service, None, request.uid),
-        )
-        service_id = db.q("SELECT last_insert_rowid()").fetchone()[0]
 
     try:
         price = float(d["price"])
@@ -589,7 +578,7 @@ def add_job():
            VALUES(?,?,?,?,?,?,?,?,?,?)""",
         (
             request.uid,
-            service_id,
+            d["service_id"],
             d["title"].strip(),
             d.get("description", "").strip(),
             price,
