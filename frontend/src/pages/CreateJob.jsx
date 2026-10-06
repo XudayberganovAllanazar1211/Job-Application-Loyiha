@@ -227,12 +227,12 @@ export default function CreateJob() {
         setLoading(false)
 
         if (result?.msg === "ok") {
-            setNotice("Job yaratildi")
+            setNotice("Ish yaratildi")
             setTimeout(() => navigate("/jobs"), 700)
             return
         }
 
-        setNotice(result?.msg || "Job yaratishda xato")
+        setNotice(result?.msg || "Ish yaratishda xato")
     }
 
     return (
@@ -385,7 +385,7 @@ export default function CreateJob() {
                                         min="0.01"
                                         max="100000000000"
                                         step="0.01"
-                                        placeholder="Price"
+                                        placeholder="Narx"
                                         value={form.price}
                                         onChange={(e) => {
                                             const value = e.target.value
@@ -465,7 +465,7 @@ export default function CreateJob() {
                             <span>Ish hajmi va murakkabligiga mos narx qo‘yish ko‘proq yaxshi takliflarni jalb qiladi.</span>
                         </div>
                         <div className="tip-item">
-                            <strong>📍 Manzil’ni ko‘rsating</strong>
+                            <strong>📍 Manzilni ko‘rsating</strong>
                             <span>Oflayn ish bo‘lsa, ish bajariladigan joyni aniq yozing.</span>
                         </div>
                         <div className="tip-item">
