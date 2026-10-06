@@ -740,3 +740,94 @@ html[data-theme="dark"] .job-card:hover{
     .theme-toggle{flex:1}
     .topbar-profile-btn{flex:0 0 auto}
 }
+
+
+.jobs-recommendations {
+    margin: 18px 0 22px;
+    padding: 20px;
+}
+.jobs-recommendations-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+.jobs-recommendations-head h2 {
+    margin: 3px 0 4px;
+}
+.jobs-recommendations-head p {
+    margin: 0;
+    color: var(--muted);
+}
+.jobs-recommendations-kicker {
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--primary);
+}
+.jobs-recommendations-count,
+.jobs-profile-note {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--primary);
+    background: var(--primary-soft);
+    border: 1px solid var(--primary-border);
+    border-radius: 999px;
+    padding: 7px 11px;
+    white-space: nowrap;
+}
+.job-recommended-card {
+    position: relative;
+    overflow: hidden;
+}
+.job-recommended-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto;
+    height: 3px;
+    background: var(--primary);
+}
+.job-recommended-label {
+    display: inline-flex;
+    margin-bottom: 8px;
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--primary);
+}
+.job-recommended-skills {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+.jobs-results-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 24px 0 12px;
+}
+.jobs-results-heading h2 {
+    margin: 0 0 3px;
+}
+.jobs-results-heading p {
+    margin: 0;
+    color: var(--muted);
+}
+html[data-theme="dark"] .jobs-recommendations-count,
+html[data-theme="dark"] .jobs-profile-note {
+    color: #93c5fd;
+    background: rgba(37, 99, 235, .16);
+    border-color: rgba(96, 165, 250, .28);
+}
+@media (max-width: 700px) {
+    .jobs-recommendations-head,
+    .jobs-results-heading {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .jobs-recommendations {
+        padding: 16px;
+    }
+}
