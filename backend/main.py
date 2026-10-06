@@ -120,7 +120,8 @@ class DB:
                 worker_id INTEGER,
                 status TEXT,
                 created_at TEXT,
-                finished_at TEXT
+                finished_at TEXT,
+                custom_service TEXT DEFAULT ''
             )
         """)
 
@@ -557,7 +558,7 @@ def get_services():
 @auth
 def add_job():
     d = request.json or {}
-    if not d.get("service_id") or not d.get("title") or not d.get("price") or not d.get("location"):
+    if (not d.get("service_id") and not d.get("custom_service", "").strip()) or not d.get("title") or not d.get("price") or not d.get("location"):
         return jsonify({"msg": "Barcha maydonlarni to'ldiring"}), 400
 
     try:
@@ -574,11 +575,12 @@ def add_job():
 
     now_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     db.q(
-        """INSERT INTO jobs(user_id,service_id,title,description,price,location,worker_id,status,created_at,currency)
-           VALUES(?,?,?,?,?,?,?,?,?,?)""",
+        """INSERT INTO jobs(user_id,service_id,custom_service,title,description,price,location,worker_id,status,created_at,currency)
+           VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
         (
             request.uid,
-            d["service_id"],
+            d.get("service_id"),
+            d.get("custom_service", "").strip(),
             d["title"].strip(),
             d.get("description", "").strip(),
             price,
@@ -598,7 +600,8 @@ def get_jobs():
     r = db.q(
         """
         SELECT j.id, j.title, j.price, j.currency, j.location, j.status, j.user_id, j.worker_id,
-               u.first_name, u.last_name, u.username, j.description, j.service_id, s.name as service_name
+               u.first_name, u.last_name, u.username, j.description, j.service_id,
+               COALESCE(NULLIF(s.name, ''), j.custom_service) as service_name
         FROM jobs j
         LEFT JOIN users u ON j.worker_id = u.id
         LEFT JOIN services s ON j.service_id = s.id
