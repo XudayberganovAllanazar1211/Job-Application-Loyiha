@@ -54,10 +54,12 @@ export default function CreateJob() {
         title: "",
         description: "",
         price: "",
+        currency: "UZS",
         location: ""
     })
     const [notice, setNotice] = useState("")
     const [loading, setLoading] = useState(false)
+    const [priceError, setPriceError] = useState("")
     const navigate = useNavigate()
     const token = localStorage.getItem("token") || ""
     const serviceTree = useMemo(() => buildServiceTree(services), [services])
@@ -113,13 +115,19 @@ export default function CreateJob() {
     }, [token])
 
     const canSubmit = useMemo(
-        () => form.service_id && form.title && form.description && form.price && form.location,
+        () => form.service_id && form.title && form.description && form.price && !priceError && form.location,
         [form]
     )
 
     const submit = async (e) => {
         e.preventDefault()
         setNotice("")
+        const price = Number(form.price)
+        if (!Number.isFinite(price) || price <= 0 || price > 100000000000) {
+            setPriceError("Narx 0 dan katta va 100 000 000 000 dan oshmasligi kerak.")
+            return
+        }
+
         setLoading(true)
 
         const result = await api("/job", {
@@ -128,7 +136,8 @@ export default function CreateJob() {
                 service_id: Number(form.service_id),
                 title: form.title,
                 description: form.description,
-                price: Number(form.price),
+                price,
+                currency: form.currency,
                 location: form.location
             },
             token
@@ -238,16 +247,40 @@ export default function CreateJob() {
                         />
 
                         <div className="form-row">
-                            <input
-                                className="input"
-                                type="number"
-                                min="0.01"
-                                step="0.01"
-                                placeholder="Price"
-                                value={form.price}
-                                onChange={(e) => setForm({ ...form, price: e.target.value })}
-                                required
-                            />
+                            <div className="price-field">
+                                <div className="price-input-row">
+                                    <input
+                                        className="input"
+                                        type="number"
+                                        min="0.01"
+                                        max="100000000000"
+                                        step="0.01"
+                                        placeholder="Price"
+                                        value={form.price}
+                                        onChange={(e) => {
+                                            const value = e.target.value
+                                            setForm({ ...form, price: value })
+                                            const number = Number(value)
+                                            if (!value || !Number.isFinite(number) || number <= 0 || number > 100000000000) {
+                                                setPriceError("Narx 0 dan katta va 100 000 000 000 dan oshmasligi kerak.")
+                                            } else {
+                                                setPriceError("")
+                                            }
+                                        }}
+                                        required
+                                    />
+                                    <select
+                                        className="input currency-select"
+                                        value={form.currency}
+                                        onChange={(e) => setForm({ ...form, currency: e.target.value })}
+                                    >
+                                        <option value="UZS">UZS — So'm</option>
+                                        <option value="USD">USD — Dollar</option>
+                                        <option value="EUR">EUR — Euro</option>
+                                    </select>
+                                </div>
+                                {priceError && <div className="field-error">{priceError}</div>}
+                            </div>
                             <input
                                 className="input"
                                 placeholder="Location"
