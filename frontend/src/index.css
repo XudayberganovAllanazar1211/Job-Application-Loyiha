@@ -462,3 +462,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .leaderboard-item.top .leaderboard-rank{font-size:27px}
 .leaderboard-count{padding:8px 12px;border-radius:999px;background:#eff6ff;border:1px solid #dbeafe;color:#2563eb;font-size:13px;font-weight:800;white-space:nowrap}
 @media(max-width:700px){.workspace-search{min-width:0!important;width:100%}.leaderboard-item{align-items:flex-start}.leaderboard-count{margin-top:2px}}
+
+.sidebar-profile > div{min-width:0}
+.sidebar-profile > div > div:last-child{flex:1;min-width:0;max-width:calc(100% - 48px)}
+.sidebar-profile-name{display:block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sidebar-profile .helper{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
