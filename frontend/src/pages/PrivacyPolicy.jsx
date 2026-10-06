@@ -17,20 +17,20 @@ export default function PrivacyPolicy() {
                     <p>Ushbu Maxfiylik siyosati FinJob platformasidan foydalanishda shaxsiy ma'lumotlaringiz qanday yig'ilishi, ishlatilishi, saqlanishi va himoyalanishini tushuntiradi. FinJob ushbu siyosatni O'zbekiston Respublikasining shaxsiy ma'lumotlar to'g'risidagi amaldagi talablarini hisobga olgan holda yuritadi.</p>
 
                     <h2>1. Qanday ma'lumotlar yig'iladi?</h2>
-                    <p>Hisob yaratishda ism, familiya, tug'ilgan sana, username, email va parol bilan bog'liq ma'lumotlar olinadi. Parol ochiq ko'rinishda saqlanmaydi; platforma uni xavfsiz hash ko'rinishida saqlaydi.</p>
-                    <p>Profil to'ldirilganda bio, ko‘nikmalar va profil rasmi kabi qo'shimcha ma'lumotlar saqlanishi mumkin.</p>
-                    <p>Job yaratishda xizmat tanlovi, sarlavha, tavsif, narx, valyuta va manzil saqlanadi. Chat va rating funksiyalaridan foydalanganda yuborilgan xabarlar, baholar va izohlar ham tegishli ish bilan bog'lanadi.</p>
+                    <p>Hisob yaratishda ism, familiya, tug'ilgan sana, foydalanuvchi nomi, elektron pochta va parol bilan bog'liq ma'lumotlar olinadi. Parol ochiq ko'rinishda saqlanmaydi; platforma uni xavfsiz hash ko'rinishida saqlaydi.</p>
+                    <p>Profil to'ldirilganda o‘zingiz haqingizdagi ma’lumot, ko‘nikmalar va profil rasmi kabi qo'shimcha ma'lumotlar saqlanishi mumkin.</p>
+                    <p>Ish yaratishda xizmat tanlovi, sarlavha, tavsif, narx, valyuta va manzil saqlanadi. Suhbat va baholash funksiyalaridan foydalanganda yuborilgan xabarlar, baholar va izohlar ham tegishli ish bilan bog'lanadi.</p>
 
                     <h2>2. Joylashuv ma'lumotlari</h2>
                     <p>FinJob avtomatik joylashuv funksiyasini faqat siz “Joylashuvimni aniqlash” tugmasini bosganingizda ishga tushiradi. Brauzer qurilma joylashuvini olish uchun ruxsat so'raydi.</p>
-                    <p>Olingan koordinatalar manzil matniga aylantiriladi va job manzil maydoniga joylashtiriladi. Siz uni yuborishdan oldin o'zgartirishingiz yoki o'zingiz kiritishingiz mumkin.</p>
+                    <p>Olingan koordinatalar manzil matniga aylantiriladi va ish manzil maydoniga joylashtiriladi. Siz uni yuborishdan oldin o'zgartirishingiz yoki o'zingiz kiritishingiz mumkin.</p>
                     <p>Manzilni aniqlash jarayonida koordinatalar OpenStreetMap Nominatim geokodlash xizmatiga yuborilishi mumkin. Ushbu xizmatning o'z maxfiylik va foydalanish qoidalari mavjud.</p>
 
                     <h2>3. Ma'lumotlardan nima uchun foydalanamiz?</h2>
-                    <p>Ma'lumotlar hisobni yaratish va boshqarish, email tasdiqlash, joblarni joylashtirish va topish, foydalanuvchilar o'rtasida aloqa, rating va platforma xavfsizligini ta'minlash uchun ishlatiladi.</p>
+                    <p>Ma'lumotlar hisobni yaratish va boshqarish, elektron pochta tasdiqlash, ishlarni joylashtirish va topish, foydalanuvchilar o'rtasida aloqa, baholash va platforma xavfsizligini ta'minlash uchun ishlatiladi.</p>
 
                     <h2>4. Email va uchinchi tomon xizmatlari</h2>
-                    <p>Ro'yxatdan o'tish kodi siz ko'rsatgan email manziliga SMTP orqali yuboriladi. Email manzilingiz va tasdiqlash xabari email yetkazib berish xizmatidan foydalanish uchun tegishli email provayderiga uzatilishi mumkin.</p>
+                    <p>Ro'yxatdan o'tish kodi siz ko'rsatgan email manziliga SMTP orqali yuboriladi. Email manzilingiz va tasdiqlash xabari email yetkazib berish xizmatidan foydalanish uchun tegishli elektron pochta provayderiga uzatilishi mumkin.</p>
                     <p>FinJob foydalanuvchi ma'lumotlarini sotmaydi. Ma'lumotlar faqat platforma ishlashi uchun zarur bo'lgan xizmatlar yoki qonunchilik talab qilgan holatlarda uzatiladi.</p>
 
                     <h2>5. Saqlash va xavfsizlik</h2>
@@ -38,7 +38,7 @@ export default function PrivacyPolicy() {
                     <p>Email tasdiqlash kodi vaqtincha server xotirasida saqlanadi va tasdiqlash jarayoni tugagach yoki kodning amal qilish muddati tugagach o'chiriladi.</p>
 
                     <h2>6. Brauzer xotirasi</h2>
-                    <p>FinJob sessiya tokeni va ayrim foydalanuvchi ma'lumotlarini brauzer xotirasida saqlashi mumkin. Bu klassik brauzer cookie'sidan farq qiladi. Shu sababli FinJob hozircha majburiy reklama tracking cookie'lariga tayanmaydi.</p>
+                    <p>FinJob sessiya belgisi va ayrim foydalanuvchi ma'lumotlarini brauzer xotirasida saqlashi mumkin. Bu klassik brauzer cookie'sidan farq qiladi. Shu sababli FinJob hozircha majburiy reklama kuzatuv cookie fayllari'lariga tayanmaydi.</p>
 
                     <h2>7. Sizning huquqlaringiz</h2>
                     <p>Siz o'zingiz haqingizdagi ma'lumotlarni ko'rish, tuzatish va qonunchilik doirasida o'chirishni so'rash huquqiga egasiz. Shuningdek, avtomatik geolokatsiya ruxsatini brauzer sozlamalaridan boshqarishingiz mumkin.</p>
