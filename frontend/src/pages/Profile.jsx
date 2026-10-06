@@ -320,15 +320,35 @@ export default function Profile() {
         setNotice("")
 
         try {
-            const areaRect = area.getBoundingClientRect()
-            const imageRect = image.getBoundingClientRect()
-            const sourceScaleX = image.naturalWidth / imageRect.width
-            const sourceScaleY = image.naturalHeight / imageRect.height
+            const areaSize = area.clientWidth
+            const naturalWidth = image.naturalWidth
+            const naturalHeight = image.naturalHeight
+            if (!areaSize || !naturalWidth || !naturalHeight) {
+                setNotice("Rasmni tayyorlashda xatolik yuz berdi")
+                return
+            }
 
-            const sourceX = Math.max(0, (areaRect.left - imageRect.left) * sourceScaleX)
-            const sourceY = Math.max(0, (areaRect.top - imageRect.top) * sourceScaleY)
-            const sourceWidth = Math.min(image.naturalWidth - sourceX, areaRect.width * sourceScaleX)
-            const sourceHeight = Math.min(image.naturalHeight - sourceY, areaRect.height * sourceScaleY)
+            const baseScale = Math.max(areaSize / naturalWidth, areaSize / naturalHeight)
+            const scale = baseScale * cropZoom
+            const displayedWidth = naturalWidth * scale
+            const displayedHeight = naturalHeight * scale
+            const centerX = areaSize / 2 + cropOffset.x
+            const centerY = areaSize / 2 + cropOffset.y
+            const left = centerX - displayedWidth / 2
+            const top = centerY - displayedHeight / 2
+
+            const sourceX = Math.max(0, -left / scale)
+            const sourceY = Math.max(0, -top / scale)
+            const sourceSize = Math.min(
+                naturalWidth - sourceX,
+                naturalHeight - sourceY,
+                areaSize / scale
+            )
+
+            if (sourceSize <= 0) {
+                setNotice("Rasmni kesishda xatolik yuz berdi")
+                return
+            }
 
             const canvas = document.createElement("canvas")
             canvas.width = 512
@@ -346,8 +366,8 @@ export default function Profile() {
                 image,
                 sourceX,
                 sourceY,
-                sourceWidth,
-                sourceHeight,
+                sourceSize,
+                sourceSize,
                 0,
                 0,
                 canvas.width,
