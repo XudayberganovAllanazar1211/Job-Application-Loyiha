@@ -122,7 +122,7 @@ export default function Jobs() {
             const locationMatches = !locationQuery || String(job.location || "").toLowerCase().includes(locationQuery)
             const days = timeLimits[timeFilter]
             const created = new Date(String(job.created_at || "").replace(" ", "T")).getTime()
-            const timeMatches = !days || (!Number.isNaN(created) && now - created <= days * 24 * 60 * 60 * 1000)
+            const timeMatches = !days || (!Number.isNaN(created) && created <= now && now - created <= days * 24 * 60 * 60 * 1000)
             const textMatches = !query || text.includes(query)
             const serviceMatches = !selectedServices.length || selectedServices.some((service) => jobServices.includes(service))
 
@@ -388,7 +388,7 @@ export default function Jobs() {
                                 <span className={`chip status-chip status-${status}`}><span className="status-dot" />{statusLabel}</span>
 
                                 {isMyJob && (
-                                    <span className="chip" style={{ background: "rgba(255,255,255,0.05)", color: "#9ca3af" }}>
+                                    <span className="chip job-worker-chip">
                                         👤 Bajaruvchi: {job.worker_id ? workerName : "Hali qabul qilinmagan"}
                                     </span>
                                 )}
@@ -420,7 +420,7 @@ export default function Jobs() {
                             {/* --- ADMIN BILAN BOG'LANISH OGOHLANTIRISHI --- */}
                             {adminContactJobId === job.id && (
                                 <div className="notice warn" style={{ marginBottom: 14, fontSize: 13 }}>
-                                    ⚠️ To'lov yoki ish bo'yicha muammo mavjud. Iltimos, administratorlarimiz bilan bog‘laning: <strong>@admin_support</strong>
+                                    ⚠️ To‘lov yoki ish bo‘yicha muammo mavjud. Iltimos, administrator bilan bog‘laning.
                                 </div>
                             )}
 
@@ -445,7 +445,7 @@ export default function Jobs() {
 
                                 {/* --- SIZ QABUL QILGANSIS CHIP --- */}
                                 {isIAccepted && status === "accepted" && (
-                                    <span className="chip" style={{ background: "rgba(34, 197, 94, 0.2)", color: "#4ade80" }}>
+                                    <span className="chip job-accepted-chip">
                                         ✅ Siz qabul qilgansiz
                                     </span>
                                 )}
