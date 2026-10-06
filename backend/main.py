@@ -1321,6 +1321,46 @@ def accept():
     return jsonify({"msg": "ok"})
 
 
+@app.route("/cancel_worker", methods=["POST"])
+@auth
+def cancel_worker():
+    d = request.json or {}
+    job_id = d.get("job_id")
+
+    if not job_id:
+        return jsonify({"msg": "Ish identifikatori ko‘rsatilmagan"}), 400
+
+    try:
+        job_id = int(job_id)
+    except (TypeError, ValueError):
+        return jsonify({"msg": "Ish identifikatori noto‘g‘ri"}), 400
+
+    job = db.q("SELECT user_id, worker_id, status FROM jobs WHERE id=?", (job_id,)).fetchone()
+    if not job:
+        return jsonify({"msg": "Ish topilmadi"}), 404
+
+    if job[0] != request.uid:
+        return jsonify({"msg": "Faqat ish egasi bajaruvchini bekor qilishi mumkin"}), 403
+
+    if job[1] is None:
+        return jsonify({"msg": "Bu ishda hozir biriktirilgan bajaruvchi yo‘q"}), 400
+
+    if job[2] != "accepted":
+        return jsonify({"msg": "Bajaruvchini bekor qilish faqat qabul qilingan ishda mumkin"}), 400
+
+    result = db.q(
+        "UPDATE jobs SET worker_id=NULL, status='active', finished_at=NULL WHERE id=? AND user_id=? AND status='accepted'",
+        (job_id, request.uid),
+    )
+    updated = result.rowcount
+    result.close()
+
+    if updated != 1:
+        return jsonify({"msg": "Ish holati o‘zgardi. Qayta urinib ko‘ring"}), 409
+
+    return jsonify({"msg": "ok", "status": "active"})
+
+
 @app.route("/finish_job", methods=["POST"])
 @auth
 def finish():
