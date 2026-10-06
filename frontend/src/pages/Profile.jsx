@@ -534,9 +534,6 @@ export default function Profile() {
                                                 }
                                             }}
                                         />
-                                        <button type="button" className="btn btn-secondary" onClick={addSkill}>
-                                            Qo'shish
-                                        </button>
                                     </div>
                                 )}
                             </section>
