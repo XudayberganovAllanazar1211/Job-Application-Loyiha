@@ -1,17 +1,17 @@
 import { NavLink, useNavigate } from "react-router-dom"
 
 const navItems = [
-    ["/", "Dashboard", "⌂"],
-    ["/create", "Create Job", "+"],
-    ["/jobs", "Jobs", "▤"],
-    ["/leaderboard", "Leaderboard", "★"]
+    ["/", "Boshqaruv paneli", "⌂"],
+    ["/create", "Ish yaratish", "+"],
+    ["/jobs", "Ishlar", "▤"],
+    ["/leaderboard", "Reyting jadvali", "★"]
 ]
 
 export default function AppLayout({ title, subtitle, children }) {
     const navigate = useNavigate()
     const user = JSON.parse(localStorage.getItem("user") || "null")
     const isAdmin = user?.role === "admin"
-    const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(" ") || user?.username || "Guest"
+    const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(" ") || user?.username || "Mehmon"
     const initials = fullName.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()
 
     const logout = () => {
@@ -28,7 +28,7 @@ export default function AppLayout({ title, subtitle, children }) {
                         <div className="brand-badge">FJ</div>
                         <div>
                             <div className="brand-name">FinJob</div>
-                            <div className="helper">Find work. Get it done.</div>
+                            <div className="helper">Ish toping. Ishni yakunlang.</div>
                         </div>
                     </button>
                     <div className="sidebar-profile">
@@ -36,7 +36,7 @@ export default function AppLayout({ title, subtitle, children }) {
                             <div className="sidebar-user-avatar">{initials}</div>
                             <div style={{minWidth:0}}>
                                 <div className="sidebar-profile-name" style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{fullName}</div>
-                                <div className="helper">{user?.email || (isAdmin ? "Administrator" : "FinJob member")}</div>
+                                <div className="helper">{user?.email || (isAdmin ? "Administrator" : "FinJob foydalanuvchisi")}</div>
                             </div>
                         </div>
                     </div>
@@ -50,26 +50,26 @@ export default function AppLayout({ title, subtitle, children }) {
                 </nav>
                 {isAdmin && (
                     <NavLink to="/admin" className={({isActive}) => `nav-link admin-nav-link ${isActive ? "active" : ""}`}>
-                        <span className="nav-link-icon">⚙</span><span className="nav-link-label">Admin</span>
+                        <span className="nav-link-icon">⚙</span><span className="nav-link-label">Administrator</span>
                     </NavLink>
                 )}
                 <div className="legal-footer">
-                    <div className="legal-footer-title">FinJob Legal</div>
+                    <div className="legal-footer-title">FinJob huquqiy bo‘limi</div>
                     <div className="legal-footer-links">
-                        <NavLink to="/privacy">Privacy</NavLink>
-                        <NavLink to="/terms">Terms</NavLink>
-                        <NavLink to="/community-rules">Rules</NavLink>
+                        <NavLink to="/privacy">Maxfiylik</NavLink>
+                        <NavLink to="/terms">Shartlar</NavLink>
+                        <NavLink to="/community-rules">Qoidalar</NavLink>
                     </div>
                 </div>
                 <div className="sidebar-footer">
-                    <button className="btn btn-secondary" onClick={() => navigate("/profile")} style={{width:"100%",marginBottom:8}}>Profile</button>
-                    <button className="btn btn-danger" onClick={logout} style={{width:"100%"}}>Log out</button>
+                    <button className="btn btn-secondary" onClick={() => navigate("/profile")} style={{width:"100%",marginBottom:8}}>Profil</button>
+                    <button className="btn btn-danger" onClick={logout} style={{width:"100%"}}>Chiqish</button>
                 </div>
             </aside>
             <main className="main">
                 <div className="topbar">
                     <div className="page-head">
-                        <div className="chip" style={{width:"fit-content",color:"#2563eb",background:"#eff6ff",borderColor:"#dbeafe"}}>FINJOB / WORKSPACE</div>
+                        <div className="chip" style={{width:"fit-content",color:"#2563eb",background:"#eff6ff",borderColor:"#dbeafe"}}>FINJOB / ISH MAYDONI</div>
                         <h1 className="page-title">{title}</h1>
                         <p className="page-subtitle">{subtitle}</p>
                     </div>
