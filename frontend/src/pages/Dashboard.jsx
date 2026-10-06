@@ -188,12 +188,12 @@ export default function Dashboard() {
                                     <h3 className="job-title">{job.title}</h3>
                                     <p className="job-desc">{job.description || "No description"}</p>
                                     <div className="meta" style={{ marginBottom: 12 }}>
-                                        <span className="chip">💰 {job.price ?? "-"} UZS</span>
+                                        <span className="chip">💰 {job.price ?? "-"} {job.currency || "UZS"}</span>
                                         <span className="chip">📍 {job.location || "-"}</span>
                                         <span className="chip">🧩 {serviceMap[String(job.service_id)] || job.service_name || job.service_id || "Unknown"}</span>
                                         <span className="chip" style={{
-                                            background: job.status === "pending_finish" ? "rgba(245, 158, 11, 0.2)" : "rgba(255,255,255,0.05)",
-                                            color: job.status === "pending_finish" ? "#f59e0b" : "#fff"
+                                            background: status === "pending_finish" ? "rgba(245, 158, 11, 0.2)" : "rgba(255,255,255,0.05)",
+                                            color: status === "pending_finish" ? "#f59e0b" : "#fff"
                                         }}>
                                             Status: {status === "pending_finish" ? "Kutilmoqda" : status}
                                         </span>
