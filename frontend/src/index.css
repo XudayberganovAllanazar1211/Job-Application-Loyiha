@@ -1139,3 +1139,12 @@ html[data-theme="dark"] .sidebar-footer{
     color:#94a3b8;
 }
 
+
+html[data-theme="dark"] .rating-user-field{
+    background:#0f172a!important;
+    color:#f1f5f9!important;
+    border-color:#334155!important;
+}
+html[data-theme="dark"] .register-email{
+    color:#f8fafc!important;
+}
