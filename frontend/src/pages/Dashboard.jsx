@@ -10,6 +10,7 @@ export default function Dashboard() {
     const [selectedJob, setSelectedJob] = useState(null)
     const [search, setSearch] = useState("")
     const [notice, setNotice] = useState("")
+    const [noticeType, setNoticeType] = useState("ok")
     const token = localStorage.getItem("token") || ""
     const user = JSON.parse(localStorage.getItem("user") || "null")
     const navigate = useNavigate()
@@ -81,7 +82,9 @@ export default function Dashboard() {
             body: { job_id: job.id },
             token
         })
-        setNotice(result?.msg === "ok" ? "Job qabul qilindi ✅" : (result?.msg || "Xato"))
+        const accepted = result?.msg === "ok"
+        setNoticeType(accepted ? "ok" : "warn")
+        setNotice(accepted ? "Job qabul qilindi" : (result?.msg || "Xato"))
         load()
     }
 
@@ -92,7 +95,9 @@ export default function Dashboard() {
             body: { job_id: job.id },
             token
         })
-        setNotice(result?.msg === "ok" ? "Yakunlash so'rovi yuborildi. Bajaruvchi tasdiqlashi kutilmoqda." : (result?.msg || "Xato"))
+        const requested = result?.msg === "ok"
+        setNoticeType(requested ? "ok" : "warn")
+        setNotice(requested ? "Yakunlash so'rovi yuborildi. Bajaruvchi tasdiqlashi kutilmoqda." : (result?.msg || "Xato"))
         load()
     }
 
@@ -109,14 +114,17 @@ export default function Dashboard() {
         })
 
         if (result?.msg === "ok") {
-            setNotice("Ish muvaffaqiyatli yakunlandi va yopildi ✅")
+            setNoticeType("ok")
+            setNotice("Ish muvaffaqiyatli yakunlandi va yopildi")
             setAdminContactJobId(null)
             setActiveConfirmJobId(null)
         } else if (result?.msg === "rejected") {
+            setNoticeType("warn")
             setNotice("Siz rad etdingiz. Ish o'z joyida faol holatda qoldi.")
             setAdminContactJobId(jobId)
             setActiveConfirmJobId(null)
         } else {
+            setNoticeType("warn")
             setNotice(result?.msg || "Xatolik yuz berdi")
         }
         load()
@@ -134,18 +142,24 @@ export default function Dashboard() {
             title="Dashboard"
             subtitle={`Xush kelibsiz, ${user?.first_name || user?.username || "user"}!`}
         >
-            {notice && <div className="notice ok" style={{ marginBottom: 16 }}>{notice}</div>}
+            {notice && <div className={`notice ${noticeType === "ok" ? "ok" : "warn"}`} style={{ marginBottom: 16 }}>{notice}</div>}
 
             <div className="stat-grid" style={{ marginBottom: 18 }}>
                 <div className="stat-card">
+                    <div className="stat-card-icon">01</div>
+                    <div className="stat-card-kicker">Workspace</div>
                     <div className="stat-label">Active jobs</div>
                     <div className="stat-value">{jobs.filter((job) => String(job.status || "").trim().toLowerCase() === "active").length}</div>
                 </div>
                 <div className="stat-card">
+                    <div className="stat-card-icon">02</div>
+                    <div className="stat-card-kicker">Catalog</div>
                     <div className="stat-label">Services</div>
                     <div className="stat-value">{services.length}</div>
                 </div>
                 <div className="stat-card">
+                    <div className="stat-card-icon">03</div>
+                    <div className="stat-card-kicker">Platform</div>
                     <div className="stat-label">System Mode</div>
                     <div className="stat-value" style={{ fontSize: 22, color: "#10b981" }}>
                         Multi-talent (All-in-One)
@@ -183,15 +197,18 @@ export default function Dashboard() {
                             const isIAccepted = String(job.worker_id) === String(user?.id)
                             const isParticipant = isMyJob || isIAccepted
                             const canAccept = status === "active" && !isMyJob && job.worker_id == null
+                            const statusLabel = {
+                                active: "Faol",
+                                accepted: "Qabul qilingan",
+                                pending_finish: "Tasdiqlash kutilmoqda",
+                                finished: "Yakunlangan"
+                            }[status] || status
 
                             return (
                                 <article
                                     key={job.id}
-                                    className="card job-card"
-                                    style={{
-                                        cursor: "pointer",
-                                        outline: selectedJob?.id === job.id ? "2px solid rgba(96,165,250,.45)" : "none"
-                                    }}
+                                     className={`card job-card ${selectedJob?.id === job.id ? "selected" : ""}`}
+                                    style={{ cursor: "pointer" }}
                                     onClick={() => selectJob(job)}
                                 >
                                     <h3 className="job-title">{job.title}</h3>
@@ -200,12 +217,7 @@ export default function Dashboard() {
                                         <span className="chip">💰 {job.price ?? "-"} {job.currency || "UZS"}</span>
                                         <span className="chip">📍 {job.location || "-"}</span>
                                         <span className="chip">🧩 {serviceMap[String(job.service_id)] || job.service_name || job.service_id || "Unknown"}</span>
-                                        <span className="chip" style={{
-                                            background: status === "pending_finish" ? "rgba(245, 158, 11, 0.2)" : "rgba(255,255,255,0.05)",
-                                            color: status === "pending_finish" ? "#f59e0b" : "#fff"
-                                        }}>
-                                            Status: {status === "pending_finish" ? "Kutilmoqda" : status}
-                                        </span>
+                                        <span className={`chip status-chip status-${status}`}><span className="status-dot" />{statusLabel}</span>
                                     </div>
 
                                     {/* --- IJROCHI TASDIQLASH SINOVI OYNASI --- */}
