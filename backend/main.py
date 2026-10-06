@@ -1474,6 +1474,9 @@ def msg():
     if not job_id or not message_text:
         return jsonify({"msg": "Ish identifikatori va xabar maydonlari talab qilinadi"}), 400
 
+    if len(message_text) > 5000:
+        return jsonify({"msg": "Xabar 5000 belgidan oshmasligi kerak"}), 400
+
     job = db.q("SELECT user_id, worker_id, status FROM jobs WHERE id=?", (job_id,)).fetchone()
     if not job:
         return jsonify({"msg": "Ish topilmadi"}), 404
