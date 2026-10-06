@@ -274,7 +274,7 @@ export default function Jobs() {
                                 )}
 
                                 {/* --- ISHCHINI BEKOR QILISH (Ish egasi uchun) --- */}
-                                {isMyJob && status === "accepted" && (
+                                {isMyJob && (status === "accepted" || status === "pending_finish") && (
                                     <button className="btn btn-warn" onClick={() => cancelWorker(job)}>
                                         Ishchini almashtirish
                                     </button>
