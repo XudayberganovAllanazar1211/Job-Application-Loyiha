@@ -181,3 +181,27 @@ input[type=range]{accent-color:#2563eb}
     text-align: center;
     font-size: 14px;
 }
+
+.price-input-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 150px;
+    gap: 10px;
+}
+
+.price-input-row .input {
+    margin: 0;
+}
+
+.price-field {
+    min-width: 0;
+}
+
+.currency-select {
+    cursor: pointer;
+}
+
+.field-error {
+    margin-top: 6px;
+    color: #ef4444;
+    font-size: 13px;
+}
