@@ -131,7 +131,7 @@ export default function Jobs() {
                         </button>
                     </div>
                 </div>
-                {notice && <div className="notice ok" style={{ marginTop: 14 }}>{notice}</div>}
+                {notice && <div className={`notice ${noticeType === "ok" ? "ok" : "warn"}`} style={{ marginTop: 14 }}>{notice}</div>}
             </div>
 
             <div className="job-grid">
