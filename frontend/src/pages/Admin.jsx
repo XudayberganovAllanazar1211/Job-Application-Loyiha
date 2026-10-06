@@ -78,7 +78,8 @@ export default function Admin() {
 
         if (ok) {
             if (editingUser.id === user.id) {
-                localStorage.setItem("user", JSON.stringify({ ...user, ...userForm, password: undefined }))
+                const { password, ...safeUserForm } = userForm
+                localStorage.setItem("user", JSON.stringify({ ...user, ...safeUserForm }))
             }
             setEditingUser(null)
         }
@@ -164,6 +165,7 @@ export default function Admin() {
             </div>
 
             <div className="card admin-panel">
+                <div className="admin-toolbar-note">Bu yerda platformadagi asosiy maʼlumotlarni boshqarishingiz mumkin.</div>
                 <div className="admin-tabs">
                     {tabs.map(([key, label]) => (
                         <button key={key} className={tab === key ? "admin-tab active" : "admin-tab"} onClick={() => setTab(key)}>
@@ -223,6 +225,7 @@ export default function Admin() {
                                             <select className="admin-action-select" value={item.status || "active"} onChange={(event) => updateJobStatus(item, event.target.value)}>
                                                 <option value="active">active</option>
                                                 <option value="accepted">accepted</option>
+                                                <option value="pending_finish">pending_finish</option>
                                                 <option value="finished">finished</option>
                                             </select>
                                         </td>
@@ -280,7 +283,7 @@ export default function Admin() {
                                         <td>#{item.job_id}</td>
                                         <td>{item.from_username || "—"}</td>
                                         <td>{item.to_username || "—"}</td>
-                                        <td><strong>{item.score}/5</strong></td>
+                                        <td><strong>{item.score}/10</strong></td>
                                         <td>{item.comment || "—"}</td>
                                         <td><button className="btn btn-danger admin-small-btn" onClick={() => deleteRating(item)}>O'chirish</button></td>
                                     </tr>
