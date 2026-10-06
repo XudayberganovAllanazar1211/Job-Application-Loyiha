@@ -12,7 +12,7 @@ export default function Dashboard() {
     const [notice, setNotice] = useState("")
     const [noticeType, setNoticeType] = useState("ok")
     const token = localStorage.getItem("token") || ""
-    const user = JSON.parse(localStorage.getItem("user") || "null")
+    const user = JSON.parse(localStorage.getItem("foydalanuvchi") || "null")
     const navigate = useNavigate()
 
     const [activeConfirmJobId, setActiveConfirmJobId] = useState(null)
@@ -47,7 +47,7 @@ export default function Dashboard() {
         if (Array.isArray(serviceResult)) setServices(serviceResult)
 
         if (profileResult?.id) {
-            localStorage.setItem("user", JSON.stringify(profileResult))
+            localStorage.setItem("foydalanuvchi", JSON.stringify(profileResult))
         }
     }
 
@@ -106,7 +106,7 @@ export default function Dashboard() {
         setActiveConfirmJobId(jobId)
     }
 
-    const handleConfirmFinish = async (jobId, choice) => {
+    const handleConfirmYakunlash = async (jobId, choice) => {
         const result = await api("/confirm_finish", {
             method: "POST",
             body: { job_id: jobId, choice },
@@ -139,8 +139,8 @@ export default function Dashboard() {
 
     return (
         <AppLayout
-            title="Dashboard"
-            subtitle={`Xush kelibsiz, ${user?.first_name || user?.username || "user"}!`}
+            title="Boshqaruv paneli"
+            subtitle={`Xush kelibsiz, ${user?.first_name || user?.username || "foydalanuvchi"}!`}
         >
             {notice && <div className={`notice ${noticeType === "ok" ? "ok" : "warn"}`} style={{ marginBottom: 16 }}>{notice}</div>}
 
@@ -148,7 +148,7 @@ export default function Dashboard() {
                 <div className="stat-card">
                     <div className="stat-card-icon">01</div>
                     <div className="stat-card-kicker">Workspace</div>
-                    <div className="stat-label">Active jobs</div>
+                    <div className="stat-label">Faol ishlar</div>
                     <div className="stat-value">{jobs.filter((job) => String(job.status || "").trim().toLowerCase() === "active").length}</div>
                 </div>
                 <div className="stat-card">
@@ -160,9 +160,9 @@ export default function Dashboard() {
                 <div className="stat-card">
                     <div className="stat-card-icon">03</div>
                     <div className="stat-card-kicker">Platform</div>
-                    <div className="stat-label">System Mode</div>
+                    <div className="stat-label">Tizim rejimi</div>
                     <div className="stat-value" style={{ fontSize: 22, color: "#10b981" }}>
-                        Multi-talent (All-in-One)
+                        Ko‘p yo‘nalishli bitta profil
                     </div>
                 </div>
             </div>
@@ -171,21 +171,21 @@ export default function Dashboard() {
                 <section className="card">
                     <div className="topbar" style={{ marginBottom: 16 }}>
                         <div className="page-head">
-                            <h2 style={{ margin: 0 }}>My Workspace</h2>
+                            <h2 style={{ margin: 0 }}>Mening ish maydonim</h2>
                             <p className="muted" style={{ margin: 0 }}>
-                                Faol e'lonlar hamda siz yaratgan yoki qabul qilgan ishlar shu yerda ko'rinadi.
+                                Faol e’lonlar hamda siz yaratgan yoki qabul qilgan ishlar shu yerda ko‘rinadi.
                             </p>
                         </div>
                         <div className="actions">
                             <input
                                 className="input"
                                 style={{ minWidth: 220 }}
-                                placeholder="Search..."
+                                placeholder="Qidirish..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                             />
                             <button className="btn btn-primary" onClick={() => navigate("/create")}>
-                                Create Job
+                                Ish yaratish
                             </button>
                         </div>
                     </div>
@@ -194,9 +194,9 @@ export default function Dashboard() {
                         {filtered.map((job) => {
                             const status = String(job.status || "").trim().toLowerCase()
                             const isMyJob = String(job.user_id) === String(user?.id)
-                            const isIAccepted = String(job.worker_id) === String(user?.id)
-                            const isParticipant = isMyJob || isIAccepted
-                            const canAccept = status === "active" && !isMyJob && job.worker_id == null
+                            const isIQabul qilished = String(job.worker_id) === String(user?.id)
+                            const isParticipant = isMyJob || isIQabul qilished
+                            const canQabul qilish = status === "active" && !isMyJob && job.worker_id == null
                             const statusLabel = {
                                 active: "Faol",
                                 accepted: "Qabul qilingan",
@@ -212,16 +212,16 @@ export default function Dashboard() {
                                     onClick={() => selectJob(job)}
                                 >
                                     <h3 className="job-title">{job.title}</h3>
-                                    <p className="job-desc">{job.description || "No description"}</p>
+                                    <p className="job-desc">{job.description || "Tavsif kiritilmagan"}</p>
                                     <div className="meta" style={{ marginBottom: 12 }}>
                                         <span className="chip">💰 {job.price ?? "-"} {job.currency || "UZS"}</span>
                                         <span className="chip">📍 {job.location || "-"}</span>
-                                        <span className="chip">🧩 {serviceMap[String(job.service_id)] || job.service_name || job.service_id || "Unknown"}</span>
+                                        <span className="chip">🧩 {serviceMap[String(job.service_id)] || job.service_name || job.service_id || "Noma’lum"}</span>
                                         <span className={`chip status-chip status-${status}`}><span className="status-dot" />{statusLabel}</span>
                                     </div>
 
                                     {/* --- IJROCHI TASDIQLASH SINOVI OYNASI --- */}
-                                    {isIAccepted && activeConfirmJobId === job.id && (
+                                    {isIQabul qilished && activeConfirmJobId === job.id && (
                                         <div style={{
                                             background: "rgba(245, 158, 11, 0.1)",
                                             border: "1px solid rgba(245, 158, 11, 0.3)",
@@ -233,10 +233,10 @@ export default function Dashboard() {
                                                 Ishni tugatib, to'lovni qabul qildingizmi?
                                             </strong>
                                             <div style={{ display: "flex", gap: "8px" }}>
-                                                <button className="btn btn-success" style={{ padding: "2px 10px", fontSize: 12 }} onClick={() => handleConfirmFinish(job.id, "yes")}>
+                                                <button className="btn btn-success" style={{ padding: "2px 10px", fontSize: 12 }} onClick={() => handleConfirmYakunlash(job.id, "yes")}>
                                                     Ha
                                                 </button>
-                                                <button className="btn btn-warn" style={{ padding: "2px 10px", fontSize: 12, background: "#ef4444" }} onClick={() => handleConfirmFinish(job.id, "no")}>
+                                                <button className="btn btn-warn" style={{ padding: "2px 10px", fontSize: 12, background: "#ef4444" }} onClick={() => handleConfirmYakunlash(job.id, "no")}>
                                                     Yo'q
                                                 </button>
                                             </div>
@@ -259,7 +259,7 @@ export default function Dashboard() {
                                                     navigate(`/chat/${job.id}`, { state: { job } })
                                                 }}
                                             >
-                                                Chat
+                                                Suhbat
                                             </button>
                                         )}
                                         {isParticipant && status === "finished" && (
@@ -270,12 +270,12 @@ export default function Dashboard() {
                                                     navigate(`/rating/${job.id}`, { state: { job } })
                                                 }}
                                             >
-                                                Rating
+                                                Baho
                                             </button>
                                         )}
 
                                         {/* --- ACCEPT TUGMASI (Mening ishim bo'lmaganda hamma uchun) --- */}
-                                        {canAccept && (
+                                        {canQabul qilish && (
                                             <button
                                                 className="btn btn-primary"
                                                 onClick={(e) => {
@@ -283,12 +283,12 @@ export default function Dashboard() {
                                                     acceptJob(job)
                                                 }}
                                             >
-                                                Accept
+                                                Qabul qilish
                                             </button>
                                         )}
 
                                         {/* --- SIZ QABUL QILGANSIS CHIP --- */}
-                                        {isIAccepted && status === "accepted" && (
+                                        {isIQabul qilished && status === "accepted" && (
                                             <span className="chip" style={{ background: "rgba(34, 197, 94, 0.2)", color: "#4ade80" }}>
                                                 ✅ Qabul qilgansiz
                                             </span>
@@ -303,12 +303,12 @@ export default function Dashboard() {
                                                     finishJobSeeker(job)
                                                 }}
                                             >
-                                                Finish
+                                                Yakunlash
                                             </button>
                                         )}
 
                                         {/* --- FINISH TUGMASI (Bajaruvchi uchun) --- */}
-                                        {isIAccepted && status === "pending_finish" && activeConfirmJobId !== job.id && (
+                                        {isIQabul qilished && status === "pending_finish" && activeConfirmJobId !== job.id && (
                                             <button
                                                 className="btn btn-success"
                                                 style={{ background: "#f59e0b" }}
@@ -317,7 +317,7 @@ export default function Dashboard() {
                                                     openConfirmPanel(job.id)
                                                 }}
                                             >
-                                                Finish
+                                                Yakunlash
                                             </button>
                                         )}
                                     </div>
@@ -325,16 +325,16 @@ export default function Dashboard() {
                             )
                         })}
 
-                        {!filtered.length && <div className="empty-state">Hozircha job yo‘q.</div>}
+                        {!filtered.length && <div className="empty-state">Hozircha ishlar yo‘q.</div>}
                     </div>
                 </section>
 
                 <aside className="card chat-wrap">
                     <div className="topbar" style={{ marginBottom: 0 }}>
                         <div className="page-head">
-                            <h2 style={{ margin: 0 }}>Chat preview</h2>
+                            <h2 style={{ margin: 0 }}>Suhbat preview</h2>
                             <p className="muted" style={{ margin: 0 }}>
-                                Tanlangan job bo‘yicha oxirgi xabarlar.
+                                Tanlangan ish bo‘yicha oxirgi xabarlar.
                             </p>
                         </div>
                         <button
@@ -342,14 +342,14 @@ export default function Dashboard() {
                             disabled={!selectedJob}
                             onClick={() => selectedJob && navigate(`/chat/${selectedJob.id}`, { state: { job: selectedJob } })}
                         >
-                            Open chat
+                            Suhbatni ochish
                         </button>
                     </div>
 
                     {selectedJob ? (
                         <>
                             <div className="card" style={{ padding: 16, background: "rgba(255,255,255,.03)" }}>
-                                <div className="helper">Selected job</div>
+                                <div className="helper">Tanlangan ish</div>
                                 <div style={{ fontWeight: 800, fontSize: 18, marginTop: 6 }}>{selectedJob.title}</div>
                                 <div className="meta" style={{ marginTop: 10 }}>
                                     <span className="chip">💰 {selectedJob.price ?? "-"} UZS</span>
@@ -368,7 +368,7 @@ export default function Dashboard() {
                             </div>
                         </>
                     ) : (
-                        <div className="empty-state">Chat ko‘rish uchun job tanla.</div>
+                        <div className="empty-state">Suhbat ko‘rish uchun job tanla.</div>
                     )}
                 </aside>
             </div>
