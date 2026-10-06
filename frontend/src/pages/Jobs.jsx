@@ -3,6 +3,34 @@ import { useNavigate } from "react-router-dom"
 import AppLayout from "../components/AppLayout"
 import { api } from "../api"
 
+function formatTimeAgo(dateString) {
+    if (!dateString) return "Vaqt noma'lum"
+
+    const created = new Date(String(dateString).replace(" ", "T"))
+    if (Number.isNaN(created.getTime())) return "Vaqt noma'lum"
+
+    const seconds = Math.max(0, Math.floor((Date.now() - created.getTime()) / 1000))
+    if (seconds < 60) return "Hozirgina"
+
+    const minutes = Math.floor(seconds / 60)
+    if (minutes < 60) return `${minutes} daqiqa oldin`
+
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return `${hours} soat oldin`
+
+    const days = Math.floor(hours / 24)
+    if (days < 7) return `${days} kun oldin`
+
+    const weeks = Math.floor(days / 7)
+    if (days < 30) return `${weeks} hafta oldin`
+
+    const months = Math.floor(days / 30)
+    if (days < 365) return `${months} oy oldin`
+
+    const years = Math.floor(days / 365)
+    return `${years} yil oldin`
+}
+
 export default function Jobs() {
     const [jobs, setJobs] = useState([])
     const [services, setServices] = useState([])
@@ -154,6 +182,7 @@ export default function Jobs() {
                             <h3 className="job-title">{job.title}</h3>
                             <p className="job-desc">{job.description || "Tavsif kiritilmagan"}</p>
                             <div className="meta" style={{ marginBottom: 12 }}>
+                                <span className="chip job-time-chip">🕒 {formatTimeAgo(job.created_at)}</span>
                                 <span className="chip">💰 {job.price ?? "-"} {job.currency || "UZS"}</span>
                                 <span className="chip">📍 {job.location || "-"}</span>
                                 <span className="chip">🧩 {serviceMap[String(job.service_id)] || job.service_name || job.service_id || "Noma’lum"}</span>
