@@ -57,7 +57,7 @@ export default function Jobs() {
         })
         const accepted = result?.msg === "ok"
         setNoticeType(accepted ? "ok" : "warn")
-        setNotice(accepted ? "Job qabul qilindi" : (result?.msg || "Xato"))
+        setNotice(accepted ? "Ish qabul qilindi" : (result?.msg || "Xato"))
         load()
     }
 
@@ -152,7 +152,7 @@ export default function Jobs() {
                     return (
                         <article className="card job-card" key={job.id}>
                             <h3 className="job-title">{job.title}</h3>
-                            <p className="job-desc">{job.description || "No description"}</p>
+                            <p className="job-desc">{job.description || "Tavsif kiritilmagan"}</p>
                             <div className="meta" style={{ marginBottom: 12 }}>
                                 <span className="chip">💰 {job.price ?? "-"} {job.currency || "UZS"}</span>
                                 <span className="chip">📍 {job.location || "-"}</span>
