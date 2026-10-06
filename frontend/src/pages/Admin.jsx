@@ -11,6 +11,8 @@ export default function Admin() {
     const [tab, setTab] = useState("users")
     const [serviceName, setServiceName] = useState("")
     const [serviceParent, setServiceParent] = useState("")
+    const [editingUser, setEditingUser] = useState(null)
+    const [userForm, setUserForm] = useState({ username: "", email: "", first_name: "", last_name: "", birthday: "", bio: "", skills: "", password: "" })
 
     const load = async () => {
         const result = await api("/admin/overview", { token })
@@ -48,6 +50,38 @@ export default function Admin() {
             { method: "PATCH", body: { user_id: item.id, role } },
             "User roli o'zgartirildi."
         )
+    }
+
+    const editUser = (item) => {
+        setEditingUser(item)
+        setUserForm({
+            username: item.username || "",
+            email: item.email || "",
+            first_name: item.first_name || "",
+            last_name: item.last_name || "",
+            birthday: item.birthday || "",
+            bio: item.bio || "",
+            skills: item.skills || "",
+            password: ""
+        })
+    }
+
+    const saveUser = async (event) => {
+        event.preventDefault()
+        if (!editingUser) return
+
+        const ok = await action(
+            "/admin/user/"+editingUser.id,
+            { method: "PATCH", body: userForm },
+            "Foydalanuvchi ma'lumotlari yangilandi."
+        )
+
+        if (ok) {
+            if (editingUser.id === user.id) {
+                localStorage.setItem("user", JSON.stringify({ ...user, ...userForm, password: undefined }))
+            }
+            setEditingUser(null)
+        }
     }
 
     const deleteUser = async (item) => {
@@ -160,7 +194,7 @@ export default function Admin() {
                                         <td>{item.created_at || "—"}</td>
                                         <td>
                                             <button className="btn btn-danger admin-small-btn" disabled={item.id === user.id || item.role === "admin"} onClick={() => deleteUser(item)}>
-                                                O'chirish
+                                                Tahrirlash
                                             </button>
                                         </td>
                                     </tr>
@@ -253,6 +287,33 @@ export default function Admin() {
                     </div>
                 )}
             </div>
+        {editingUser && (
+                <div className="admin-modal-backdrop" onClick={() => setEditingUser(null)}>
+                    <div className="card admin-modal" onClick={(event) => event.stopPropagation()}>
+                        <div className="admin-modal-head">
+                            <div><h3>Userni tahrirlash</h3><p>@{editingUser.username}</p></div>
+                            <button className="admin-modal-close" onClick={() => setEditingUser(null)}>×</button>
+                        </div>
+                        <form onSubmit={saveUser} className="admin-user-form">
+                            <div className="admin-form-grid">
+                                <label>Username<input className="input" value={userForm.username} onChange={e => setUserForm({...userForm, username:e.target.value})} /></label>
+                                <label>Email<input className="input" type="email" value={userForm.email} onChange={e => setUserForm({...userForm, email:e.target.value})} /></label>
+                                <label>Ism<input className="input" value={userForm.first_name} onChange={e => setUserForm({...userForm, first_name:e.target.value})} /></label>
+                                <label>Familiya<input className="input" value={userForm.last_name} onChange={e => setUserForm({...userForm, last_name:e.target.value})} /></label>
+                                <label>Tug'ilgan sana<input className="input" value={userForm.birthday} onChange={e => setUserForm({...userForm, birthday:e.target.value})} /></label>
+                                <label>Yangi parol<input className="input" type="password" placeholder="Bo'sh = o'zgarmaydi" value={userForm.password} onChange={e => setUserForm({...userForm, password:e.target.value})} /></label>
+                            </div>
+                            <label>Bio<textarea className="input admin-textarea" value={userForm.bio} onChange={e => setUserForm({...userForm, bio:e.target.value})} /></label>
+                            <label>Ko'nikmalar<textarea className="input admin-textarea" value={userForm.skills} onChange={e => setUserForm({...userForm, skills:e.target.value})} /></label>
+                            <div className="admin-modal-actions">
+                                <button type="button" className="btn btn-secondary" onClick={() => setEditingUser(null)}>Bekor qilish</button>
+                                <button type="submit" className="btn btn-primary">Saqlash</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
         </AppLayout>
     )
 }
