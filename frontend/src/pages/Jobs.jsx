@@ -74,13 +74,13 @@ export default function Jobs() {
         load()
     }
 
-    // Ish bajaruvchi "Finish" tugmasini bosganda tasdiqlash panelini ochish
+    // Ish bajaruvchi "Yakunlash" tugmasini bosganda tasdiqlash panelini ochish
     const openConfirmPanel = (jobId) => {
         setActiveConfirmJobId(jobId)
     }
 
     // Tasdiqlash natijasini yuborish (Ha yoki Yo'q)
-    const handleConfirmFinish = async (jobId, choice) => {
+    const handleConfirmYakunlash = async (jobId, choice) => {
         const result = await api("/confirm_finish", {
             method: "POST",
             body: { job_id: jobId, choice },
@@ -106,28 +106,28 @@ export default function Jobs() {
 
     return (
         <AppLayout
-            title="Jobs"
-            subtitle="Tizimdagi faol e'lonlar va siz yaratgan yoki qabul qilgan ishlar."
+            title="Ishlar"
+            subtitle="Tizimdagi faol e’lonlar va siz yaratgan yoki qabul qilgan ishlar."
         >
             <div className="card" style={{ marginBottom: 18 }}>
                 <div className="topbar" style={{ marginBottom: 0 }}>
                     <div className="page-head">
-                        <h2 style={{ margin: 0 }}>Available jobs</h2>
+                        <h2 style={{ margin: 0 }}>Mavjud ishlar</h2>
                         <p className="muted" style={{ margin: 0 }}>
-                            Ishlarni qidirish, qabul qilish va boshqarish paneli.
+                            Ishlarni qidirish, qabul qilish va boshqarish bo‘limi.
                         </p>
                     </div>
                     <div className="actions">
                         <input
                             className="input"
                             style={{ minWidth: 260 }}
-                            placeholder="Search job..."
+                            placeholder="Ish qidirish..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                         />
-                        <button className="btn btn-secondary" onClick={load}>Refresh</button>
+                        <button className="btn btn-secondary" onClick={load}>Yangilash</button>
                         <button className="btn btn-primary" onClick={() => navigate("/create")}>
-                            Create Job
+                            Ish yaratish
                         </button>
                     </div>
                 </div>
@@ -161,7 +161,7 @@ export default function Jobs() {
 
                                 {isMyJob && (
                                     <span className="chip" style={{ background: "rgba(255,255,255,0.05)", color: "#9ca3af" }}>
-                                        👤 Bajaruvchi: {job.worker_id ? workerName : "Hozircha qabul qilinmagan"}
+                                        👤 Bajaruvchi: {job.worker_id ? workerName : "Hali qabul qilinmagan"}
                                     </span>
                                 )}
                             </div>
@@ -179,10 +179,10 @@ export default function Jobs() {
                                         Siz ishni bajarib bo'ldingizmi va to'lovni qabul qildingizmi?
                                     </strong>
                                     <div style={{ display: "flex", gap: "8px" }}>
-                                        <button className="btn btn-success" style={{ padding: "4px 14px" }} onClick={() => handleConfirmFinish(job.id, "yes")}>
+                                        <button className="btn btn-success" style={{ padding: "4px 14px" }} onClick={() => handleConfirmYakunlash(job.id, "yes")}>
                                             Ha
                                         </button>
-                                        <button className="btn btn-warn" style={{ padding: "4px 14px", background: "#ef4444" }} onClick={() => handleConfirmFinish(job.id, "no")}>
+                                        <button className="btn btn-warn" style={{ padding: "4px 14px", background: "#ef4444" }} onClick={() => handleConfirmYakunlash(job.id, "no")}>
                                             Yo'q
                                         </button>
                                     </div>
@@ -199,19 +199,19 @@ export default function Jobs() {
                             <div className="actions">
                                 {isParticipant && (
                                     <button className="btn btn-secondary" onClick={() => navigate(`/chat/${job.id}`, { state: { job } })}>
-                                        Chat
+                                        Suhbat
                                     </button>
                                 )}
                                 {isParticipant && status === "finished" && (
                                     <button className="btn btn-secondary" onClick={() => navigate(`/rating/${job.id}`, { state: { job } })}>
-                                        Rating
+                                        Baho
                                     </button>
                                 )}
 
                                 {/* --- ACCEPT TUGMASI (Mening ishim bo'lmasa va bo'sh bo'lsa hamma ko'ra oladi) --- */}
                                 {canAccept && (
                                     <button className="btn btn-primary" onClick={() => acceptJob(job)}>
-                                        Accept Job
+                                        Ishni qabul qilish
                                     </button>
                                 )}
 
@@ -225,14 +225,14 @@ export default function Jobs() {
                                 {/* --- FINISH TUGMASI (Ish egasi uchun) --- */}
                                 {isMyJob && status === "accepted" && (
                                     <button className="btn btn-success" onClick={() => finishJobSeeker(job)}>
-                                        Finish
+                                        Yakunlash
                                     </button>
                                 )}
 
                                 {/* --- FINISH TUGMASI (Bajaruvchi uchun) --- */}
                                 {isIAccepted && status === "pending_finish" && activeConfirmJobId !== job.id && (
                                     <button className="btn btn-success" style={{ background: "#f59e0b" }} onClick={() => openConfirmPanel(job.id)}>
-                                        Finish
+                                        Yakunlash
                                     </button>
                                 )}
                             </div>
@@ -240,7 +240,7 @@ export default function Jobs() {
                     )
                 })}
 
-                {!filtered.length && <div className="empty-state">Job topilmadi.</div>}
+                {!filtered.length && <div className="empty-state">Ish topilmadi.</div>}
             </div>
         </AppLayout>
     )
