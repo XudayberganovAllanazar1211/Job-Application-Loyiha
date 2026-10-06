@@ -32,8 +32,14 @@ export default function Dashboard() {
         if (Array.isArray(jobResult)) {
             setJobs(jobResult)
             if (!selectedJob && jobResult[0]) {
-                setSelectedJob(jobResult[0])
-                loadMessages(jobResult[0])
+                const firstJob = jobResult[0]
+                setSelectedJob(firstJob)
+                const participant =
+                    String(firstJob.user_id) === String(user?.id) ||
+                    String(firstJob.worker_id) === String(user?.id)
+                if (participant) {
+                    loadMessages(firstJob)
+                }
             }
         }
 
@@ -187,7 +193,7 @@ export default function Dashboard() {
                                             background: job.status === "pending_finish" ? "rgba(245, 158, 11, 0.2)" : "rgba(255,255,255,0.05)",
                                             color: job.status === "pending_finish" ? "#f59e0b" : "#fff"
                                         }}>
-                                            Status: {job.status === "pending_finish" ? "Kutilmoqda" : job.status}
+                                            Status: {status === "pending_finish" ? "Kutilmoqda" : status}
                                         </span>
                                     </div>
 
@@ -222,24 +228,28 @@ export default function Dashboard() {
                                     )}
 
                                     <div className="actions">
-                                        <button
-                                            className="btn btn-secondary"
-                                            onClick={(e) => {
-                                                e.stopPropagation()
-                                                navigate(`/chat/${job.id}`, { state: { job } })
-                                            }}
-                                        >
-                                            Chat
-                                        </button>
-                                        <button
-                                            className="btn btn-secondary"
-                                            onClick={(e) => {
-                                                e.stopPropagation()
-                                                navigate(`/rating/${job.id}`, { state: { job } })
-                                            }}
-                                        >
-                                            Rating
-                                        </button>
+                                        {isParticipant && (
+                                            <button
+                                                className="btn btn-secondary"
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    navigate(`/chat/${job.id}`, { state: { job } })
+                                                }}
+                                            >
+                                                Chat
+                                            </button>
+                                        )}
+                                        {isParticipant && status === "finished" && (
+                                            <button
+                                                className="btn btn-secondary"
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    navigate(`/rating/${job.id}`, { state: { job } })
+                                                }}
+                                            >
+                                                Rating
+                                            </button>
+                                        )}
 
                                         {/* --- ACCEPT TUGMASI (Mening ishim bo'lmaganda hamma uchun) --- */}
                                         {canAccept && (
@@ -255,14 +265,14 @@ export default function Dashboard() {
                                         )}
 
                                         {/* --- SIZ QABUL QILGANSIS CHIP --- */}
-                                        {isIAccepted && job.status === "accepted" && (
+                                        {isIAccepted && status === "accepted" && (
                                             <span className="chip" style={{ background: "rgba(34, 197, 94, 0.2)", color: "#4ade80" }}>
                                                 ✅ Qabul qilgansiz
                                             </span>
                                         )}
 
                                         {/* --- FINISH TUGMASI (Ish beruvchi uchun) --- */}
-                                        {isMyJob && job.status === "accepted" && (
+                                        {isMyJob && status === "accepted" && (
                                             <button
                                                 className="btn btn-success"
                                                 onClick={(e) => {
@@ -275,7 +285,7 @@ export default function Dashboard() {
                                         )}
 
                                         {/* --- FINISH TUGMASI (Bajaruvchi uchun) --- */}
-                                        {isIAccepted && job.status === "pending_finish" && activeConfirmJobId !== job.id && (
+                                        {isIAccepted && status === "pending_finish" && activeConfirmJobId !== job.id && (
                                             <button
                                                 className="btn btn-success"
                                                 style={{ background: "#f59e0b" }}
