@@ -443,36 +443,36 @@ export default function CreateJob() {
                 </section>
 
                 <aside className="card job-tips-card">
-                    <h3>Maslahatlar</h3>
-                    <p className="muted">Yaxshi ish e’lonini yaratish uchun foydali maslahatlar.</p>
+                    <h3>Yaxshi e’lon uchun qo‘llanma</h3>
+                    <p className="muted">Mutaxassis sizning vazifangizni tez tushunishi va mos taklif berishi uchun quyidagilarni yozing.</p>
                     <div className="tips-list">
                         <div className="tip-item">
                             <strong>🎯 Aniq sarlavha yozing</strong>
-                            <span>Ish sarlavhasi qisqa va tushunarli bo‘lsin. Masalan: “React bir sahifali sayt yaratish”.</span>
+                            <span>Natijani aniq ayting. Masalan: “React’da landing page yaratish” yoki “Logo uchun 3 ta variant tayyorlash”.</span>
                         </div>
                         <div className="tip-item">
                             <strong>📝 Vazifani batafsil tushuntiring</strong>
-                            <span>Nima kerakligini, qanday natija kutayotganingizni va muhim talablarni yozing.</span>
+                            <span>Vazifa, kutilayotgan natija, kerakli format va muhim talablarni yozing. Keraksiz umumiy gaplarni kamaytiring.</span>
                         </div>
                         <div className="tip-item">
                             <strong>🛠️ To‘g‘ri xizmatni tanlang</strong>
-                            <span>Ishingizga eng mos xizmatni tanlash kerakli mutaxassisni topishni osonlashtiradi.</span>
+                            <span>Eng mos sohani tanlang. Mos soha e’loningizni kerakli mutaxassislarga ko‘rsatishga yordam beradi.</span>
                         </div>
                         <div className="tip-item">
                             <strong>💰 Realistik narx belgilang</strong>
-                            <span>Ish hajmi va murakkabligiga mos narx qo‘yish ko‘proq yaxshi takliflarni jalb qiladi.</span>
+                            <span>Budjetni ish hajmi va murakkabligiga mos qo‘ying. Zarur bo‘lsa, narx kelishilishini tavsifda yozing.</span>
                         </div>
                         <div className="tip-item">
                             <strong>📍 Manzilni ko‘rsating</strong>
-                            <span>Oflayn ish bo‘lsa, ish bajariladigan joyni aniq yozing.</span>
+                            <span>Oflayn ish bo‘lsa, hududni ko‘rsating. Keraksiz darajada aniq shaxsiy manzilni yozmang.</span>
                         </div>
                         <div className="tip-item">
                             <strong>⏱️ Muddatni ayting</strong>
-                            <span>Kerak bo‘lsa, tavsif ichida ish qachongacha tugashi kerakligini ko‘rsating.</span>
+                            <span>Muddat muhim bo‘lsa, boshlanish yoki topshirish vaqtini tavsifda aniq ko‘rsating.</span>
                         </div>
                         <div className="tip-item">
-                            <strong>💬 Muhim tafsilotlarni yozing</strong>
-                            <span>Kerakli ko‘nikma, texnologiya, fayl yoki boshqa shartlarni oldindan belgilang.</span>
+                            <strong>🤝 Kelishuvni aniq qiling</strong>
+                            <span>Masalan: React, Python, Photoshop, kerakli fayl formati, tajriba darajasi yoki topshirish formati.</span>
                         </div>
                     </div>
                 </aside>
