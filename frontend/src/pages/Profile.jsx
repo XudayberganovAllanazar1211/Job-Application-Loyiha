@@ -321,7 +321,7 @@ export default function Profile() {
                                     <span className="profile-role">{form.role === "admin" ? "Administrator" : "Foydalanuvchi"}</span>
                                 </div>
                                 <p>@{form.username || "username"}</p>
-                                <span>{form.email || "Email kiritilmagan"}</span>
+                                <span>{form.email || "Elektron pochta kiritilmagan"}</span>
                             </div>
                         </div>
 
@@ -449,7 +449,7 @@ export default function Profile() {
                                 {isEditing && (
                                     <div className="profile-form-actions">
                                         <button type="submit" className="btn btn-primary" disabled={loading}>
-                                            {loading ? "Saqlanmoqda..." : "O'zgarishlarni saqlash"}
+                                            {loading ? "Saqlanmoqda..." : "O‘zgarishlarni saqlash"}
                                         </button>
                                         <button type="button" className="btn btn-secondary" onClick={cancelEditing}>
                                             Bekor qilish
@@ -485,7 +485,7 @@ export default function Profile() {
                                 ) : (
                                     <div className="profile-empty">
                                         <strong>Hali ko'nikmalar qo'shilmagan</strong>
-                                        <span>Tahrirlash rejimida o'zingizga mos ko'nikmalarni qo'shing.</span>
+                                        <span>Tahrirlash rejimida o‘zingizga mos ko‘nikmalarni qo‘shing.</span>
                                     </div>
                                 )}
 
@@ -499,7 +499,7 @@ export default function Profile() {
                                                 setServiceSearch("")
                                             }}
                                         >
-                                            {showServicePicker ? "Yopish" : "Qo'shish"}
+                                            {showServicePicker ? "Yopish" : "Qo‘shish"}
                                         </button>
 
                                         {showServicePicker && (
@@ -509,7 +509,7 @@ export default function Profile() {
                                                         autoFocus
                                                         className="input"
                                                         type="search"
-                                                        placeholder="Xizmatni qidiring..."
+                                                        placeholder="Xizmat qidiring..."
                                                         value={serviceSearch}
                                                         onChange={(e) => setServiceSearch(e.target.value)}
                                                     />
@@ -568,7 +568,7 @@ export default function Profile() {
                                     <strong><i className="profile-online-dot" /> Faol</strong>
                                 </div>
                                 <div className="profile-info-row">
-                                    <span>Ro'yxatdan o'tgan</span>
+                                    <span>Ro‘yxatdan o‘tgan</span>
                                     <strong>{getMembershipDuration(form.created_at)} oldin</strong>
                                 </div>
                                 <div className="profile-info-row">
