@@ -173,7 +173,7 @@ export default function CreateJob() {
                             <div className="service-picker-title">
                                 {form.service_id
                                     ? services.find((service) => String(service.id) === String(form.service_id))?.name || "Xizmat"
-                                    : "Xizmatni tanlang"}
+                                    : customService || "Xizmatni tanlang"}
                             </div>
                             <button
                                 type="button"
@@ -224,16 +224,19 @@ export default function CreateJob() {
                                         )) : (
                                             <div>
                                                 <div className="empty-state">Bunday xizmat topilmadi</div>
-                                                <input
-                                                    className="input"
-                                                    style={{ marginTop: 10 }}
-                                                    placeholder="Boshqa soha nomini qo'shing..."
-                                                    value={customService}
-                                                    onChange={(e) => {
-                                                        setCustomService(e.target.value)
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-secondary"
+                                                    style={{ marginTop: 10, width: "100%" }}
+                                                    onClick={() => {
+                                                        setCustomService(serviceSearch.trim())
                                                         setForm({ ...form, service_id: "" })
+                                                        setServiceSearch("")
+                                                        setShowCategories(false)
                                                     }}
-                                                />
+                                                >
+                                                    “{serviceSearch.trim()}” sohasini qo'shish
+                                                </button>
                                             </div>
                                         )
                                     })()
