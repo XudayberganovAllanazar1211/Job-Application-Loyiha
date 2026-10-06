@@ -314,3 +314,22 @@ input[type=range]{accent-color:#2563eb}
 .location-error{margin-top:6px;color:#dc2626;font-size:12px;line-height:1.45}
 .location-attribution{margin-top:6px;color:#94a3b8;font-size:11px;line-height:1.4}
 @media(max-width:600px){.location-input-row{grid-template-columns:1fr}.detect-location-button{width:100%;min-width:0}}
+
+
+.legal-page{min-height:100vh;padding:30px 18px;background:radial-gradient(circle at 10% 0%,rgba(37,99,235,.08),transparent 30%),#f6f8fc}
+.legal-shell{width:min(900px,100%);margin:0 auto}
+.legal-top{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:18px}
+.legal-brand{font:800 24px Manrope,sans-serif;color:#172033}
+.legal-card{background:#fff;border:1px solid #e7ebf2;border-radius:22px;padding:32px;box-shadow:0 12px 35px rgba(15,23,42,.06)}
+.legal-eyebrow{display:inline-flex;padding:6px 9px;border-radius:999px;background:#eff6ff;border:1px solid #dbeafe;color:#2563eb;font-size:10px;font-weight:800;letter-spacing:1px}
+.legal-card h1{margin:14px 0 5px;font:800 clamp(30px,5vw,44px)/1.1 Manrope,sans-serif;color:#172033;letter-spacing:-1px}
+.legal-updated{margin:0 0 24px;color:#94a3b8;font-size:13px}
+.legal-card h2{margin:25px 0 8px;font:800 17px Manrope,sans-serif;color:#172033}
+.legal-card p{margin:0 0 12px;color:#475569;line-height:1.75;font-size:14px}
+.legal-note{margin-top:28px;padding:14px 15px;border-radius:14px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-size:13px;line-height:1.6}
+.legal-footer{margin-top:12px;margin-bottom:8px}
+.legal-footer-title{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#94a3b8;font-weight:800;margin:0 6px 8px}
+.legal-footer-links{display:flex;flex-wrap:wrap;gap:5px}
+.legal-footer-links a{padding:7px 8px;border-radius:9px;color:#94a3b8;font-size:12px;font-weight:600}
+.legal-footer-links a:hover{background:#f8fafc;color:#334155}
+@media(max-width:600px){.legal-page{padding:16px 10px}.legal-card{padding:22px 18px;border-radius:18px}.legal-top{align-items:flex-start}}
