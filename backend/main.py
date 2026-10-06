@@ -455,7 +455,7 @@ def rows(r, cols):
 @admin_required
 def admin_overview():
     users = db.q(
-        """SELECT id, username, first_name, last_name, email, role, created_at, average_rating
+        """SELECT id, username, first_name, last_name, email, birthday, bio, skills, role, created_at, average_rating
            FROM users ORDER BY id DESC"""
     ).fetchall()
 
@@ -494,7 +494,7 @@ def admin_overview():
             "services": len(services),
             "ratings": len(ratings),
         },
-        "users": rows(users, ["id", "username", "first_name", "last_name", "email", "role", "created_at", "average_rating"]),
+        "users": rows(users, ["id", "username", "first_name", "last_name", "email", "birthday", "bio", "skills", "role", "created_at", "average_rating"]),
         "jobs": rows(jobs, ["id", "title", "price", "currency", "location", "status", "created_at", "creator_username", "worker_username"]),
         "services": rows(services, ["id", "name", "parent_id", "parent_name", "created_by"]),
         "ratings": rows(ratings, ["id", "job_id", "score", "comment", "created_at", "from_username", "to_username"]),
@@ -617,7 +617,7 @@ def admin_delete_user(user_id):
 def admin_update_job(job_id):
     d = request.json or {}
     status = str(d.get("status", "")).strip().lower()
-    allowed = {"active", "accepted", "finished"}
+    allowed = {"active", "accepted", "pending_finish", "finished"}
 
     if status not in allowed:
         return jsonify({"msg": "Noto'g'ri job statusi."}), 400
@@ -626,8 +626,21 @@ def admin_update_job(job_id):
     if not job:
         return jsonify({"msg": "Job topilmadi."}), 404
 
-    finished_at = datetime.datetime.now(datetime.timezone.utc).isoformat() if status == "finished" else None
-    db.q("UPDATE jobs SET status=?, finished_at=? WHERE id=?", (status, finished_at, job_id)).close()
+    job_state = db.q("SELECT worker_id FROM jobs WHERE id=?", (job_id,)).fetchone()
+    worker_id = job_state[0] if job_state else None
+
+    if status in {"accepted", "pending_finish", "finished"} and not worker_id:
+        return jsonify({"msg": "Bu status uchun jobga avval bajaruvchi biriktirilishi kerak."}), 400
+
+    if status == "active":
+        db.q("UPDATE jobs SET status='active', worker_id=NULL, finished_at=NULL WHERE id=?", (job_id,)).close()
+    elif status == "accepted":
+        db.q("UPDATE jobs SET status='accepted', finished_at=NULL WHERE id=?", (job_id,)).close()
+    elif status == "pending_finish":
+        db.q("UPDATE jobs SET status='pending_finish', finished_at=NULL WHERE id=?", (job_id,)).close()
+    else:
+        finished_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        db.q("UPDATE jobs SET status='finished', finished_at=? WHERE id=?", (finished_at, job_id)).close()
 
     return jsonify({"msg": "Job statusi yangilandi."})
 
