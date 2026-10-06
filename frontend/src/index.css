@@ -255,3 +255,7 @@ input[type=range]{accent-color:#2563eb}
 .profile-service-picker .service-search{border-bottom:1px solid #eef1f5}
 .profile-service-picker .service-tree{max-height:300px}
 .profile-skill-add .service-select-button{width:100%;margin:0}
+
+.service-picker-title{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.service-remove-button{width:28px;height:28px;flex:0 0 28px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;color:#64748b;font-size:20px;line-height:1;cursor:pointer;display:grid;place-items:center;transition:.16s}
+.service-remove-button:hover{background:#fee2e2;border-color:#fecaca;color:#dc2626}
