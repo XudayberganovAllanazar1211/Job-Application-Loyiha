@@ -297,7 +297,7 @@ export default function Dashboard() {
                                     {/* --- ADMIN BILAN BOG'LANISH OGOHLANTIRISHI --- */}
                                     {adminContactJobId === job.id && (
                                         <div className="notice warn" style={{ marginBottom: 12, fontSize: 12 }} onClick={(e) => e.stopPropagation()}>
-                                            ⚠️ Muammo bormi? administrator bilan bog‘laning: <strong>@admin_support</strong>
+                                            ⚠️ Muammo bormi? administrator bilan bog‘laning.
                                         </div>
                                     )}
 
