@@ -70,40 +70,7 @@ export default function CreateJob() {
         const query = serviceSearch.trim().toLowerCase()
         if (!query) return services
 
-        const matchingIds = new Set(
-            services
-                .filter((service) => service.name.toLowerCase().includes(query))
-                .map((service) => String(service.id))
-        )
-
-        const visibleIds = new Set(matchingIds)
-
-        services.forEach((service) => {
-            let parentId = service.parent_id
-
-            while (parentId != null) {
-                if (matchingIds.has(String(parentId))) {
-                    visibleIds.add(String(service.id))
-                    break
-                }
-
-                const parent = services.find((item) => String(item.id) === String(parentId))
-                if (!parent) break
-                parentId = parent.parent_id
-            }
-        })
-
-        matchingIds.forEach((id) => {
-            let current = services.find((service) => String(service.id) === id)
-            while (current && current.parent_id != null) {
-                const parent = services.find((service) => String(service.id) === String(current.parent_id))
-                if (!parent) break
-                visibleIds.add(String(parent.id))
-                current = parent
-            }
-        })
-
-        return services.filter((service) => visibleIds.has(String(service.id)))
+        return services.filter((service) => service.name.toLowerCase().includes(query))
     }, [services, serviceSearch])
 
     const filteredServiceTree = useMemo(() => buildServiceTree(filteredServices), [filteredServices])
@@ -117,8 +84,14 @@ export default function CreateJob() {
     }, [token])
 
     const canSubmit = useMemo(
-        () => (selectedServiceIds.length > 0 || customServices.length > 0) && form.title && form.description && form.price && !priceError && form.location,
-        [form, selectedServiceIds, customServices]
+        () =>
+            (selectedServiceIds.length > 0 || customServices.length > 0) &&
+            form.title.trim() &&
+            form.description.trim() &&
+            form.price &&
+            !priceError &&
+            form.location.trim(),
+        [form, selectedServiceIds, customServices, priceError]
     )
 
     const submit = async (e) => {
@@ -138,11 +111,11 @@ export default function CreateJob() {
                 service_id: selectedServiceIds.length ? Number(selectedServiceIds[0]) : null,
                 service_ids: selectedServiceIds.map(Number),
                 custom_service: customServices.join(", "),
-                title: form.title,
-                description: form.description,
+                title: form.title.trim(),
+                description: form.description.trim(),
                 price,
                 currency: form.currency,
-                location: form.location
+                location: form.location.trim()
             },
             token
         })
@@ -228,7 +201,9 @@ export default function CreateJob() {
                                                 type="button"
                                                 className={selectedServiceIds.includes(String(service.id)) ? "service-search-result selected" : "service-search-result"}
                                                 onClick={() => {
-                                                    if (!selectedServiceIds.includes(String(service.id))) setSelectedServiceIds([...selectedServiceIds, String(service.id)])
+                                                    setSelectedServiceIds((current) =>
+                                                        current.includes(String(service.id)) ? current : [...current, String(service.id)]
+                                                    )
                                                     setServiceSearch("")
                                                     setShowCategories(false)
                                                 }}
@@ -243,7 +218,14 @@ export default function CreateJob() {
                                                     className="btn btn-secondary"
                                                     style={{ marginTop: 10, width: "100%" }}
                                                     onClick={() => {
-                                                        setCustomServices([...customServices, serviceSearch.trim()])
+                                                        const customService = serviceSearch.trim()
+                                                        if (!customService) return
+
+                                                        setCustomServices((current) =>
+                                                            current.some((item) => item.toLowerCase() === customService.toLowerCase())
+                                                                ? current
+                                                                : [...current, customService]
+                                                        )
                                                         setServiceSearch("")
                                                         setShowCategories(false)
                                                     }}
