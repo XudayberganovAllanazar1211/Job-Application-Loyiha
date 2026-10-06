@@ -36,7 +36,7 @@ pending_verifications = {}
 
 
 def send_email_code(to_email, code):
-    subject = "Job Platform - Ro'yxatdan o'tish kodi"
+    subject = "FinJob - Ro'yxatdan o'tish kodi"
     body = f"Sizning 6 xonali ro'yxatdan o'tish kodingiz: {code}\nUshbu kodni hech kimga bermang."
 
     msg = MIMEMultipart()
@@ -381,6 +381,10 @@ class QueryResult:
     def rowcount(self):
         return self.cursor.rowcount
 
+    @property
+    def lastrowid(self):
+        return self.cursor.lastrowid
+
     def close(self):
         if self.conn is not None:
             self.conn.close()
@@ -541,8 +545,8 @@ def verify_code():
 
         del pending_verifications[email]
         return jsonify({"msg": "ok", "role": assigned_role})
-    except Exception as e:
-        return jsonify({"msg": f"Xatolik yuz berdi: {str(e)}"}), 400
+    except Exception:
+        return jsonify({"msg": "Ro'yxatdan o'tishda xatolik yuz berdi"}), 400
 
 
 @app.route("/logout", methods=["POST"])
@@ -555,10 +559,35 @@ def logout():
 @admin_required
 def add_service():
     d = request.json or {}
-    name = d.get("name", "").strip()
+    name = str(d.get("name", "")).strip()
     if not name:
         return jsonify({"msg": "Xizmat nomi kiritilishi shart"}), 400
-    db.q("INSERT INTO services(name,parent_id,created_by) VALUES(?,?,?)", (name, d.get("parent_id"), request.uid))
+
+    parent_id = d.get("parent_id")
+    if parent_id in ("", None):
+        parent_id = None
+    else:
+        try:
+            parent_id = int(parent_id)
+        except (TypeError, ValueError):
+            return jsonify({"msg": "parent_id noto'g'ri"}), 400
+
+        parent = db.q("SELECT id FROM services WHERE id=?", (parent_id,)).fetchone()
+        if not parent:
+            return jsonify({"msg": "Ota kategoriya topilmadi"}), 404
+
+    duplicate = db.q(
+        "SELECT id FROM services WHERE name=? AND parent_id IS ?",
+        (name, parent_id),
+    ).fetchone()
+    if duplicate:
+        return jsonify({"msg": "Bunday xizmat allaqachon mavjud"}), 409
+
+    result = db.q(
+        "INSERT INTO services(name,parent_id,created_by) VALUES(?,?,?)",
+        (name, parent_id, request.uid),
+    )
+    result.close()
     return jsonify({"msg": "ok"})
 
 
@@ -573,8 +602,55 @@ def get_services():
 @auth
 def add_job():
     d = request.json or {}
-    if (not d.get("service_id") and not d.get("custom_service", "").strip()) or not d.get("title") or not d.get("price") or not d.get("location"):
-        return jsonify({"msg": "Barcha maydonlarni to'ldiring"}), 400
+
+    title = str(d.get("title", "")).strip()
+    description = str(d.get("description", "")).strip()
+    location = str(d.get("location", "")).strip()
+    currency = str(d.get("currency", "UZS")).strip().upper()
+
+    raw_service_ids = d.get("service_ids") or []
+    if not isinstance(raw_service_ids, list):
+        raw_service_ids = [raw_service_ids]
+
+    if not raw_service_ids and d.get("service_id"):
+        raw_service_ids = [d.get("service_id")]
+
+    valid_service_ids = []
+    seen_service_ids = set()
+
+    for raw_service_id in raw_service_ids:
+        try:
+            service_id = int(raw_service_id)
+        except (TypeError, ValueError):
+            continue
+
+        if service_id in seen_service_ids:
+            continue
+
+        service = db.q("SELECT id FROM services WHERE id=?", (service_id,)).fetchone()
+        if service:
+            seen_service_ids.add(service_id)
+            valid_service_ids.append(service_id)
+
+    raw_custom_services = str(d.get("custom_service", ""))
+    custom_services = []
+    seen_custom_services = set()
+
+    for item in raw_custom_services.split(","):
+        custom_service = item.strip()
+        key = custom_service.casefold()
+        if custom_service and key not in seen_custom_services:
+            seen_custom_services.add(key)
+            custom_services.append(custom_service)
+
+    if not title or not location:
+        return jsonify({"msg": "Title va location maydonlarini to'ldiring"}), 400
+
+    if not valid_service_ids and not custom_services:
+        return jsonify({"msg": "Kamida bitta xizmat tanlang yoki yangi xizmat nomini kiriting"}), 400
+
+    if not d.get("price"):
+        return jsonify({"msg": "Narx kiritilishi shart"}), 400
 
     try:
         price = float(d["price"])
@@ -584,39 +660,46 @@ def add_job():
     if price <= 0 or price > 100000000000:
         return jsonify({"msg": "Narx 0 dan katta va 100 000 000 000 dan oshmasligi kerak"}), 400
 
-    currency = str(d.get("currency", "UZS")).upper()
     if currency not in {"UZS", "USD", "EUR"}:
         return jsonify({"msg": "Currency noto'g'ri tanlangan"}), 400
 
+    primary_service_id = valid_service_ids[0] if valid_service_ids else None
+    custom_service_text = ", ".join(custom_services)
     now_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    db.q(
+
+    insert_result = db.q(
         """INSERT INTO jobs(user_id,service_id,custom_service,title,description,price,location,worker_id,status,created_at,currency)
            VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
         (
             request.uid,
-            d.get("service_id"),
-            d.get("custom_service", "").strip(),
-            d["title"].strip(),
-            d.get("description", "").strip(),
+            primary_service_id,
+            custom_service_text,
+            title,
+            description,
             price,
-            d["location"].strip(),
+            location,
             None,
             "active",
             now_time,
             currency,
         ),
     )
+    job_id = insert_result.lastrowid
+    insert_result.close()
 
-    job_id = db.q("SELECT last_insert_rowid()").fetchone()[0]
-    service_ids = d.get("service_ids") or []
-    custom_services = [item.strip() for item in d.get("custom_service", "").split(",") if item.strip()]
-    for service_id in service_ids:
-        try:
-            db.q("INSERT INTO job_services(job_id,service_id,custom_service) VALUES(?,?,?)", (job_id, int(service_id), ""))
-        except (TypeError, ValueError):
-            continue
+    for service_id in valid_service_ids:
+        result = db.q(
+            "INSERT INTO job_services(job_id,service_id,custom_service) VALUES(?,?,?)",
+            (job_id, service_id, ""),
+        )
+        result.close()
+
     for custom_service in custom_services:
-        db.q("INSERT INTO job_services(job_id,service_id,custom_service) VALUES(?,?,?)", (job_id, None, custom_service))
+        result = db.q(
+            "INSERT INTO job_services(job_id,service_id,custom_service) VALUES(?,?,?)",
+            (job_id, None, custom_service),
+        )
+        result.close()
 
     return jsonify({"msg": "ok"})
 
@@ -629,7 +712,10 @@ def get_jobs():
         SELECT j.id, j.title, j.price, j.currency, j.location, j.status, j.user_id, j.worker_id,
                u.first_name, u.last_name, u.username, j.description, j.service_id,
                COALESCE(
-                   (SELECT GROUP_CONCAT(CASE WHEN js.service_id IS NOT NULL THEN ss.name ELSE js.custom_service END, ', ')
+                   (SELECT GROUP_CONCAT(
+                       CASE WHEN js.service_id IS NOT NULL THEN ss.name ELSE js.custom_service END,
+                       ', '
+                   )
                     FROM job_services js
                     LEFT JOIN services ss ON js.service_id = ss.id
                     WHERE js.job_id = j.id),
@@ -638,12 +724,14 @@ def get_jobs():
         FROM jobs j
         LEFT JOIN users u ON j.worker_id = u.id
         LEFT JOIN services s ON j.service_id = s.id
-        WHERE j.status != 'finished' 
-        AND (j.status = 'active' OR j.user_id = ? OR j.worker_id = ?)
+        WHERE j.status = 'active'
+           OR j.user_id = ?
+           OR j.worker_id = ?
         ORDER BY j.id DESC
     """,
         (request.uid, request.uid),
     ).fetchall()
+
     return jsonify(
         rows(
             r,
@@ -672,36 +760,50 @@ def get_jobs():
 def get_job_detail(job_id):
     r = db.q(
         """
-        SELECT j.id, j.title, j.price, j.location, j.status, j.user_id, j.worker_id,
-               u.first_name, u.last_name, u.username, j.description, j.service_id, s.name as service_name,
+        SELECT j.id, j.title, j.price, j.currency, j.location, j.status, j.user_id, j.worker_id,
+               u.first_name, u.last_name, u.username, j.description, j.service_id,
+               COALESCE(
+                   (SELECT GROUP_CONCAT(
+                       CASE WHEN js.service_id IS NOT NULL THEN ss.name ELSE js.custom_service END,
+                       ', '
+                   )
+                    FROM job_services js
+                    LEFT JOIN services ss ON js.service_id = ss.id
+                    WHERE js.job_id = j.id),
+                   COALESCE(NULLIF(s.name, ''), j.custom_service)
+               ) as service_name,
                c.first_name as creator_first, c.last_name as creator_last, c.username as creator_username
         FROM jobs j
         LEFT JOIN users u ON j.worker_id = u.id
         LEFT JOIN users c ON j.user_id = c.id
         LEFT JOIN services s ON j.service_id = s.id
         WHERE j.id = ?
+          AND (j.status = 'active' OR j.user_id = ? OR j.worker_id = ?)
     """,
-        (job_id,),
+        (job_id, request.uid, request.uid),
     ).fetchone()
+
     if not r:
         return jsonify({"msg": "Job topilmadi"}), 404
+
     return jsonify({
         "id": r[0],
         "title": r[1],
         "price": r[2],
-        "location": r[3],
-        "status": r[4],
-        "user_id": r[5],
-        "worker_id": r[6],
-        "worker_first": r[7],
-        "worker_last": r[8],
-        "worker_username": r[9],
-        "description": r[10],
-        "service_id": r[11],
-        "service_name": r[12],
-        "creator_first": r[13],
-        "creator_last": r[14],
-        "creator_username": r[15],
+        "currency": r[3],
+        "location": r[4],
+        "status": r[5],
+        "user_id": r[6],
+        "worker_id": r[7],
+        "worker_first": r[8],
+        "worker_last": r[9],
+        "worker_username": r[10],
+        "description": r[11],
+        "service_id": r[12],
+        "service_name": r[13],
+        "creator_first": r[14],
+        "creator_last": r[15],
+        "creator_username": r[16],
     })
 
 
@@ -713,18 +815,31 @@ def accept():
     if not job_id:
         return jsonify({"msg": "job_id ko'rsatilmadi"}), 400
 
-    job = db.q("SELECT user_id FROM jobs WHERE id=?", (job_id,)).fetchone()
+    try:
+        job_id = int(job_id)
+    except (TypeError, ValueError):
+        return jsonify({"msg": "job_id noto'g'ri"}), 400
+
+    job = db.q("SELECT user_id, status, worker_id FROM jobs WHERE id=?", (job_id,)).fetchone()
     if not job:
         return jsonify({"msg": "Job topilmadi"}), 404
     if job[0] == request.uid:
         return jsonify({"msg": "O'zingiz yaratgan ishni qabul qila olmaysiz!"}), 400
+    if job[1] != "active":
+        return jsonify({"msg": "Bu job hozir qabul qilish uchun mavjud emas"}), 409
+    if job[2] is not None:
+        return jsonify({"msg": "Ushbu ish allaqachon qabul qilingan"}), 409
 
     result = db.q(
         "UPDATE jobs SET worker_id=?,status='accepted' WHERE id=? AND status='active' AND worker_id IS NULL AND user_id!=?",
         (request.uid, job_id, request.uid),
     )
-    if result.rowcount != 1:
+    updated = result.rowcount
+    result.close()
+
+    if updated != 1:
         return jsonify({"msg": "Ushbu ish allaqachon boshqa foydalanuvchi tomonidan qabul qilingan!"}), 409
+
     return jsonify({"msg": "ok"})
 
 
@@ -736,15 +851,23 @@ def finish():
     if not job_id:
         return jsonify({"msg": "job_id ko'rsatilmadi"}), 400
 
+    try:
+        job_id = int(job_id)
+    except (TypeError, ValueError):
+        return jsonify({"msg": "job_id noto'g'ri"}), 400
+
     job = db.q("SELECT user_id, worker_id, status FROM jobs WHERE id=?", (job_id,)).fetchone()
     if not job:
         return jsonify({"msg": "Job topilmadi"}), 404
     if job[0] != request.uid:
         return jsonify({"msg": "Faqat ish yaratuvchisi yakunlash so'rovini yuborishi mumkin!"}), 403
+    if not job[1]:
+        return jsonify({"msg": "Ishni yakunlashdan oldin bajaruvchi tanlanishi kerak"}), 400
     if job[2] != "accepted":
         return jsonify({"msg": "Ish faqat qabul qilingan holatda yakunlanishi mumkin"}), 400
 
-    db.q("UPDATE jobs SET status='pending_finish' WHERE id=?", (job_id,))
+    result = db.q("UPDATE jobs SET status='pending_finish' WHERE id=?", (job_id,))
+    result.close()
     return jsonify({"msg": "ok"})
 
 
@@ -754,6 +877,14 @@ def confirm_finish():
     d = request.json or {}
     job_id = d.get("job_id")
     choice = d.get("choice")
+
+    if not job_id:
+        return jsonify({"msg": "job_id ko'rsatilmadi"}), 400
+
+    try:
+        job_id = int(job_id)
+    except (TypeError, ValueError):
+        return jsonify({"msg": "job_id noto'g'ri"}), 400
 
     job = db.q("SELECT worker_id, status FROM jobs WHERE id=?", (job_id,)).fetchone()
     if not job:
@@ -767,11 +898,13 @@ def confirm_finish():
 
     if choice == "yes":
         now_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        db.q("UPDATE jobs SET status='finished', finished_at=? WHERE id=?", (now_time, job_id))
+        result = db.q("UPDATE jobs SET status='finished', finished_at=? WHERE id=?", (now_time, job_id))
+        result.close()
         return jsonify({"msg": "ok", "status": "finished"})
-    else:
-        db.q("UPDATE jobs SET status='accepted' WHERE id=?", (job_id,))
-        return jsonify({"msg": "rejected", "status": "accepted"})
+
+    result = db.q("UPDATE jobs SET status='accepted' WHERE id=?", (job_id,))
+    result.close()
+    return jsonify({"msg": "rejected", "status": "accepted"})
 
 
 # -------- MESSAGES --------
@@ -861,9 +994,12 @@ def add_rating():
     if request.uid == to_user:
         return jsonify({"msg": "O'zingizga baho bera olmaysiz!"}), 400
 
-    job = db.q("SELECT user_id, worker_id FROM jobs WHERE id=?", (job_id,)).fetchone()
+    job = db.q("SELECT user_id, worker_id, status FROM jobs WHERE id=?", (job_id,)).fetchone()
     if not job:
         return jsonify({"msg": "Job topilmadi"}), 404
+
+    if job[1] is None:
+        return jsonify({"msg": "Bu ishda hali bajaruvchi yo'q"}), 400
 
     if job[2] != "finished":
         return jsonify({"msg": "Ish tugamaguncha baho berib bo'lmaydi"}), 400
@@ -877,14 +1013,16 @@ def add_rating():
         return jsonify({"msg": "Bu ish uchun siz allaqachon baho bergansiz"}), 409
 
     now_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    db.q(
+    result = db.q(
         "INSERT INTO ratings(job_id, from_user, to_user, score, comment, created_at) VALUES(?,?,?,?,?,?)",
         (job_id, request.uid, to_user, score, comment, now_time),
     )
+    result.close()
 
     avg_row = db.q("SELECT AVG(score) FROM ratings WHERE to_user=?", (to_user,)).fetchone()
     avg_score = round(avg_row[0], 1) if avg_row and avg_row[0] is not None else 0.0
-    db.q("UPDATE users SET average_rating=? WHERE id=?", (avg_score, to_user))
+    result = db.q("UPDATE users SET average_rating=? WHERE id=?", (avg_score, to_user))
+    result.close()
 
     return jsonify({"msg": "ok", "average_rating": avg_score})
 
@@ -955,7 +1093,8 @@ def upload_profile_avatar():
     avatar_url = f"/uploads/profile_pictures/{filename}"
     old_avatar = db.q("SELECT avatar_url FROM users WHERE id=?", (request.uid,)).fetchone()
     old_url = old_avatar[0] if old_avatar else ""
-    db.q("UPDATE users SET avatar_url=? WHERE id=?", (avatar_url, request.uid))
+    result = db.q("UPDATE users SET avatar_url=? WHERE id=?", (avatar_url, request.uid))
+    result.close()
 
     if old_url and old_url.startswith("/uploads/profile_pictures/"):
         old_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), old_url.lstrip("/").replace("/", os.sep))
@@ -1029,7 +1168,7 @@ def profile():
         if exists_e:
             return jsonify({"msg": "Ushbu Email allaqachon ro'yxatdan o'tgan!"}), 400
 
-        db.q(
+        result = db.q(
             """UPDATE users 
                SET first_name=?, last_name=?, birthday=?, username=?, email=?, bio=?, skills=? 
                WHERE id=?""",
@@ -1044,6 +1183,7 @@ def profile():
                 request.uid,
             ),
         )
+        result.close()
 
         return jsonify({"msg": "ok"})
 
