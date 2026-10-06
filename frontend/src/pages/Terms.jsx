@@ -30,7 +30,7 @@ export default function Terms() {
                     <p>FinJobning hozirgi versiyasida ko'rsatilgan narx/valyuta ma'lumotlari ish shartlarini ifodalaydi. Foydalanuvchilar o'rtasida haqiqiy to'lovni amalga oshirish tartibi ular o'rtasidagi qonuniy kelishuvga bog'liq. FinJob alohida to‘lov operatori sifatida ko'rsatilmagan.</p>
 
                     <h2>6. Suhbat va kontent</h2>
-                    <p>Foydalanuvchi chat, profil, ish va baho orqali yuborgan kontent uchun javobgardir. Spam, tahdid, firibgarlik, zararli kod yoki boshqa noqonuniy kontent tarqatish taqiqlanadi.</p>
+                    <p>Foydalanuvchi suhbat, profil, ish va baho orqali yuborgan kontent uchun javobgardir. Spam, tahdid, firibgarlik, zararli kod yoki boshqa noqonuniy kontent tarqatish taqiqlanadi.</p>
 
                     <h2>7. Baho berish</h2>
                     <p>Baholash haqiqiy ish tajribasini adolatli aks ettirishi kerak. Soxta, manipulyativ yoki qasos sifatidagi baholardan foydalanmaslik kerak.</p>
