@@ -163,8 +163,8 @@ export default function Dashboard() {
                     <div className="job-grid">
                         {filtered.map((job) => {
                             const workerName = `${job.worker_first || ""} ${job.worker_last || ""}`.trim() || job.worker_username;
-                            const isMyJob = job.user_id === user?.id;
-                            const isIAccepted = job.worker_id === user?.id;
+                            const isMyJob = String(job.user_id) === String(user?.id);
+                            const isIAccepted = String(job.worker_id) === String(user?.id);
 
                             return (
                                 <article
@@ -241,7 +241,7 @@ export default function Dashboard() {
                                         </button>
 
                                         {/* --- ACCEPT TUGMASI (Mening ishim bo'lmaganda hamma uchun) --- */}
-                                        {!isMyJob && job.status === "active" && (
+                                        {!isMyJob && String(job.status).toLowerCase() === "active" && (
                                             <button
                                                 className="btn btn-primary"
                                                 onClick={(e) => {
