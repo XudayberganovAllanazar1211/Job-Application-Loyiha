@@ -772,6 +772,15 @@ def admin_overview():
            ORDER BY r.id DESC"""
     ).fetchall()
 
+    reports = db.q(
+        """SELECT r.id, r.reason, r.details, r.status, r.created_at,
+                  f.username AS reporter_username, t.username AS reported_username
+           FROM reports r
+           LEFT JOIN users f ON f.id = r.reporter_id
+           LEFT JOIN users t ON t.id = r.reported_user_id
+           ORDER BY r.id DESC"""
+    ).fetchall()
+
     return jsonify({
         "stats": {
             "users": len(users),
@@ -780,11 +789,13 @@ def admin_overview():
             "finished_jobs": sum(1 for j in jobs if str(j[5]).lower() == "finished"),
             "services": len(services),
             "ratings": len(ratings),
+            "reports": len(reports),
         },
         "users": rows(users, ["id", "username", "first_name", "last_name", "email", "birthday", "bio", "skills", "role", "created_at", "average_rating"]),
         "jobs": rows(jobs, ["id", "title", "price", "currency", "location", "status", "created_at", "creator_username", "worker_username"]),
         "services": rows(services, ["id", "name", "parent_id", "parent_name", "created_by"]),
         "ratings": rows(ratings, ["id", "job_id", "score", "comment", "created_at", "from_username", "to_username"]),
+        "reports": rows(reports, ["id", "reason", "details", "status", "created_at", "reporter_username", "reported_username"]),
     })
 
 
