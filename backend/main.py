@@ -373,8 +373,7 @@ class QueryResult:
 
     def fetchone(self):
         row = self.cursor.fetchone()
-        if row is None:
-            self.close()
+        self.close()
         return row
 
     def fetchall(self):
