@@ -93,7 +93,7 @@ export default function CreateJob() {
         setLoading(false)
 
         if (result?.msg === "ok") {
-            setNotice("Job yaratildi ✅")
+            setNotice("Job yaratildi")
             setTimeout(() => navigate("/jobs"), 700)
             return
         }
@@ -171,16 +171,6 @@ export default function CreateJob() {
                         </button>
                     </form>
                 </section>
-
-                <aside className="card">
-                    <h3>Xizmatlar katalogi</h3>
-                    <p className="muted">Ota → guruh → xizmat ko‘rinishida barcha xizmatlarni tanlang.</p>
-                    <div className="chip-row">
-                        {services.length ? services.map((service) => (
-                            <span className="chip" key={service.id}>{service.name}</span>
-                        )) : <div className="empty-state">Hozircha service yo‘q</div>}
-                    </div>
-                </aside>
             </div>
         </AppLayout>
     )
