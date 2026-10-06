@@ -99,11 +99,16 @@ class JobPlatformTestCase(unittest.TestCase):
         self.assertEqual(res_serv.status_code, 200)
         services = res_serv.get_json()
         self.assertTrue(len(services) > 0)
-        service_id = services[0]["id"]
+        parent_ids = {service["parent_id"] for service in services if service["parent_id"] is not None}
+        leaf_services = [service for service in services if service["id"] not in parent_ids]
+        self.assertGreaterEqual(len(leaf_services), 2)
 
-        # Create Job
+        service_ids = [leaf_services[0]["id"], leaf_services[1]["id"]]
+
+        # Create Job with multiple services
         job_payload = {
-            "service_id": service_id,
+            "service_id": service_ids[0],
+            "service_ids": service_ids,
             "title": "Fix Water Pipe",
             "description": "Bathroom pipe is leaking urgently",
             "price": 150000,
@@ -116,7 +121,12 @@ class JobPlatformTestCase(unittest.TestCase):
         res_jobs = self.client.get("/jobs", headers={"Authorization": f"Bearer {token_creator}"})
         self.assertEqual(res_jobs.status_code, 200)
         jobs = res_jobs.get_json()
-        self.assertTrue(any(j["title"] == "Fix Water Pipe" for j in jobs))
+        created = [j for j in jobs if j["title"] == "Fix Water Pipe"][0]
+        self.assertEqual(created["currency"], "UZS")
+        self.assertEqual(created["status"], "active")
+        self.assertEqual(created["worker_id"], None)
+        self.assertIn(leaf_services[0]["name"], created["service_name"])
+        self.assertIn(leaf_services[1]["name"], created["service_name"])
 
     def test_04_full_lifecycle_and_rating(self):
         # Register worker (Second user -> regular 'user' role)
@@ -169,7 +179,7 @@ class JobPlatformTestCase(unittest.TestCase):
 
         # Double accept should fail
         res_double = self.client.post("/accept_job", headers={"Authorization": f"Bearer {token_worker}"}, json={"job_id": job_id})
-        self.assertEqual(res_double.status_code, 400)
+        self.assertEqual(res_double.status_code, 409)
 
         # Send Message
         res_msg = self.client.post("/message", headers={"Authorization": f"Bearer {token_creator}"}, json={
@@ -203,6 +213,19 @@ class JobPlatformTestCase(unittest.TestCase):
         })
         self.assertEqual(res_conf.status_code, 200)
         self.assertEqual(res_conf.get_json()["status"], "finished")
+
+        # Finished jobs remain visible to participants
+        creator_jobs = self.client.get(
+            "/jobs",
+            headers={"Authorization": f"Bearer {token_creator}"}
+        ).get_json()
+        worker_jobs = self.client.get(
+            "/jobs",
+            headers={"Authorization": f"Bearer {token_worker}"}
+        ).get_json()
+
+        self.assertTrue(any(j["id"] == job_id and j["status"] == "finished" for j in creator_jobs))
+        self.assertTrue(any(j["id"] == job_id and j["status"] == "finished" for j in worker_jobs))
 
         # Creator rates worker
         res_rate = self.client.post("/rating", headers={"Authorization": f"Bearer {token_creator}"}, json={
