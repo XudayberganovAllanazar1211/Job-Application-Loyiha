@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import AppLayout from "../components/AppLayout"
 import { api } from "../api"
 
@@ -80,6 +80,13 @@ export default function Profile() {
     const [initialLoad, setInitialLoad] = useState(true)
     const [avatarUrl, setAvatarUrl] = useState("")
     const [avatarLoading, setAvatarLoading] = useState(false)
+    const [cropImageUrl, setCropImageUrl] = useState("")
+    const [cropZoom, setCropZoom] = useState(1)
+    const [cropOffset, setCropOffset] = useState({ x: 0, y: 0 })
+    const [cropDragging, setCropDragging] = useState(false)
+    const cropImageRef = useRef(null)
+    const cropAreaRef = useRef(null)
+    const cropDragRef = useRef({ x: 0, y: 0, startX: 0, startY: 0 })
 
     const serviceTree = buildServiceTree(services)
     const filteredServices = services.filter((service) => service.name.toLowerCase().includes(serviceSearch.trim().toLowerCase()))
@@ -196,7 +203,15 @@ export default function Profile() {
         setShowServicePicker(false)
     }
 
-    const uploadAvatar = async (event) => {
+    const closeCropModal = () => {
+        if (cropImageUrl) URL.revokeObjectURL(cropImageUrl)
+        setCropImageUrl("")
+        setCropZoom(1)
+        setCropOffset({ x: 0, y: 0 })
+        setCropDragging(false)
+    }
+
+    const selectAvatar = (event) => {
         const file = event.target.files?.[0]
         event.target.value = ""
         if (!file) return
@@ -212,12 +227,139 @@ export default function Profile() {
             return
         }
 
+        if (cropImageUrl) URL.revokeObjectURL(cropImageUrl)
+        setCropImageUrl(URL.createObjectURL(file))
+        setCropZoom(1)
+        setCropOffset({ x: 0, y: 0 })
+        setCropDragging(false)
+        setNotice("")
+    }
+
+    const handleCropPointerDown = (event) => {
+        event.preventDefault()
+        const pointX = event.clientX
+        const pointY = event.clientY
+        cropDragRef.current = {
+            x: cropOffset.x,
+            y: cropOffset.y,
+            startX: pointX,
+            startY: pointY
+        }
+        setCropDragging(true)
+        event.currentTarget.setPointerCapture?.(event.pointerId)
+    }
+
+    const handleCropPointerMove = (event) => {
+        if (!cropDragging) return
+
+        const area = cropAreaRef.current
+        const image = cropImageRef.current
+        if (!area || !image) return
+
+        const zoomedWidth = image.offsetWidth * cropZoom
+        const zoomedHeight = image.offsetHeight * cropZoom
+        const maxX = Math.max(0, (zoomedWidth - area.clientWidth) / 2)
+        const maxY = Math.max(0, (zoomedHeight - area.clientHeight) / 2)
+
+        const nextX = cropDragRef.current.x + event.clientX - cropDragRef.current.startX
+        const nextY = cropDragRef.current.y + event.clientY - cropDragRef.current.startY
+
+        setCropOffset({
+            x: Math.max(-maxX, Math.min(maxX, nextX)),
+            y: Math.max(-maxY, Math.min(maxY, nextY))
+        })
+    }
+
+    const handleCropPointerUp = (event) => {
+        setCropDragging(false)
+        event.currentTarget.releasePointerCapture?.(event.pointerId)
+    }
+
+    const handleCropZoomChange = (event) => {
+        const nextZoom = Number(event.target.value)
+        const previousZoom = cropZoom
+        if (previousZoom <= 0) {
+            setCropZoom(nextZoom)
+            return
+        }
+
+        const ratio = nextZoom / previousZoom
+        const area = cropAreaRef.current
+        const image = cropImageRef.current
+        if (!area || !image) {
+            setCropZoom(nextZoom)
+            return
+        }
+
+        const zoomedWidth = image.offsetWidth * nextZoom
+        const zoomedHeight = image.offsetHeight * nextZoom
+        const maxX = Math.max(0, (zoomedWidth - area.clientWidth) / 2)
+        const maxY = Math.max(0, (zoomedHeight - area.clientHeight) / 2)
+
+        setCropZoom(nextZoom)
+        setCropOffset({
+            x: Math.max(-maxX, Math.min(maxX, cropOffset.x * ratio)),
+            y: Math.max(-maxY, Math.min(maxY, cropOffset.y * ratio))
+        })
+    }
+
+    const resetCrop = () => {
+        setCropZoom(1)
+        setCropOffset({ x: 0, y: 0 })
+    }
+
+    const saveCroppedAvatar = async () => {
+        const area = cropAreaRef.current
+        const image = cropImageRef.current
+        if (!area || !image || !cropImageUrl) return
+
         setAvatarLoading(true)
         setNotice("")
 
         try {
+            const areaRect = area.getBoundingClientRect()
+            const imageRect = image.getBoundingClientRect()
+            const sourceScaleX = image.naturalWidth / imageRect.width
+            const sourceScaleY = image.naturalHeight / imageRect.height
+
+            const sourceX = Math.max(0, (areaRect.left - imageRect.left) * sourceScaleX)
+            const sourceY = Math.max(0, (areaRect.top - imageRect.top) * sourceScaleY)
+            const sourceWidth = Math.min(image.naturalWidth - sourceX, areaRect.width * sourceScaleX)
+            const sourceHeight = Math.min(image.naturalHeight - sourceY, areaRect.height * sourceScaleY)
+
+            const canvas = document.createElement("canvas")
+            canvas.width = 512
+            canvas.height = 512
+            const context = canvas.getContext("2d")
+
+            if (!context) {
+                setNotice("Rasmni tayyorlashda xatolik yuz berdi")
+                return
+            }
+
+            context.imageSmoothingEnabled = true
+            context.imageSmoothingQuality = "high"
+            context.drawImage(
+                image,
+                sourceX,
+                sourceY,
+                sourceWidth,
+                sourceHeight,
+                0,
+                0,
+                canvas.width,
+                canvas.height
+            )
+
+            const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92))
+            if (!blob) {
+                setNotice("Rasmni tayyorlashda xatolik yuz berdi")
+                return
+            }
+
             const data = new FormData()
-            data.append("image", file)
+            data.append("image", new File([blob], "avatar.jpg", { type: "image/jpeg" }))
+
             const token = localStorage.getItem("token") || ""
             const response = await fetch((import.meta.env.VITE_API_URL || "http://localhost:5000") + "/profile/avatar", {
                 method: "POST",
@@ -242,6 +384,7 @@ export default function Profile() {
                 }))
             }
 
+            closeCropModal()
             setNotice("Profil rasmi muvaffaqiyatli yangilandi")
             setTimeout(() => setNotice(""), 3000)
         } catch {
@@ -312,7 +455,7 @@ export default function Profile() {
                                     )}
                                 </div>
                                 {isEditing && (
-                                    <input type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadAvatar} disabled={avatarLoading} />
+                                    <input type="file" accept="image/png,image/jpeg,image/webp" onChange={selectAvatar} disabled={avatarLoading} />
                                 )}
                             </label>
                             <div className="profile-identity-text">
@@ -581,5 +724,67 @@ export default function Profile() {
                 </div>
             )}
         </AppLayout>
+            {cropImageUrl && (
+                <div className="avatar-crop-backdrop" role="dialog" aria-modal="true" aria-label="Profil rasmini kesish">
+                    <div className="avatar-crop-modal">
+                        <div className="avatar-crop-head">
+                            <div>
+                                <span className="profile-eyebrow">PROFIL RASMI</span>
+                                <h3 className="section-title">Rasmni joylashtiring</h3>
+                                <p>Sichqoncha bilan rasmni suring va kerakli joyni dumaloq oynaga moslang.</p>
+                            </div>
+                            <button type="button" className="avatar-crop-close" onClick={closeCropModal} disabled={avatarLoading}>×</button>
+                        </div>
+
+                        <div
+                            ref={cropAreaRef}
+                            className={cropDragging ? "avatar-crop-area dragging" : "avatar-crop-area"}
+                            onPointerDown={handleCropPointerDown}
+                            onPointerMove={handleCropPointerMove}
+                            onPointerUp={handleCropPointerUp}
+                            onPointerCancel={handleCropPointerUp}
+                        >
+                            <img
+                                ref={cropImageRef}
+                                src={cropImageUrl}
+                                alt="Profil rasmi tanlovi"
+                                draggable="false"
+                                style={{transform: `translate(calc(-50% + ${cropOffset.x}px), calc(-50% + ${cropOffset.y}px)) scale(${cropZoom})`}}
+                                onLoad={() => setCropOffset({ x: 0, y: 0 })}
+                            />
+                            <div className="avatar-crop-circle" />
+                        </div>
+
+                        <div className="avatar-crop-controls">
+                            <div className="avatar-crop-zoom-row">
+                                <span>🔍</span>
+                                <input
+                                    type="range"
+                                    min="1"
+                                    max="3"
+                                    step="0.01"
+                                    value={cropZoom}
+                                    onChange={handleCropZoomChange}
+                                    disabled={avatarLoading}
+                                />
+                                <strong>{Math.round(cropZoom * 100)}%</strong>
+                            </div>
+                            <button type="button" className="btn btn-secondary avatar-crop-reset" onClick={resetCrop} disabled={avatarLoading}>
+                                Markazga qaytarish
+                            </button>
+                        </div>
+
+                        <div className="avatar-crop-actions">
+                            <button type="button" className="btn btn-secondary" onClick={closeCropModal} disabled={avatarLoading}>
+                                Bekor qilish
+                            </button>
+                            <button type="button" className="btn btn-primary" onClick={saveCroppedAvatar} disabled={avatarLoading}>
+                                {avatarLoading ? "Saqlanmoqda..." : "Rasmni saqlash"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
     )
 }
