@@ -35,6 +35,12 @@ export default function Jobs() {
     const [jobs, setJobs] = useState([])
     const [services, setServices] = useState([])
     const [search, setSearch] = useState("")
+    const [statusFilter, setStatusFilter] = useState("all")
+    const [serviceFilter, setServiceFilter] = useState("all")
+    const [minPrice, setMinPrice] = useState("")
+    const [maxPrice, setMaxPrice] = useState("")
+    const [onlyMine, setOnlyMine] = useState(false)
+    const [showFilters, setShowFilters] = useState(false)
     const [notice, setNotice] = useState("")
     const [noticeType, setNoticeType] = useState("ok")
     const token = localStorage.getItem("token") || ""
@@ -70,12 +76,46 @@ export default function Jobs() {
         load()
     }, [])
 
+    const availableServices = useMemo(() => {
+        return [...new Set(
+            jobs
+                .map((job) => job.service_name || serviceMap[String(job.service_id)] || "")
+                .map((name) => String(name).trim())
+                .filter(Boolean)
+        )].sort((a, b) => a.localeCompare(b, "uz"))
+    }, [jobs, serviceMap])
+
     const filtered = useMemo(() => {
+        const min = minPrice.trim() === "" ? null : Number(minPrice)
+        const max = maxPrice.trim() === "" ? null : Number(maxPrice)
+
         return jobs.filter((job) => {
             const text = `${job.title || ""} ${job.description || ""} ${job.location || ""}`.toLowerCase()
-            return text.includes(search.toLowerCase())
+            const jobStatus = String(job.status || "").trim().toLowerCase()
+            const jobService = String(job.service_name || serviceMap[String(job.service_id)] || "").trim()
+            const isMine = String(job.user_id) === String(user?.id) || String(job.worker_id) === String(user?.id)
+            const price = Number(job.price)
+
+            if (!text.includes(search.trim().toLowerCase())) return false
+            if (statusFilter !== "all" && jobStatus !== statusFilter) return false
+            if (serviceFilter !== "all" && jobService !== serviceFilter) return false
+            if (onlyMine && !isMine) return false
+            if (min !== null && (!Number.isFinite(price) || price < min)) return false
+            if (max !== null && (!Number.isFinite(price) || price > max)) return false
+            return true
         })
-    }, [jobs, search])
+    }, [jobs, search, statusFilter, serviceFilter, minPrice, maxPrice, onlyMine, serviceMap, user?.id])
+
+    const resetFilters = () => {
+        setSearch("")
+        setStatusFilter("all")
+        setServiceFilter("all")
+        setMinPrice("")
+        setMaxPrice("")
+        setOnlyMine(false)
+    }
+
+    const hasActiveFilters = search.trim() || statusFilter !== "all" || serviceFilter !== "all" || minPrice || maxPrice || onlyMine
 
     const acceptJob = async (job) => {
         const result = await api("/accept_job", {
@@ -169,18 +209,87 @@ export default function Jobs() {
                     </div>
                     <div className="actions">
                         <input
-                            className="input"
-                            style={{ minWidth: 260 }}
+                            className="input jobs-search-input"
                             placeholder="Ish qidirish..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                         />
+                        <button className={showFilters ? "btn btn-primary" : "btn btn-secondary"} onClick={() => setShowFilters(!showFilters)}>
+                            {showFilters ? "Filtrni yopish" : "Filtrlash"}
+                        </button>
                         <button className="btn btn-secondary" onClick={load}>Yangilash</button>
                         <button className="btn btn-primary" onClick={() => navigate("/create")}>
                             Ish yaratish
                         </button>
                     </div>
                 </div>
+
+                {showFilters && (
+                    <div className="jobs-filter-panel">
+                        <div className="jobs-filter-grid">
+                            <label className="jobs-filter-field">
+                                <span>Holat</span>
+                                <select className="select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                                    <option value="all">Barcha holatlar</option>
+                                    <option value="active">Faol</option>
+                                    <option value="accepted">Qabul qilingan</option>
+                                    <option value="pending_finish">Tasdiqlash kutilmoqda</option>
+                                    <option value="finished">Yakunlangan</option>
+                                </select>
+                            </label>
+
+                            <label className="jobs-filter-field">
+                                <span>Xizmat</span>
+                                <select className="select" value={serviceFilter} onChange={(e) => setServiceFilter(e.target.value)}>
+                                    <option value="all">Barcha xizmatlar</option>
+                                    {availableServices.map((service) => (
+                                        <option key={service} value={service}>{service}</option>
+                                    ))}
+                                </select>
+                            </label>
+
+                            <label className="jobs-filter-field">
+                                <span>Minimal narx</span>
+                                <input
+                                    className="input"
+                                    type="number"
+                                    min="0"
+                                    placeholder="Masalan: 100000"
+                                    value={minPrice}
+                                    onChange={(e) => setMinPrice(e.target.value)}
+                                />
+                            </label>
+
+                            <label className="jobs-filter-field">
+                                <span>Maksimal narx</span>
+                                <input
+                                    className="input"
+                                    type="number"
+                                    min="0"
+                                    placeholder="Masalan: 1000000"
+                                    value={maxPrice}
+                                    onChange={(e) => setMaxPrice(e.target.value)}
+                                />
+                            </label>
+                        </div>
+
+                        <div className="jobs-filter-bottom">
+                            <label className="jobs-filter-check">
+                                <input type="checkbox" checked={onlyMine} onChange={(e) => setOnlyMine(e.target.checked)} />
+                                <span>Faqat mening ishlarim</span>
+                            </label>
+                            <div className="jobs-filter-summary">
+                                <strong>{filtered.length}</strong> ta ish ko‘rsatilmoqda
+                                {hasActiveFilters && (
+                                    <button type="button" className="jobs-reset-button" onClick={resetFilters}>
+                                        Filtrlarni tozalash
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {notice && <div className={`notice ${noticeType === "ok" ? "ok" : "warn"}`} style={{ marginTop: 14 }}>{notice}</div>}
             </div>
 
