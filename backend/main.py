@@ -193,6 +193,12 @@ class DB:
             except Exception:
                 pass
 
+        if "custom_service" not in existing_job_cols:
+            try:
+                cursor.execute("ALTER TABLE jobs ADD COLUMN custom_service TEXT DEFAULT ''")
+            except Exception:
+                pass
+
         cursor.execute("PRAGMA table_info(ratings)")
         existing_rating_cols = [row[1] for row in cursor.fetchall()]
         if "created_at" not in existing_rating_cols:
