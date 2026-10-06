@@ -163,7 +163,7 @@ export default function Rating() {
                     <div className="empty-state" style={{ marginTop: 16 }}>
                         {job
                             ? `Ushbu baho ${job.title} ishi bo'yicha beriladi.`
-                            : "Job ma'lumotlari avtomatik bog'lanadi."}
+                            : "Ish ma'lumotlari avtomatik bog‘lanadi."}
                     </div>
                 </aside>
             </div>
