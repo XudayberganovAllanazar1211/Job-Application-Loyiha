@@ -18,7 +18,7 @@ function buildServiceTree(services) {
 }
 
 function ServiceNode({ node, level, selected, onSelect }) {
-    const [open, setOpen] = useState(level < 2)
+    const [open, setOpen] = useState(false)
     const hasChildren = node.children.length > 0
 
     return (
