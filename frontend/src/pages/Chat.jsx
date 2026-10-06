@@ -108,7 +108,7 @@ export default function Chat() {
                         <div className="page-head">
                             <h2 style={{ margin: 0 }}>Xabarlar</h2>
                             <p className="muted" style={{ margin: 0 }}>
-                                {job?.title || `Job #${jobId}`}
+                                {job?.title || `Ish #${jobId}`}
                             </p>
                         </div>
                         <div className="actions">
