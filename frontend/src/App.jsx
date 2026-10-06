@@ -6,12 +6,17 @@ import CreateJob from "./pages/CreateJob"
 import Jobs from "./pages/Jobs"
 import Chat from "./pages/Chat"
 import Rating from "./pages/Rating"
-import Leaderboard from "./pages/Leaderboard" // IMPORT QILINDI
+import Leaderboard from "./pages/Leaderboard"
 import Profile from "./pages/Profile"
 import PrivacyPolicy from "./pages/PrivacyPolicy"
 import Terms from "./pages/Terms"
 import CommunityRules from "./pages/CommunityRules"
 import Admin from "./pages/Admin"
+
+function AdminOnly({ children }) {
+    const user = JSON.parse(localStorage.getItem("user") || "null")
+    return user?.role === "admin" ? children : <Navigate to="/" replace />
+}
 
 function Protected({ children }) {
     const token = localStorage.getItem("token")
@@ -37,10 +42,9 @@ export default function App() {
             <Route path="/chat/:jobId" element={<Protected><Chat /></Protected>} />
             <Route path="/rating/:jobId" element={<Protected><Rating /></Protected>} />
 
-            {/* LEADERBOARD SAHIFASI QO'SHILDI */}
             <Route path="/leaderboard" element={<Protected><Leaderboard /></Protected>} />
             <Route path="/profile" element={<Protected><Profile /></Protected>} />
-            <Route path="/admin" element={<Protected><Admin /></Protected>} />
+            <Route path="/admin" element={<Protected><AdminOnly><Admin /></AdminOnly></Protected>} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
