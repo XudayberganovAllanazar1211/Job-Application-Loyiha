@@ -1200,8 +1200,10 @@ def get_jobs():
         LEFT JOIN users u ON j.worker_id = u.id
         LEFT JOIN services s ON j.service_id = s.id
         WHERE j.status = 'active'
-           OR j.user_id = ?
-           OR j.worker_id = ?
+           OR (
+               j.status IN ('accepted', 'pending_finish', 'finished')
+               AND (j.user_id = ? OR j.worker_id = ?)
+           )
         ORDER BY j.id DESC
     """,
         (request.uid, request.uid),
