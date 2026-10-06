@@ -2,6 +2,56 @@ import { useState, useEffect } from "react"
 import AppLayout from "../components/AppLayout"
 import { api } from "../api"
 
+function buildServiceTree(services) {
+    const nodes = Object.fromEntries(services.map((service) => [
+        String(service.id),
+        { ...service, children: [] }
+    ]))
+    const roots = []
+
+    services.forEach((service) => {
+        const node = nodes[String(service.id)]
+        if (service.parent_id == null) roots.push(node)
+        else if (nodes[String(service.parent_id)]) nodes[String(service.parent_id)].children.push(node)
+    })
+
+    return roots
+}
+
+function ServiceNode({ node, level, selected, onSelect }) {
+    const [open, setOpen] = useState(false)
+    const hasChildren = node.children.length > 0
+
+    return (
+        <div>
+            <div className="service-tree-row" style={{ paddingLeft: 10 + level * 20 }}>
+                {hasChildren ? (
+                    <button type="button" className="service-tree-toggle" onClick={() => setOpen(!open)}>
+                        {open ? "▾" : "▸"}
+                    </button>
+                ) : <span className="service-tree-spacer" />}
+                <button
+                    type="button"
+                    className={selected.includes(String(node.id)) ? "service-tree-item selected" : "service-tree-item"}
+                    disabled={hasChildren}
+                    onClick={() => onSelect(node)}
+                >
+                    {node.name}
+                </button>
+            </div>
+            {open && hasChildren && node.children.map((child) => (
+                <ServiceNode
+                    key={child.id}
+                    node={child}
+                    level={level + 1}
+                    selected={selected}
+                    onSelect={onSelect}
+                />
+            ))}
+        </div>
+    )
+}
+
 export default function Profile() {
     const [form, setForm] = useState({
         first_name: "",
@@ -21,10 +71,17 @@ export default function Profile() {
     const [skills, setSkills] = useState([])
     const [savedSkills, setSavedSkills] = useState([])
     const [newSkill, setNewSkill] = useState("")
+    const [services, setServices] = useState([])
+    const [serviceSearch, setServiceSearch] = useState("")
+    const [showServicePicker, setShowServicePicker] = useState(false)
     const [isEditing, setIsEditing] = useState(false)
     const [notice, setNotice] = useState("")
     const [loading, setLoading] = useState(false)
     const [initialLoad, setInitialLoad] = useState(true)
+
+    const serviceTree = buildServiceTree(services)
+    const filteredServices = services.filter((service) => service.name.toLowerCase().includes(serviceSearch.trim().toLowerCase()))
+    const exactSearchServices = filteredServices.filter((service) => !services.some((item) => String(item.parent_id) === String(service.id)))
 
     useEffect(() => {
         const loadProfile = async () => {
@@ -62,6 +119,14 @@ export default function Profile() {
         }
 
         loadProfile()
+    }, [])
+
+    useEffect(() => {
+        const loadServices = async () => {
+            const result = await api("/services", { token: localStorage.getItem("token") || "" })
+            if (Array.isArray(result)) setServices(result)
+        }
+        loadServices()
     }, [])
 
     const startEditing = () => {
@@ -105,6 +170,14 @@ export default function Profile() {
         } else {
             setNotice(result?.msg || "Profilni yangilashda xatolik yuz berdi")
         }
+    }
+
+    const addServiceSkill = (service) => {
+        if (!skills.some((item) => item.toLowerCase() === service.name.toLowerCase())) {
+            setSkills([...skills, service.name])
+        }
+        setServiceSearch("")
+        setShowServicePicker(false)
     }
 
     const addSkill = () => {
@@ -335,10 +408,63 @@ export default function Profile() {
 
                                 {isEditing && (
                                     <div className="profile-skill-add">
+                                        <button
+                                            type="button"
+                                            className="service-select-button"
+                                            onClick={() => {
+                                                setShowServicePicker((current) => !current)
+                                                setServiceSearch("")
+                                            }}
+                                        >
+                                            {showServicePicker ? "Soha tanlashni yopish" : "Soha tanlang"}
+                                        </button>
+
+                                        {showServicePicker && (
+                                            <div className="profile-service-picker">
+                                                <div className="service-search">
+                                                    <input
+                                                        autoFocus
+                                                        className="input"
+                                                        type="search"
+                                                        placeholder="Xizmatni qidiring..."
+                                                        value={serviceSearch}
+                                                        onChange={(e) => setServiceSearch(e.target.value)}
+                                                    />
+                                                </div>
+
+                                                <div className="service-tree">
+                                                    {serviceSearch.trim() ? (
+                                                        exactSearchServices.length ? exactSearchServices.map((service) => (
+                                                            <button
+                                                                key={service.id}
+                                                                type="button"
+                                                                className={skills.some((item) => item.toLowerCase() === service.name.toLowerCase()) ? "service-search-result selected" : "service-search-result"}
+                                                                onClick={() => addServiceSkill(service)}
+                                                            >
+                                                                {service.name}
+                                                            </button>
+                                                        )) : (
+                                                            <div className="empty-state">Bunday xizmat topilmadi</div>
+                                                        )
+                                                    ) : (
+                                                        serviceTree.map((node) => (
+                                                            <ServiceNode
+                                                                key={node.id}
+                                                                node={node}
+                                                                level={0}
+                                                                selected={[]}
+                                                                onSelect={addServiceSkill}
+                                                            />
+                                                        ))
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+
                                         <input
                                             className="input"
                                             type="text"
-                                            placeholder="Masalan: Python, React..."
+                                            placeholder="Boshqa ko'nikma..."
                                             value={newSkill}
                                             onChange={(e) => setNewSkill(e.target.value)}
                                             onKeyDown={(e) => {
