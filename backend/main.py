@@ -126,6 +126,15 @@ class DB:
         """)
 
         cursor.execute("""
+            CREATE TABLE IF NOT EXISTS job_services(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id INTEGER NOT NULL,
+                service_id INTEGER,
+                custom_service TEXT DEFAULT ''
+            )
+        """)
+
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS ratings(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 job_id INTEGER,
@@ -591,6 +600,18 @@ def add_job():
             currency,
         ),
     )
+
+    job_id = db.q("SELECT last_insert_rowid()").fetchone()[0]
+    service_ids = d.get("service_ids") or []
+    custom_services = [item.strip() for item in d.get("custom_service", "").split(",") if item.strip()]
+    for service_id in service_ids:
+        try:
+            db.q("INSERT INTO job_services(job_id,service_id,custom_service) VALUES(?,?,?)", (job_id, int(service_id), ""))
+        except (TypeError, ValueError):
+            continue
+    for custom_service in custom_services:
+        db.q("INSERT INTO job_services(job_id,service_id,custom_service) VALUES(?,?,?)", (job_id, None, custom_service))
+
     return jsonify({"msg": "ok"})
 
 
@@ -601,7 +622,13 @@ def get_jobs():
         """
         SELECT j.id, j.title, j.price, j.currency, j.location, j.status, j.user_id, j.worker_id,
                u.first_name, u.last_name, u.username, j.description, j.service_id,
-               COALESCE(NULLIF(s.name, ''), j.custom_service) as service_name
+               COALESCE(
+                   (SELECT GROUP_CONCAT(CASE WHEN js.service_id IS NOT NULL THEN ss.name ELSE js.custom_service END, ', ')
+                    FROM job_services js
+                    LEFT JOIN services ss ON js.service_id = ss.id
+                    WHERE js.job_id = j.id),
+                   COALESCE(NULLIF(s.name, ''), j.custom_service)
+               ) as service_name
         FROM jobs j
         LEFT JOIN users u ON j.worker_id = u.id
         LEFT JOIN services s ON j.service_id = s.id
