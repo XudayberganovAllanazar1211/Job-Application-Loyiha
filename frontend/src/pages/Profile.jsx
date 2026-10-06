@@ -279,17 +279,19 @@ export default function Profile() {
 
                     <section className="profile-hero card">
                         <div className="profile-identity">
-                            <div className="profile-avatar-wrap">
+                            <label className="profile-avatar-wrap" title="Profil rasmini o'zgartirish">
                                 <div className="profile-avatar">
                                     {avatarUrl ? <img src={(import.meta.env.VITE_API_URL || "http://localhost:5000") + avatarUrl} alt="Profil rasmi" /> : initials}
+                                    {isEditing && (
+                                        <span className="profile-avatar-edit" aria-label="Profil rasmini yuklash">
+                                            {avatarLoading ? "..." : "✎"}
+                                        </span>
+                                    )}
                                 </div>
                                 {isEditing && (
-                                    <label className="profile-avatar-upload">
-                                        {avatarLoading ? "..." : "Rasm"}
-                                        <input type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadAvatar} disabled={avatarLoading} />
-                                    </label>
+                                    <input type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadAvatar} disabled={avatarLoading} />
                                 )}
-                            </div>
+                            </label>
                             <div className="profile-identity-text">
                                 <div className="profile-name-row">
                                     <h2>{fullName}</h2>
