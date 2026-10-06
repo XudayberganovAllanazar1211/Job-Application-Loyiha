@@ -248,10 +248,10 @@ export default function Profile() {
 
         const diffDays = Math.max(1, Math.ceil(Math.abs(new Date() - createdDate) / (1000 * 60 * 60 * 24)))
 
-        if (diffDays < 30) return `\${diffDays} kun`
+        if (diffDays < 30) return `${diffDays} kun`
         const diffMonths = Math.floor(diffDays / 30)
-        if (diffMonths < 12) return `\${diffMonths} oy`
-        return `\${(diffDays / 365).toFixed(1)} yil`
+        if (diffMonths < 12) return `${diffMonths} oy`
+        return `${(diffDays / 365).toFixed(1)} yil`
     }
 
     const fullName = `${form.first_name} ${form.last_name}`.trim() || form.username || "Foydalanuvchi"
