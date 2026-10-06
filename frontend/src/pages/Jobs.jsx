@@ -282,10 +282,15 @@ export default function Jobs() {
         }
     }
 
-    const submitOffer = async (jobId) => {
-        const result = await api("/offer", { method: "POST", body: { job_id: jobId, amount: Number(offerAmount), message: offerMessage }, token })
-        if (result?.status === 201 || result?.msg === "Taklif yuborildi.") {
-        pe("ok")
+    const handleConfirmFinish = async (jobId, choice) => {
+        const result = await api("/confirm_finish", {
+            method: "POST",
+            body: { job_id: jobId, choice },
+            token
+        })
+
+        if (result?.msg === "ok") {
+            setNoticeType("ok")
             setNotice("Ish muvaffaqiyatli yakunlandi va yopildi")
             setAdminContactJobId(null)
             setActiveConfirmJobId(null)
@@ -513,34 +518,31 @@ export default function Jobs() {
                                 </div>
                             )}
 
-                            {offerJobId === job.id && canBid && (
-                                <div className="offer-panel">
-                                    <div>
-                                        <strong>O‘z taklifingizni yuboring</strong>
-                                        <p className="muted">Ish egasiga narx va qisqa rejangizni yuboring.</p>
-                                    </div>
-                                    <div className="offer-form-grid">
-                                        <input
-                                            className="input"
-                                            type="number"
-                                            min="1"
-                                            placeholder="Narx (UZS)"
-                                            value={offerAmount}
-                                            onChange={(e) => setOfferAmount(e.target.value)}
-                                        />
-                                        <input
-                                            className="input"
-                                            maxLength={1500}
-                                            placeholder="Masalan: 2 kunda topshiraman"
-                                            value={offerMessage}
-                                            onChange={(e) => setOfferMessage(e.target.value)}
-                                        />
-                                    </div>
+                            {reportJobId === job.id && !isMyJob && (
+                                <div className="report-panel">
+                                    <strong>Shikoyat yuborish</strong>
+                                    <select
+                                        className="select"
+                                        value={reportReason}
+                                        onChange={(e) => setReportReason(e.target.value)}
+                                    >
+                                        <option value="">Sababni tanlang</option>
+                                        <option value="Firibgarlik yoki aldov">Firibgarlik yoki aldov</option>
+                                        <option value="Noto‘g‘ri yoki yolg‘on e’lon">Noto‘g‘ri yoki yolg‘on e’lon</option>
+                                        <option value="Haqorat yoki nomaqbul xatti-harakat">Haqorat yoki nomaqbul xatti-harakat</option>
+                                        <option value="Spam">Spam</option>
+                                        <option value="Boshqa">Boshqa</option>
+                                    </select>
+                                    <textarea
+                                        className="textarea"
+                                        maxLength={2000}
+                                        placeholder="Qo‘shimcha tafsilot..."
+                                        value={reportDetails}
+                                        onChange={(e) => setReportDetails(e.target.value)}
+                                    />
                                     <div className="actions">
                                         <button
                                             type="button"
-                                            className="btn btn-primary"
-                              ="button"
                                             className="btn btn-danger"
                                             disabled={!reportReason}
                                             onClick={() => submitReport(job)}
@@ -566,18 +568,9 @@ export default function Jobs() {
                                     </button>
                                 )}
 
-                                {/* Faol ishlar endi taklif orqali qabul qilinadi. */}
-                                {canBid && (
-                                    <button
-                                        type="button"
-                                        className="btn btn-secondary"
-                                        onClick={() => {
-                                            setOfferJobId(offerJobId === job.id ? null : job.id)
-                                            setOfferAmount(String(job.price || ""))
-                                            setOfferMessage("")
-                                        }}
-                                    >
-                                        💼 Taklif yuborish
+                                {canAccept && (
+                                    <button className="btn btn-primary" onClick={() => acceptJob(job)}>
+                                        Ishni qabul qilish
                                     </button>
                                 )}
                                 {isMyJob && status === "active" && (
@@ -627,8 +620,4 @@ export default function Jobs() {
             </div>
         </AppLayout>
     )
-}                                {canAccept && (
-                                    <button className="btn btn-primary" onClick={() => acceptJob(job)}>
-                                        Ishni qabul qilish
-                                    </button>
-                                )}
+}
