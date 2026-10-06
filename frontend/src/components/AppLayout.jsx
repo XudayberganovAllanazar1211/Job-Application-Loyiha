@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react"
 import { NavLink, useNavigate } from "react-router-dom"
 
 const navItems = [
@@ -9,6 +10,7 @@ const navItems = [
 
 export default function AppLayout({ title, subtitle, children }) {
     const navigate = useNavigate()
+    const [theme, setTheme] = useState(() => localStorage.getItem("finjob-theme") || "light")
     const user = JSON.parse(localStorage.getItem("user") || "null")
     const isAdmin = user?.role === "admin"
     const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(" ") || user?.username || "Mehmon"
@@ -16,6 +18,11 @@ export default function AppLayout({ title, subtitle, children }) {
     const avatarSrc = user?.avatar_url
         ? (import.meta.env.VITE_API_URL || "http://localhost:5000") + user.avatar_url
         : ""
+
+    useEffect(() => {
+        document.documentElement.dataset.theme = theme
+        localStorage.setItem("finjob-theme", theme)
+    }, [theme])
 
     const logout = () => {
         localStorage.removeItem("token")
@@ -76,9 +83,15 @@ export default function AppLayout({ title, subtitle, children }) {
                         <h1 className="page-title">{title}</h1>
                         <p className="page-subtitle">{subtitle}</p>
                     </div>
-                    <button className="btn btn-secondary topbar-profile-btn" onClick={() => navigate("/profile")} aria-label="Profilni ochish">
+                    <div className="topbar-actions">
+                        <button className="theme-toggle" type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label={theme === "dark" ? "Yorug‘ rejimga o‘tish" : "Qorong‘i rejimga o‘tish"}>
+                            <span>{theme === "dark" ? "☀" : "☾"}</span>
+                            <span>{theme === "dark" ? "Yorug‘" : "Qorong‘i"}</span>
+                        </button>
+                        <button className="btn btn-secondary topbar-profile-btn" onClick={() => navigate("/profile")} aria-label="Profilni ochish">
                         <span className="topbar-avatar">{avatarSrc ? <img src={avatarSrc} alt="" /> : initials}</span>
-                    </button>
+                        </button>
+                    </div>
                 </div>
                 {children}
             </main>
