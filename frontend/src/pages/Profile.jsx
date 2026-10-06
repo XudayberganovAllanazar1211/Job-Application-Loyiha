@@ -470,13 +470,13 @@ export default function Profile() {
                                     <div className="profile-skill-add">
                                         <button
                                             type="button"
-                                            className="service-select-button"
+                                            className="btn btn-secondary"
                                             onClick={() => {
                                                 setShowServicePicker((current) => !current)
                                                 setServiceSearch("")
                                             }}
                                         >
-                                            {showServicePicker ? "Soha tanlashni yopish" : "Soha tanlang"}
+                                            {showServicePicker ? "Yopish" : "Qo'shish"}
                                         </button>
 
                                         {showServicePicker && (
