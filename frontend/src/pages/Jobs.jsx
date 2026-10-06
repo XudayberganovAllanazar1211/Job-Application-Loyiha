@@ -99,7 +99,7 @@ export default function Jobs() {
     return (
         <AppLayout
             title="Jobs"
-            subtitle="Tizimdagi barcha faol e'lonlar va siz qabul qilgan ishlar."
+            subtitle="Tizimdagi faol e'lonlar va siz yaratgan yoki qabul qilgan ishlar."
         >
             <div className="card" style={{ marginBottom: 18 }}>
                 <div className="topbar" style={{ marginBottom: 0 }}>
