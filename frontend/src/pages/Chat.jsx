@@ -10,7 +10,7 @@ export default function Chat() {
     const token = localStorage.getItem("token") || ""
     const me = JSON.parse(localStorage.getItem("user") || "null")
     const [job, setJob] = useState(location.state?.job || null)
-    const [messages, setMessages] = useState([])
+    const [messages, setXabarlar] = useState([])
     const [text, setText] = useState("")
     const [receiverId, setReceiverId] = useState(
         String(location.state?.job?.worker_id || location.state?.job?.user_id || "")
@@ -18,11 +18,11 @@ export default function Chat() {
     const [notice, setNotice] = useState("")
     const bottomRef = useRef(null)
 
-    const loadMessages = async () => {
+    const loadXabarlar = async () => {
         // Skip polling if the browser tab is hidden to save bandwidth and battery
         if (document.hidden) return
         const result = await api(`/messages/${jobId}`, { token })
-        if (Array.isArray(result)) setMessages(result)
+        if (Array.isArray(result)) setXabarlar(result)
     }
 
     const loadJob = async () => {
@@ -37,16 +37,16 @@ export default function Chat() {
     }
 
     useEffect(() => {
-        loadMessages()
+        loadXabarlar()
         if (!location.state?.job) {
             loadJob()
         }
 
         // Smart polling: poll every 3 seconds, and immediately refresh when user returns to tab
-        const interval = setInterval(loadMessages, 3000)
+        const interval = setInterval(loadXabarlar, 3000)
         const handleVisibilityChange = () => {
             if (!document.hidden) {
-                loadMessages()
+                loadXabarlar()
             }
         }
         document.addEventListener("visibilitychange", handleVisibilityChange)
@@ -89,7 +89,7 @@ export default function Chat() {
         if (result?.msg === "ok" || result?.msg === "sent") {
             setText("")
             const res = await api(`/messages/${jobId}`, { token })
-            if (Array.isArray(res)) setMessages(res)
+            if (Array.isArray(res)) setXabarlar(res)
         } else {
             setNotice(result?.msg || "Xabar yuborilmadi")
         }
@@ -97,8 +97,8 @@ export default function Chat() {
 
     return (
         <AppLayout
-            title="Chat"
-            subtitle={`Job #${jobId} bo‘yicha suhbat`}
+            title="Suhbat"
+            subtitle={`Ish #${jobId} bo‘yicha suhbat`}
         >
             {notice && <div className="notice warn" style={{ marginBottom: 16 }}>{notice}</div>}
 
@@ -106,13 +106,13 @@ export default function Chat() {
                 <section className="card chat-wrap" style={{ width: "100%", maxWidth: "100%" }}>
                     <div className="topbar" style={{ marginBottom: 0 }}>
                         <div className="page-head">
-                            <h2 style={{ margin: 0 }}>Messages</h2>
+                            <h2 style={{ margin: 0 }}>Xabarlar</h2>
                             <p className="muted" style={{ margin: 0 }}>
                                 {job?.title || `Job #${jobId}`}
                             </p>
                         </div>
                         <div className="actions">
-                            <button className="btn btn-secondary" onClick={() => navigate(-1)}>Back</button>
+                            <button className="btn btn-secondary" onClick={() => navigate(-1)}>Orqaga</button>
                         </div>
                     </div>
 
@@ -124,7 +124,7 @@ export default function Chat() {
                             return (
                                 <div key={index} className={`message ${mine ? "me" : "them"}`}>
                                     <div className="message-meta">
-                                        {mine ? "You" : (message.sender_name || "Foydalanuvchi")} • {message.sent_at}
+                                        {mine ? "Siz" : (message.sender_name || "Foydalanuvchi")} • {message.sent_at}
                                     </div>
                                     <div>{message.message}</div>
                                 </div>
@@ -138,11 +138,11 @@ export default function Chat() {
                         <input
                             className="input"
                             style={{ flex: 1 }}
-                            placeholder="Write a message..."
+                            placeholder="Xabar yozing..."
                             value={text}
                             onChange={(e) => setText(e.target.value)}
                         />
-                        <button className="btn btn-primary">Send</button>
+                        <button className="btn btn-primary">Yuborish</button>
                     </form>
                 </section>
             </div>
