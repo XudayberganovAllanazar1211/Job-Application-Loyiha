@@ -129,9 +129,11 @@ export default function Jobs() {
             <div className="job-grid">
                 {filtered.map((job) => {
                     const workerName = `${job.worker_first || ""} ${job.worker_last || ""}`.trim() || job.worker_username;
-                    const isMyJob = String(job.user_id) === String(user?.id); // Men yaratgan ishmi?
-                    const isIAccepted = String(job.worker_id) === String(user?.id); // Men qabul qilgan ishmi?
-                    const canAccept = String(job.status || "").trim().toLowerCase() === "active" && !isMyJob && !job.worker_id;
+                    const status = String(job.status || "").trim().toLowerCase()
+                    const isMyJob = String(job.user_id) === String(user?.id)
+                    const isIAccepted = String(job.worker_id) === String(user?.id)
+                    const isParticipant = isMyJob || isIAccepted
+                    const canAccept = status === "active" && !isMyJob && job.worker_id == null
 
                     return (
                         <article className="card job-card" key={job.id}>
@@ -145,7 +147,7 @@ export default function Jobs() {
                                     background: job.status === "pending_finish" ? "rgba(245, 158, 11, 0.2)" : "rgba(255,255,255,0.05)",
                                     color: job.status === "pending_finish" ? "#f59e0b" : "#fff"
                                 }}>
-                                    Status: {job.status === "pending_finish" ? "Tasdiqlanish kutilmoqda" : job.status}
+                                    Status: {status === "pending_finish" ? "Tasdiqlanish kutilmoqda" : status}
                                 </span>
 
                                 {isMyJob && (
@@ -186,12 +188,16 @@ export default function Jobs() {
                             )}
 
                             <div className="actions">
-                                <button className="btn btn-secondary" onClick={() => navigate(`/chat/${job.id}`, { state: { job } })}>
-                                    Chat
-                                </button>
-                                <button className="btn btn-secondary" onClick={() => navigate(`/rating/${job.id}`, { state: { job } })}>
-                                    Rating
-                                </button>
+                                {isParticipant && (
+                                    <button className="btn btn-secondary" onClick={() => navigate(`/chat/${job.id}`, { state: { job } })}>
+                                        Chat
+                                    </button>
+                                )}
+                                {isParticipant && status === "finished" && (
+                                    <button className="btn btn-secondary" onClick={() => navigate(`/rating/${job.id}`, { state: { job } })}>
+                                        Rating
+                                    </button>
+                                )}
 
                                 {/* --- ACCEPT TUGMASI (Mening ishim bo'lmasa va bo'sh bo'lsa hamma ko'ra oladi) --- */}
                                 {canAccept && (
@@ -201,21 +207,21 @@ export default function Jobs() {
                                 )}
 
                                 {/* --- SIZ QABUL QILGANSIS CHIP --- */}
-                                {isIAccepted && job.status === "accepted" && (
+                                {isIAccepted && status === "accepted" && (
                                     <span className="chip" style={{ background: "rgba(34, 197, 94, 0.2)", color: "#4ade80" }}>
                                         ✅ Siz qabul qilgansiz
                                     </span>
                                 )}
 
                                 {/* --- FINISH TUGMASI (Ish egasi uchun) --- */}
-                                {isMyJob && job.status === "accepted" && (
+                                {isMyJob && status === "accepted" && (
                                     <button className="btn btn-success" onClick={() => finishJobSeeker(job)}>
                                         Finish
                                     </button>
                                 )}
 
                                 {/* --- FINISH TUGMASI (Bajaruvchi uchun) --- */}
-                                {isIAccepted && job.status === "pending_finish" && activeConfirmJobId !== job.id && (
+                                {isIAccepted && status === "pending_finish" && activeConfirmJobId !== job.id && (
                                     <button className="btn btn-success" style={{ background: "#f59e0b" }} onClick={() => openConfirmPanel(job.id)}>
                                         Finish
                                     </button>
