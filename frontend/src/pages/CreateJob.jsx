@@ -183,15 +183,17 @@ export default function CreateJob() {
                             >
                                 {showCategories ? "Soha tanlashni yopish" : "Soha tanlang"}
                             </button>
-                            <div className="service-search">
-                                <input
-                                    className="input"
-                                    type="search"
-                                    placeholder="Xizmatni qidiring..."
-                                    value={serviceSearch}
-                                    onChange={(e) => setServiceSearch(e.target.value)}
-                                />
-                            </div>
+                            {showCategories && (
+                                <div className="service-search">
+                                    <input
+                                        className="input"
+                                        type="search"
+                                        placeholder="Xizmatni qidiring..."
+                                        value={serviceSearch}
+                                        onChange={(e) => setServiceSearch(e.target.value)}
+                                    />
+                                </div>
+                            )}
                             <div className="service-tree">
                                 {!showCategories && !serviceSearch.trim() ? (
                                     <div className="service-category-placeholder">
