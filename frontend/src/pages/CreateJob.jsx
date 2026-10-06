@@ -177,7 +177,7 @@ export default function CreateJob() {
                                 type="button"
                                 className="service-select-button"
                                 onClick={() => {
-                                    setShowCategories(true)
+                                    setShowCategories((current) => !current)
                                     setServiceSearch("")
                                 }}
                             >
