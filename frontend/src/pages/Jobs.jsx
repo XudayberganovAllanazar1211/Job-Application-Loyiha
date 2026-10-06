@@ -38,12 +38,18 @@ export default function Jobs() {
     const [serviceSearch, setServiceSearch] = useState("")
     const [selectedServices, setSelectedServices] = useState([])
     const [showServiceMenu, setShowServiceMenu] = useState(false)
+    const [showFilters, setShowFilters] = useState(false)
+    const [minPrice, setMinPrice] = useState("")
+    const [maxPrice, setMaxPrice] = useState("")
+    const [timeFilter, setTimeFilter] = useState("all")
+    const [locationFilter, setLocationFilter] = useState("")
     const [notice, setNotice] = useState("")
     const [noticeType, setNoticeType] = useState("ok")
     const token = localStorage.getItem("token") || ""
     const user = JSON.parse(localStorage.getItem("user") || "null")
     const navigate = useNavigate()
     const serviceSearchRef = useRef(null)
+    const filterRef = useRef(null)
 
     // Bajaruvchi uchun tasdiqlash so'rovi oynasini ochish/yopish holati
     const [activeConfirmJobId, setActiveConfirmJobId] = useState(null)
@@ -98,6 +104,11 @@ export default function Jobs() {
 
     const filtered = useMemo(() => {
         const query = search.trim().toLowerCase()
+        const locationQuery = locationFilter.trim().toLowerCase()
+        const min = minPrice === "" ? null : Number(minPrice)
+        const max = maxPrice === "" ? null : Number(maxPrice)
+        const now = Date.now()
+        const timeLimits = { today: 1, three_days: 3, week: 7, month: 30 }
 
         return jobs.filter((job) => {
             const text = `${job.title || ""} ${job.description || ""} ${job.location || ""}`.toLowerCase()
@@ -106,20 +117,25 @@ export default function Jobs() {
                 .map((name) => name.trim())
                 .filter(Boolean)
 
+            const price = Number(job.price)
+            const priceMatches = (min === null || (!Number.isNaN(price) && price >= min)) && (max === null || (!Number.isNaN(price) && price <= max))
+            const locationMatches = !locationQuery || String(job.location || "").toLowerCase().includes(locationQuery)
+            const days = timeLimits[timeFilter]
+            const created = new Date(String(job.created_at || "").replace(" ", "T")).getTime()
+            const timeMatches = !days || (!Number.isNaN(created) && now - created <= days * 24 * 60 * 60 * 1000)
             const textMatches = !query || text.includes(query)
             const serviceMatches = !selectedServices.length || selectedServices.some((service) => jobServices.includes(service))
 
-            return textMatches && serviceMatches
+            return textMatches && serviceMatches && priceMatches && timeMatches && locationMatches
         })
-    }, [jobs, search, selectedServices, serviceMap])
+    }, [jobs, search, selectedServices, serviceMap, minPrice, maxPrice, timeFilter, locationFilter])
 
     useEffect(() => {
-        if (!showServiceMenu) return
+        if (!showServiceMenu && !showFilters) return
 
         const handleOutsideClick = (event) => {
-            if (serviceSearchRef.current && !serviceSearchRef.current.contains(event.target)) {
-                setShowServiceMenu(false)
-            }
+            if (showServiceMenu && serviceSearchRef.current && !serviceSearchRef.current.contains(event.target)) setShowServiceMenu(false)
+            if (showFilters && filterRef.current && !filterRef.current.contains(event.target)) setShowFilters(false)
         }
 
         document.addEventListener("mousedown", handleOutsideClick)
@@ -129,7 +145,7 @@ export default function Jobs() {
             document.removeEventListener("mousedown", handleOutsideClick)
             document.removeEventListener("touchstart", handleOutsideClick)
         }
-    }, [showServiceMenu])
+    }, [showServiceMenu, showFilters])
 
     const addServiceFilter = (service) => {
         setSelectedServices([...selectedServices, service])
@@ -139,6 +155,17 @@ export default function Jobs() {
 
     const removeServiceFilter = (service) => {
         setSelectedServices(selectedServices.filter((item) => item !== service))
+    }
+
+    const clearAllFilters = () => {
+        setSelectedServices([])
+        setServiceSearch("")
+        setMinPrice("")
+        setMaxPrice("")
+        setTimeFilter("all")
+        setLocationFilter("")
+        setShowServiceMenu(false)
+        setShowFilters(false)
     }
 
     const clearServiceFilters = () => {
@@ -303,7 +330,7 @@ export default function Jobs() {
                             )}
                         </div>
 
-                        <button className="btn btn-secondary" onClick={load}>Yangilash</button>
+                        <div className="jobs-filter-wrap" ref={filterRef}>\n                            <button className="btn btn-secondary" type="button" onClick={() => setShowFilters(!showFilters)}>Filtrlash</button>\n                            {showFilters && (\n                                <div className="jobs-filter-panel">\n                                    <div className="jobs-filter-title">Ishlarni filtrlash</div>\n                                    <div className="jobs-filter-grid">\n                                        <label><span>Minimal narx</span><input className="input" type="number" min="0" placeholder="Masalan: 100000" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} /></label>\n                                        <label><span>Maksimal narx</span><input className="input" type="number" min="0" placeholder="Masalan: 500000" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} /></label>\n                                        <label><span>Joylashuv</span><input className="input" placeholder="Masalan: Toshkent" value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)} /></label>\n                                        <label><span>Vaqt</span><select className="input" value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}><option value="all">Barchasi</option><option value="today">Bugun</option><option value="three_days">Oxirgi 3 kun</option><option value="week">Oxirgi hafta</option><option value="month">Oxirgi oy</option></select></label>\n                                    </div>\n                                    <button className="btn btn-secondary" type="button" onClick={clearAllFilters}>Filtrlarni tozalash</button>\n                                </div>\n                            )}\n                        </div>\n\n                        <button className="btn btn-secondary" onClick={load}>Yangilash</button>
                         <button className="btn btn-primary" onClick={() => navigate("/create")}>
                             Ish yaratish
                         </button>
