@@ -339,3 +339,27 @@ input[type=range]{accent-color:#2563eb}
 .auth-legal-links{display:flex;flex-wrap:wrap;gap:12px;margin-top:14px;font-size:12px}
 .auth-legal-links a{color:#94a3b8;font-weight:600}
 .auth-legal-links a:hover{color:#2563eb}
+
+.admin-stat-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.admin-stat{padding:18px;display:flex;flex-direction:column;gap:8px}
+.admin-stat span{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:#94a3b8;font-weight:800}
+.admin-stat strong{font-size:27px;color:#172033}
+.admin-panel{padding:0;overflow:hidden}
+.admin-tabs{display:flex;gap:4px;padding:10px;border-bottom:1px solid #edf0f5;overflow:auto}
+.admin-tab{border:0;background:transparent;padding:10px 13px;border-radius:10px;color:#64748b;font-weight:700;white-space:nowrap;cursor:pointer}
+.admin-tab:hover{background:#f8fafc;color:#334155}
+.admin-tab.active{background:#eff6ff;color:#2563eb}
+.admin-table-wrap{width:100%;overflow:auto}
+.admin-table{width:100%;border-collapse:collapse;min-width:780px}
+.admin-table th{padding:12px 14px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:#94a3b8;background:#fafbfc;border-bottom:1px solid #edf0f5}
+.admin-table td{padding:13px 14px;border-bottom:1px solid #f0f2f6;color:#475569;font-size:13px;vertical-align:top}
+.admin-table tbody tr:hover{background:#fbfdff}
+.admin-table td strong{display:block;color:#172033}
+.admin-table td small{display:block;color:#94a3b8;margin-top:3px}
+.admin-role,.user-role,.admin-status{display:inline-flex;padding:4px 8px;border-radius:999px;font-size:10px;font-weight:800}
+.admin-role{background:#eef2ff;color:#4f46e5}
+.user-role{background:#f1f5f9;color:#64748b}
+.admin-status{background:#f8fafc;color:#475569}
+.admin-nav-link{margin-top:4px}
+@media(max-width:1000px){.admin-stat-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:600px){.admin-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-stat{padding:14px}.admin-stat strong{font-size:23px}}
