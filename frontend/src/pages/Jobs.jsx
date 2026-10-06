@@ -506,7 +506,8 @@ export default function Jobs() {
                     const isIAccepted = String(job.worker_id) === String(user?.id)
                     const isParticipant = isMyJob || isIAccepted
                     const canAccept = status === "active" && !isMyJob && job.worker_id == null
-                    const canBid = status === "active" && !isMyJob && job.worker_id == null
+                    const bidAvailable = status === "active" && !isMyJob && (job.worker_id == null || job.worker_id === "" || job.worker_id === false)
+                    const canBid = !isMyJob
                     const statusLabel = {
                         active: "Faol",
                         accepted: "Qabul qilingan",
@@ -562,7 +563,7 @@ export default function Jobs() {
                                 </div>
                             )}
 
-                            {offerJobId === job.id && canBid && (
+                            {offerJobId === job.id && bidAvailable && (
                                 <div className="offer-panel">
                                     <div>
                                         <strong>O‘z taklifingizni yuboring</strong>
@@ -686,8 +687,19 @@ export default function Jobs() {
                                     </button>
                                 )}
                                 {canBid && (
-                                    <button type="button" className="btn btn-secondary" onClick={() => { setOfferJobId(offerJobId === job.id ? null : job.id); setOfferAmount(String(job.price || "")); setOfferMessage("") }}>
-                                        💼 Taklif yuborish
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        disabled={!bidAvailable}
+                                        title={bidAvailable ? "Ish egasiga narx taklif qiling" : "Bu ish uchun taklif yuborish yopiq"}
+                                        onClick={() => {
+                                            if (!bidAvailable) return
+                                            setOfferJobId(offerJobId === job.id ? null : job.id)
+                                            setOfferAmount(String(job.price || ""))
+                                            setOfferMessage("")
+                                        }}
+                                    >
+                                        💼 {bidAvailable ? "Taklif yuborish" : "Taklif yopiq"}
                                     </button>
                                 )}
                                 {isMyJob && status === "active" && (
