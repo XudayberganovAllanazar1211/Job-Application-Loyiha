@@ -56,6 +56,11 @@ export default function Jobs() {
     const [activeConfirmJobId, setActiveConfirmJobId] = useState(null)
     // Bajaruvchi "Yo'q" tugmasini bossa, ekranda chiqadigan admin xabari
     const [adminContactJobId, setAdminContactJobId] = useState(null)
+    const [offerJobId, setOfferJobId] = useState(null)
+    const [offerAmount, setOfferAmount] = useState("")
+    const [offerMessage, setOfferMessage] = useState("")
+    const [offersJobId, setOffersJobId] = useState(null)
+    const [jobOffers, setJobOffers] = useState([])
 
     const serviceMap = useMemo(
         () => Object.fromEntries(services.map((service) => [String(service.id), service.name])),
@@ -265,6 +270,44 @@ export default function Jobs() {
     }
 
     // Tasdiqlash natijasini yuborish (Ha yoki Yo'q)
+    const submitOffer = async (jobId) => {
+        const result = await api("/offer", { method: "POST", body: { job_id: jobId, amount: Number(offerAmount), message: offerMessage }, token })
+        if (result?.status === 201 || result?.msg === "Taklif yuborildi.") {
+            setNoticeType("ok")
+            setNotice("Taklif muvaffaqiyatli yuborildi.")
+            setOfferJobId(null)
+            setOfferAmount("")
+            setOfferMessage("")
+        } else {
+            setNoticeType("warn")
+            setNotice(result?.msg || "Taklif yuborilmadi.")
+        }
+    }
+
+    const loadOffers = async (jobId) => {
+        const result = await api("/offers/"+jobId, { token })
+        if (Array.isArray(result)) {
+            setJobOffers(result)
+            setOffersJobId(jobId)
+        } else {
+            setNoticeType("warn")
+            setNotice(result?.msg || "Takliflarni yuklab bo‘lmadi.")
+        }
+    }
+
+    const acceptOffer = async (offerId, jobId) => {
+        const result = await api("/offer/"+offerId+"/accept", { method: "POST", token })
+        if (result?.msg === "ok") {
+            setNoticeType("ok")
+            setNotice("Taklif qabul qilindi. Bajaruvchi biriktirildi.")
+            setOffersJobId(null)
+            load()
+        } else {
+            setNoticeType("warn")
+            setNotice(result?.msg || "Taklifni qabul qilib bo‘lmadi.")
+        }
+    }
+
     const handleConfirmFinish = async (jobId, choice) => {
         const result = await api("/confirm_finish", {
             method: "POST",
@@ -517,6 +560,16 @@ export default function Jobs() {
                                 {canAccept && (
                                     <button className="btn btn-primary" onClick={() => acceptJob(job)}>
                                         Ishni qabul qilish
+                                    </button>
+                                )}
+                                {canAccept && (
+                                    <button className="btn btn-secondary" onClick={() => { setOfferJobId(offerJobId === job.id ? null : job.id); setOfferAmount(String(job.price || "")) }}>
+                                        💼 Taklif yuborish
+                                    </button>
+                                )}
+                                {isMyJob && status === "active" && (
+                                    <button className="btn btn-secondary" onClick={() => loadOffers(job.id)}>
+                                        📩 Takliflarni ko‘rish
                                     </button>
                                 )}
 
