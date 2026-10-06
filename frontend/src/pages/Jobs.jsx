@@ -506,6 +506,7 @@ export default function Jobs() {
                     const isIAccepted = String(job.worker_id) === String(user?.id)
                     const isParticipant = isMyJob || isIAccepted
                     const canAccept = status === "active" && !isMyJob && job.worker_id == null
+                    const canBid = status === "active" && !isMyJob && job.worker_id == null
                     const statusLabel = {
                         active: "Faol",
                         accepted: "Qabul qilingan",
