@@ -171,6 +171,41 @@ export default function CreateJob() {
                         </button>
                     </form>
                 </section>
+
+                <aside className="card job-tips-card">
+                    <h3>Tips</h3>
+                    <p className="muted">Yaxshi job e’lonini yaratish uchun foydali maslahatlar.</p>
+                    <div className="tips-list">
+                        <div className="tip-item">
+                            <strong>🎯 Aniq sarlavha yozing</strong>
+                            <span>Job title qisqa va tushunarli bo‘lsin. Masalan: “React landing page yaratish”.</span>
+                        </div>
+                        <div className="tip-item">
+                            <strong>📝 Vazifani batafsil tushuntiring</strong>
+                            <span>Nima kerakligini, qanday natija kutayotganingizni va muhim talablarni yozing.</span>
+                        </div>
+                        <div className="tip-item">
+                            <strong>🛠️ To‘g‘ri service tanlang</strong>
+                            <span>Jobingizga eng mos xizmatni tanlash kerakli mutaxassislarni topishni osonlashtiradi.</span>
+                        </div>
+                        <div className="tip-item">
+                            <strong>💰 Realistik narx belgilang</strong>
+                            <span>Ish hajmi va murakkabligiga mos narx qo‘yish ko‘proq yaxshi takliflarni jalb qiladi.</span>
+                        </div>
+                        <div className="tip-item">
+                            <strong>📍 Location’ni ko‘rsating</strong>
+                            <span>Offline ish bo‘lsa, ish bajariladigan joyni aniq yozing.</span>
+                        </div>
+                        <div className="tip-item">
+                            <strong>⏱️ Muddatni ayting</strong>
+                            <span>Kerak bo‘lsa, description ichida ish qachongacha tugashi kerakligini ko‘rsating.</span>
+                        </div>
+                        <div className="tip-item">
+                            <strong>💬 Muhim tafsilotlarni yozing</strong>
+                            <span>Kerakli skill, texnologiya, fayl yoki boshqa shartlarni oldindan belgilang.</span>
+                        </div>
+                    </div>
+                </aside>
             </div>
         </AppLayout>
     )
