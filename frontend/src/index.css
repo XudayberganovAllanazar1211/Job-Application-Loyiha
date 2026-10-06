@@ -530,3 +530,6 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .jobs-filter-panel>.btn{width:100%}
 @media(max-width:850px){.jobs-filter-wrap{width:100%}.jobs-filter-wrap>.btn{width:100%}.jobs-filter-panel{left:0;right:auto;width:100%;max-width:none}}
 @media(max-width:520px){.jobs-filter-grid{grid-template-columns:1fr}}
+
+.job-worker-chip{background:#f8fafc!important;color:#64748b!important;border-color:#e2e8f0!important}
+.job-accepted-chip{background:#ecfdf5!important;color:#15803d!important;border-color:#bbf7d0!important}
