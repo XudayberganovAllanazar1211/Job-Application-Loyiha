@@ -247,7 +247,7 @@ export default function CreateJob() {
 
                     {notice && <div className="notice ok" style={{ marginBottom: 14 }}>{notice}</div>}
 
-                    <form className="form" onJoylashtirish={submit}>
+                    <form className="form" onSubmit={submit}>
                         <div className="service-picker">
                             <div className="service-picker-title">
                                 <div className="selected-services">
