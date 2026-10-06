@@ -8,53 +8,31 @@ export default function PrivacyPolicy() {
                     <Link className="legal-brand" to="/">FinJob</Link>
                     <Link className="link" to="/">Bosh sahifaga qaytish</Link>
                 </div>
-
                 <article className="legal-card">
                     <span className="legal-eyebrow">FINJOB / MAXFIYLIK</span>
                     <h1>Maxfiylik siyosati</h1>
                     <p className="legal-updated">Kuchga kirish sanasi: 6-oktabr, 2026</p>
-
-                    <p>Ushbu Maxfiylik siyosati FinJob platformasidan foydalanishda shaxsiy ma'lumotlaringiz qanday yig'ilishi, ishlatilishi, saqlanishi va himoyalanishini tushuntiradi. FinJob ushbu siyosatni O'zbekiston Respublikasining shaxsiy ma'lumotlar to'g'risidagi amaldagi talablarini hisobga olgan holda yuritadi.</p>
-
-                    <h2>1. Qanday ma'lumotlar yig'iladi?</h2>
-                    <p>Hisob yaratishda ism, familiya, tug'ilgan sana, foydalanuvchi nomi, elektron pochta va parol bilan bog'liq ma'lumotlar olinadi. Parol ochiq ko'rinishda saqlanmaydi; platforma uni xavfsiz hash ko'rinishida saqlaydi.</p>
-                    <p>Profil to'ldirilganda o‘zingiz haqingizdagi ma’lumot, ko‘nikmalar va profil rasmi kabi qo'shimcha ma'lumotlar saqlanishi mumkin.</p>
-                    <p>Ish yaratishda xizmat tanlovi, sarlavha, tavsif, narx, valyuta va manzil saqlanadi. Suhbat va baholash funksiyalaridan foydalanganda yuborilgan xabarlar, baholar va izohlar ham tegishli ish bilan bog'lanadi.</p>
-
-                    <h2>2. Joylashuv ma'lumotlari</h2>
-                    <p>FinJob avtomatik joylashuv funksiyasini faqat siz “Joylashuvimni aniqlash” tugmasini bosganingizda ishga tushiradi. Brauzer qurilma joylashuvini olish uchun ruxsat so'raydi.</p>
-                    <p>Olingan koordinatalar manzil matniga aylantiriladi va ish manzil maydoniga joylashtiriladi. Siz uni yuborishdan oldin o'zgartirishingiz yoki o'zingiz kiritishingiz mumkin.</p>
-                    <p>Manzilni aniqlash jarayonida koordinatalar OpenStreetMap Nominatim geokodlash xizmatiga yuborilishi mumkin. Ushbu xizmatning o'z maxfiylik va foydalanish qoidalari mavjud.</p>
-
-                    <h2>3. Ma'lumotlardan nima uchun foydalanamiz?</h2>
-                    <p>Ma'lumotlar hisobni yaratish va boshqarish, elektron pochta tasdiqlash, ishlarni joylashtirish va topish, foydalanuvchilar o'rtasida aloqa, baholash va platforma xavfsizligini ta'minlash uchun ishlatiladi.</p>
-
-                    <h2>4. Elektron pochta va uchinchi tomon xizmatlari</h2>
-                    <p>Ro'yxatdan o'tish kodi siz ko'rsatgan elektron pochta manziliga SMTP orqali yuboriladi. Elektron pochta manzilingiz va tasdiqlash xabari elektron pochta yetkazib berish xizmatidan foydalanish uchun tegishli elektron pochta provayderiga uzatilishi mumkin.</p>
-                    <p>FinJob foydalanuvchi ma'lumotlarini sotmaydi. Ma'lumotlar faqat platforma ishlashi uchun zarur bo'lgan xizmatlar yoki qonunchilik talab qilgan holatlarda uzatiladi.</p>
-
+                    <p>FinJob sizning shaxsiy ma’lumotlaringizni faqat platformani ishlatish, xavfsizlikni ta’minlash va siz so‘ragan xizmatlarni ko‘rsatish uchun qayta ishlaydi. Biz ma’lumotlaringizni sotmaymiz.</p>
+                    <h2>1. Biz nimalarni saqlaymiz?</h2>
+                    <p>Ro‘yxatdan o‘tishda ism, familiya, tug‘ilgan sana, foydalanuvchi nomi va elektron pochta manzili olinadi. Parol ochiq ko‘rinishda emas, himoyalangan hash ko‘rinishida saqlanadi.</p>
+                    <p>Profilingizda ko‘nikmalar, profil rasmi va o‘zingiz kiritgan boshqa ma’lumotlar bo‘lishi mumkin. Ish e’lonlarida xizmat, sarlavha, tavsif, narx, valyuta va manzil; chat va reytinglarda esa tegishli xabar, baho va izohlar saqlanadi.</p>
+                    <h2>2. Joylashuv qanday ishlaydi?</h2>
+                    <p>Joylashuv faqat siz “Joylashuvimni aniqlash” tugmasini bosganingizda va brauzer ruxsat berganida olinadi. Aniqlangan koordinatalar manzil matniga aylantirilishi mumkin. Siz manzilni yuborishdan oldin tekshirishingiz va o‘zgartirishingiz mumkin.</p>
+                    <p>Manzilni aniqlash uchun OpenStreetMap Nominatim kabi tashqi geokodlash xizmati ishlatilishi mumkin. Ularning alohida qoidalari mavjud.</p>
+                    <h2>3. Ma’lumotlardan foydalanish</h2>
+                    <p>Ma’lumotlar akkauntni boshqarish, email orqali tasdiqlash, ishlarni ko‘rsatish va moslashtirish, chat, reyting, xavfsizlik va platformani yaxshilash uchun ishlatiladi.</p>
+                    <h2>4. Email va uchinchi tomonlar</h2>
+                    <p>Tasdiqlash kodi elektron pochta yetkazib berish xizmati orqali yuboriladi. Texnik jihatdan zarur bo‘lgan xizmatlarga faqat ularning vazifasini bajarish uchun kerakli ma’lumotlar uzatiladi.</p>
                     <h2>5. Saqlash va xavfsizlik</h2>
-                    <p>FinJob ruxsatsiz kirish, ma'lumotlarni yo'qotish yoki o'zgartirish xavfini kamaytirish uchun texnik choralarni qo'llaydi. Shunga qaramay, internet orqali uzatiladigan hech bir tizim mutlaq xavfsiz deb kafolatlanmaydi.</p>
-                    <p>Elektron pochta tasdiqlash kodi vaqtincha server xotirasida saqlanadi va tasdiqlash jarayoni tugagach yoki kodning amal qilish muddati tugagach o'chiriladi.</p>
-
+                    <p>Biz ruxsatsiz kirish, yo‘qotish yoki o‘zgartirish xavfini kamaytirish uchun texnik choralar ko‘ramiz. Biroq internetdagi hech bir tizim mutlaq xavfsiz deb kafolatlanmaydi.</p>
+                    <p>Email tasdiqlash kodi vaqtinchalik saqlanadi va tasdiqlash yoki amal qilish muddati tugagach o‘chiriladi.</p>
                     <h2>6. Brauzer xotirasi</h2>
-                    <p>FinJob sessiya belgisi va ayrim foydalanuvchi ma'lumotlarini brauzer xotirasida saqlashi mumkin. Bu klassik brauzer cookie'sidan farq qiladi. Shu sababli FinJob hozircha majburiy reklama kuzatuv cookie fayllari'lariga tayanmaydi.</p>
-
-                    <h2>7. Sizning huquqlaringiz</h2>
-                    <p>Siz o'zingiz haqingizdagi ma'lumotlarni ko'rish, tuzatish va qonunchilik doirasida o'chirishni so'rash huquqiga egasiz. Shuningdek, avtomatik geolokatsiya ruxsatini brauzer sozlamalaridan boshqarishingiz mumkin.</p>
-
-                    <h2>8. Voyaga yetmaganlar</h2>
-                    <p>Platformadan foydalanishdan oldin foydalanuvchi o'z hududidagi yosh va xizmatlardan foydalanish talablariga rioya qilishi kerak. Zarur hollarda voyaga yetmagan foydalanuvchi ota-ona yoki qonuniy vakilining roziligini olishi lozim.</p>
-
-                    <h2>9. Siyosat o‘zgarishlari</h2>
-                    <p>Platforma yoki qonunchilikdagi o'zgarishlar sabab ushbu siyosat yangilanishi mumkin. Yangilangan versiya FinJob saytida e'lon qilinadi va kuchga kirish sanasi ko'rsatiladi.</p>
-
-                    <h2>10. Huquqiy asos</h2>
-                    <p>Ushbu hujjat umumiy platforma siyosati sifatida tayyorlangan. FinJob faoliyati O'zbekiston Respublikasining amaldagi qonunchiligi, jumladan shaxsiy ma'lumotlar va elektron tijoratga oid talablar bilan uyg'unlashtirilishi kerak.</p>
-
-                    <div className="legal-note">
-                        Bu sahifadagi matn umumiy axborot uchun. Platformani real biznes sifatida ishga tushirishdan oldin yurist bilan yakuniy huquqiy tekshiruv o'tkazish tavsiya etiladi.
-                    </div>
+                    <p>FinJob sessiya va ayrim interfeys sozlamalarini brauzer xotirasida saqlashi mumkin. Reklama kuzatuvi uchun majburiy cookie ishlatilmaydi.</p>
+                    <h2>7. Sizning nazoratingiz</h2>
+                    <p>Siz profilingizdagi ma’lumotlarni ko‘rish va tuzatish, qonunchilik doirasida o‘chirishni so‘rash hamda brauzer orqali geolokatsiya ruxsatini boshqarish huquqiga egasiz.</p>
+                    <h2>8. Yangilanishlar</h2>
+                    <p>Platforma funksiyalari yoki qonunchilik o‘zgarsa, ushbu siyosat yangilanadi. Amaldagi sana sahifaning yuqori qismida ko‘rsatiladi.</p>
+                    <div className="legal-note">Ushbu matn umumiy platforma siyosati uchun tayyorlangan. FinJobni tijoriy ishga tushirishdan oldin O‘zbekiston qonunchiligi bo‘yicha yurist bilan yakuniy tekshiruv tavsiya etiladi.</div>
                 </article>
             </div>
         </div>
