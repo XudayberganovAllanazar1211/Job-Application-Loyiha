@@ -8,6 +8,7 @@ export default function Jobs() {
     const [services, setServices] = useState([])
     const [search, setSearch] = useState("")
     const [notice, setNotice] = useState("")
+    const [noticeType, setNoticeType] = useState("ok")
     const token = localStorage.getItem("token") || ""
     const user = JSON.parse(localStorage.getItem("user") || "null")
     const navigate = useNavigate()
@@ -54,7 +55,9 @@ export default function Jobs() {
             body: { job_id: job.id },
             token
         })
-        setNotice(result?.msg === "ok" ? "Job qabul qilindi ✅" : (result?.msg || "Xato"))
+        const accepted = result?.msg === "ok"
+        setNoticeType(accepted ? "ok" : "warn")
+        setNotice(accepted ? "Job qabul qilindi" : (result?.msg || "Xato"))
         load()
     }
 
@@ -65,7 +68,9 @@ export default function Jobs() {
             body: { job_id: job.id },
             token
         })
-        setNotice(result?.msg === "ok" ? "Yakunlash so'rovi yuborildi. Bajaruvchi tasdiqlashi kutilmoqda." : (result?.msg || "Xato"))
+        const requested = result?.msg === "ok"
+        setNoticeType(requested ? "ok" : "warn")
+        setNotice(requested ? "Yakunlash so'rovi yuborildi. Bajaruvchi tasdiqlashi kutilmoqda." : (result?.msg || "Xato"))
         load()
     }
 
@@ -83,14 +88,17 @@ export default function Jobs() {
         })
 
         if (result?.msg === "ok") {
-            setNotice("Ish muvaffaqiyatli yakunlandi va yopildi ✅")
+            setNoticeType("ok")
+            setNotice("Ish muvaffaqiyatli yakunlandi va yopildi")
             setAdminContactJobId(null)
             setActiveConfirmJobId(null)
         } else if (result?.msg === "rejected") {
+            setNoticeType("warn")
             setNotice("Siz rad etdingiz. Ish o'z joyida faol holatda qoldi.")
             setAdminContactJobId(jobId)
             setActiveConfirmJobId(null)
         } else {
+            setNoticeType("warn")
             setNotice(result?.msg || "Xatolik yuz berdi")
         }
         load()
@@ -134,6 +142,12 @@ export default function Jobs() {
                     const isIAccepted = String(job.worker_id) === String(user?.id)
                     const isParticipant = isMyJob || isIAccepted
                     const canAccept = status === "active" && !isMyJob && job.worker_id == null
+                    const statusLabel = {
+                        active: "Faol",
+                        accepted: "Qabul qilingan",
+                        pending_finish: "Tasdiqlash kutilmoqda",
+                        finished: "Yakunlangan"
+                    }[status] || status
 
                     return (
                         <article className="card job-card" key={job.id}>
@@ -143,12 +157,7 @@ export default function Jobs() {
                                 <span className="chip">💰 {job.price ?? "-"} {job.currency || "UZS"}</span>
                                 <span className="chip">📍 {job.location || "-"}</span>
                                 <span className="chip">🧩 {serviceMap[String(job.service_id)] || job.service_name || job.service_id || "Unknown"}</span>
-                                <span className="chip" style={{
-                                    background: job.status === "pending_finish" ? "rgba(245, 158, 11, 0.2)" : "rgba(255,255,255,0.05)",
-                                    color: job.status === "pending_finish" ? "#f59e0b" : "#fff"
-                                }}>
-                                    Status: {status === "pending_finish" ? "Tasdiqlanish kutilmoqda" : status}
-                                </span>
+                                <span className={`chip status-chip status-${status}`}><span className="status-dot" />{statusLabel}</span>
 
                                 {isMyJob && (
                                     <span className="chip" style={{ background: "rgba(255,255,255,0.05)", color: "#9ca3af" }}>
