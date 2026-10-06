@@ -679,12 +679,7 @@ export default function Jobs() {
                                     </button>
                                 )}
 
-                                {/* --- ACCEPT TUGMASI (Mening ishim bo'lmasa va bo'sh bo'lsa hamma ko'ra oladi) --- */}
-                                {canAccept && (
-                                    <button className="btn btn-primary" onClick={() => acceptJob(job)}>
-                                        Ishni qabul qilish
-                                    </button>
-                                )}
+                                {/* Faol ishlar endi taklif orqali qabul qilinadi. */}
                                 {canBid && (
                                     <button
                                         type="button"
