@@ -21,6 +21,7 @@ export default function Admin() {
             setData(result)
             setNotice("")
         } else {
+            setNoticeType("warn")
             setNotice(result?.msg || "Admin ma'lumotlarini yuklab bo'lmadi.")
         }
     }
@@ -81,7 +82,8 @@ export default function Admin() {
 
         if (ok) {
             if (editingUser.id === user.id) {
-                const { password, ...safeUserForm } = userForm
+                const safeUserForm = { ...userForm }
+                delete safeUserForm.password
                 localStorage.setItem("user", JSON.stringify({ ...user, ...safeUserForm }))
             }
             setEditingUser(null)
@@ -111,6 +113,7 @@ export default function Admin() {
         event.preventDefault()
 
         if (!serviceName.trim()) {
+            setNoticeType("warn")
             setNotice("Xizmat nomini kiriting.")
             return
         }
