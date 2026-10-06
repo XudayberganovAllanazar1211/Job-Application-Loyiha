@@ -105,40 +105,96 @@ export default function CreateJob() {
         setLocationError("")
         setLocationLoading(true)
 
-        navigator.geolocation.getCurrentPosition(
-            async (position) => {
-                const { latitude, longitude } = position.coords
-                const result = await api(
-                    `/reverse-geocode?lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}`,
-                    { token }
-                )
+        let bestPosition = null
+        let finished = false
+        let watchId = null
 
-                if (result?.ok && result.location) {
-                    setForm((current) => ({ ...current, location: result.location }))
-                } else {
-                    setLocationError(result?.msg || "Joylashuv manzilini aniqlab bo'lmadi.")
+        const finish = async (position) => {
+            if (finished || !position) return
+            finished = true
+
+            if (watchId !== null) navigator.geolocation.clearWatch(watchId)
+
+            const { latitude, longitude, accuracy } = position.coords
+
+            if (accuracy > 5000) {
+                setLocationError(
+                    `Kompyuter joylashuvni juda noaniq aniqladi (taxminan ${Math.round(accuracy / 100) / 10} km). Windows'da Location Service va Wi-Fi joylashuvini yoqing yoki joylashuvni qo'lda kiriting.`
+                )
+                setLocationLoading(false)
+                return
+            }
+
+            const result = await api(
+                `/reverse-geocode?lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}`,
+                { token }
+            )
+
+            if (result?.ok && result.location) {
+                setForm((current) => ({ ...current, location: result.location }))
+                setLocationError(
+                    accuracy > 1000
+                        ? `Joylashuv topildi, lekin aniqlik taxminan ${Math.round(accuracy)} metr.`
+                        : ""
+                )
+            } else {
+                setLocationError(result?.msg || "Joylashuv manzilini aniqlab bo'lmadi.")
+            }
+
+            setLocationLoading(false)
+        }
+
+        const handlePosition = (position) => {
+            if (!bestPosition || position.coords.accuracy < bestPosition.coords.accuracy) {
+                bestPosition = position
+            }
+
+            if (position.coords.accuracy <= 100) {
+                finish(position)
+            }
+        }
+
+        watchId = navigator.geolocation.watchPosition(
+            handlePosition,
+            (error) => {
+                if (finished) return
+
+                if (bestPosition) {
+                    finish(bestPosition)
+                    return
                 }
 
-                setLocationLoading(false)
-            },
-            (error) => {
                 if (error.code === 1) {
-                    setLocationError("Joylashuvga ruxsat berilmadi. Brauzer sozlamalaridan ruxsat bering.")
+                    setLocationError("Joylashuvga ruxsat berilmadi. Chrome va Windows sozlamalaridan ruxsat bering.")
                 } else if (error.code === 2) {
-                    setLocationError("Joylashuv aniqlanmadi. GPS yoki internet aloqasini tekshiring.")
+                    setLocationError("Joylashuv aniqlanmadi. Windows Location Service va Wi-Fi'ni tekshiring.")
                 } else if (error.code === 3) {
-                    setLocationError("Joylashuvni aniqlash vaqti tugadi. Qaytadan urinib ko'ring.")
+                    setLocationError("Joylashuvni aniqlash vaqti tugadi. Windows Location Service va Wi-Fi'ni tekshiring.")
                 } else {
                     setLocationError("Joylashuvni aniqlashda xatolik yuz berdi.")
                 }
+
                 setLocationLoading(false)
+                if (watchId !== null) navigator.geolocation.clearWatch(watchId)
             },
             {
                 enableHighAccuracy: true,
-                timeout: 12000,
-                maximumAge: 60000
+                timeout: 15000,
+                maximumAge: 0
             }
         )
+
+        setTimeout(() => {
+            if (!finished) {
+                if (bestPosition) {
+                    finish(bestPosition)
+                } else {
+                    setLocationLoading(false)
+                    setLocationError("Aniq joylashuv olinmadi. Windows Location Service yoqilganini tekshiring.")
+                    if (watchId !== null) navigator.geolocation.clearWatch(watchId)
+                }
+            }
+        }, 15000)
     }
 
     const submit = async (e) => {
