@@ -988,42 +988,6 @@ def logout():
 
 
 # -------- SERVICES (ADMIN AUTHORIZATION REQUIRED) --------
-@app.route("/service", methods=["POST"])
-@admin_required
-def add_service():
-    d = request.json or {}
-    name = str(d.get("name", "")).strip()
-    if not name:
-        return jsonify({"msg": "Xizmat nomi kiritilishi shart"}), 400
-
-    parent_id = d.get("parent_id")
-    if parent_id in ("", None):
-        parent_id = None
-    else:
-        try:
-            parent_id = int(parent_id)
-        except (TypeError, ValueError):
-            return jsonify({"msg": "Ota kategoriya identifikatori noto‘g‘ri"}), 400
-
-        parent = db.q("SELECT id FROM services WHERE id=?", (parent_id,)).fetchone()
-        if not parent:
-            return jsonify({"msg": "Ota kategoriya topilmadi"}), 404
-
-    duplicate = db.q(
-        "SELECT id FROM services WHERE name=? AND parent_id IS ?",
-        (name, parent_id),
-    ).fetchone()
-    if duplicate:
-        return jsonify({"msg": "Bunday xizmat allaqachon mavjud"}), 409
-
-    result = db.q(
-        "INSERT INTO services(name,parent_id,created_by) VALUES(?,?,?)",
-        (name, parent_id, request.uid),
-    )
-    result.close()
-    return jsonify({"msg": "ok"})
-
-
 @app.route("/services")
 def get_services():
     r = db.q("SELECT id,name,parent_id FROM services").fetchall()
