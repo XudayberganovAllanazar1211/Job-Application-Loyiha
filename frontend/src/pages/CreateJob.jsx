@@ -111,6 +111,7 @@ export default function CreateJob() {
                 service_id: selectedServiceIds.length ? Number(selectedServiceIds[0]) : null,
                 service_ids: selectedServiceIds.map(Number),
                 custom_service: customServices.join(", "),
+                custom_services: customServices,
                 title: form.title.trim(),
                 description: form.description.trim(),
                 price,
