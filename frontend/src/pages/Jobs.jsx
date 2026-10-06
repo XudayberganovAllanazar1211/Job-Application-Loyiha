@@ -129,8 +129,8 @@ export default function Jobs() {
             <div className="job-grid">
                 {filtered.map((job) => {
                     const workerName = `${job.worker_first || ""} ${job.worker_last || ""}`.trim() || job.worker_username;
-                    const isMyJob = job.user_id === user?.id; // Men yaratgan ishmi?
-                    const isIAccepted = job.worker_id === user?.id; // Men qabul qilgan ishmi?
+                    const isMyJob = String(job.user_id) === String(user?.id); // Men yaratgan ishmi?
+                    const isIAccepted = String(job.worker_id) === String(user?.id); // Men qabul qilgan ishmi?
 
                     return (
                         <article className="card job-card" key={job.id}>
@@ -193,7 +193,7 @@ export default function Jobs() {
                                 </button>
 
                                 {/* --- ACCEPT TUGMASI (Mening ishim bo'lmasa va bo'sh bo'lsa hamma ko'ra oladi) --- */}
-                                {!isMyJob && job.status === "active" && (
+                                {!isMyJob && String(job.status).toLowerCase() === "active" && (
                                     <button className="btn btn-primary" onClick={() => acceptJob(job)}>
                                         Accept job
                                     </button>
