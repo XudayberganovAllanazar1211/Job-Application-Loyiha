@@ -450,6 +450,57 @@ def rows(r, cols):
     return [dict(zip(cols, i)) for i in r]
 
 
+# -------- ADMIN --------
+@app.route("/admin/overview")
+@admin_required
+def admin_overview():
+    users = db.q(
+        """SELECT id, username, first_name, last_name, email, role, created_at, average_rating
+           FROM users ORDER BY id DESC"""
+    ).fetchall()
+
+    jobs = db.q(
+        """SELECT j.id, j.title, j.price, j.currency, j.location, j.status, j.created_at,
+                  u.username AS creator_username,
+                  w.username AS worker_username
+           FROM jobs j
+           LEFT JOIN users u ON u.id = j.user_id
+           LEFT JOIN users w ON w.id = j.worker_id
+           ORDER BY j.id DESC"""
+    ).fetchall()
+
+    services = db.q(
+        """SELECT s.id, s.name, s.parent_id, p.name AS parent_name, s.created_by
+           FROM services s
+           LEFT JOIN services p ON p.id = s.parent_id
+           ORDER BY s.id DESC"""
+    ).fetchall()
+
+    ratings = db.q(
+        """SELECT r.id, r.job_id, r.score, r.comment, r.created_at,
+                  f.username AS from_username, t.username AS to_username
+           FROM ratings r
+           LEFT JOIN users f ON f.id = r.from_user
+           LEFT JOIN users t ON t.id = r.to_user
+           ORDER BY r.id DESC"""
+    ).fetchall()
+
+    return jsonify({
+        "stats": {
+            "users": len(users),
+            "jobs": len(jobs),
+            "active_jobs": sum(1 for j in jobs if str(j[5]).lower() == "active"),
+            "finished_jobs": sum(1 for j in jobs if str(j[5]).lower() == "finished"),
+            "services": len(services),
+            "ratings": len(ratings),
+        },
+        "users": rows(users, ["id", "username", "first_name", "last_name", "email", "role", "created_at", "average_rating"]),
+        "jobs": rows(jobs, ["id", "title", "price", "currency", "location", "status", "created_at", "creator_username", "worker_username"]),
+        "services": rows(services, ["id", "name", "parent_id", "parent_name", "created_by"]),
+        "ratings": rows(ratings, ["id", "job_id", "score", "comment", "created_at", "from_username", "to_username"]),
+    })
+
+
 # -------- AUTH --------
 @app.route("/login", methods=["POST"])
 def login():
