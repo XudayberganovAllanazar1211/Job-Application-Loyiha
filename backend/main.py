@@ -651,6 +651,7 @@ def get_jobs():
                 "id",
                 "title",
                 "price",
+                "currency",
                 "location",
                 "status",
                 "user_id",
