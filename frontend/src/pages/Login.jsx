@@ -85,7 +85,7 @@ export default function Login() {
                             required
                         />
                         <button className="btn btn-primary" disabled={loading}>
-                            {loading ? "Kirilmoqda..." : "Login"}
+                            {loading ? "Kirilmoqda..." : "Kirish"}
                         </button>
                     </form>
 
