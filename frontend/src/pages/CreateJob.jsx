@@ -64,7 +64,41 @@ export default function CreateJob() {
     const filteredServices = useMemo(() => {
         const query = serviceSearch.trim().toLowerCase()
         if (!query) return services
-        return services.filter((service) => service.name.toLowerCase().includes(query))
+
+        const matchingIds = new Set(
+            services
+                .filter((service) => service.name.toLowerCase().includes(query))
+                .map((service) => String(service.id))
+        )
+
+        const visibleIds = new Set(matchingIds)
+
+        services.forEach((service) => {
+            let parentId = service.parent_id
+
+            while (parentId != null) {
+                if (matchingIds.has(String(parentId))) {
+                    visibleIds.add(String(service.id))
+                    break
+                }
+
+                const parent = services.find((item) => String(item.id) === String(parentId))
+                if (!parent) break
+                parentId = parent.parent_id
+            }
+        })
+
+        matchingIds.forEach((id) => {
+            let current = services.find((service) => String(service.id) === id)
+            while (current && current.parent_id != null) {
+                const parent = services.find((service) => String(service.id) === String(current.parent_id))
+                if (!parent) break
+                visibleIds.add(String(parent.id))
+                current = parent
+            }
+        })
+
+        return services.filter((service) => visibleIds.has(String(service.id)))
     }, [services, serviceSearch])
 
     const filteredServiceTree = useMemo(() => buildServiceTree(filteredServices), [filteredServices])
