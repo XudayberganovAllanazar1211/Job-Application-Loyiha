@@ -10,20 +10,20 @@ export default function CommunityRules() {
                 </div>
 
                 <article className="legal-card">
-                    <span className="legal-eyebrow">FINJOB / SAFETY</span>
-                    <h1>Community Rules</h1>
+                    <span className="legal-eyebrow">FINJOB / XAVFSIZLIK</span>
+                    <h1>Hamjamiyat qoidalari</h1>
                     <p className="legal-updated">Kuchga kirish sanasi: 6-oktabr, 2026</p>
 
                     <p>FinJobdagi maqsad — ish topish va ish berish jarayonini foydali, halol va xavfsiz saqlash.</p>
 
                     <h2>Ruxsat etiladi</h2>
-                    <p>Haqiqiy xizmatlar, qonuniy ish takliflari, professional muloqot, konstruktiv feedback va ishga aloqador materiallar joylashtirilishi mumkin.</p>
+                    <p>Haqiqiy xizmatlar, qonuniy ish takliflari, professional muloqot, konstruktiv fikr-mulohaza va ishga aloqador materiallar joylashtirilishi mumkin.</p>
 
                     <h2>Taqiqlanadi</h2>
-                    <p>Firibgarlik, phishing, spam, zararli dastur, akkaunt o'g'irlash, noqonuniy xizmatlar, tahdid va haqorat, shaxsiy ma'lumotlarni ruxsatsiz tarqatish hamda boshqa foydalanuvchilarni ataylab aldash taqiqlanadi.</p>
+                    <p>Firibgarlik, fishing, spam, zararli dastur, akkaunt o'g'irlash, noqonuniy xizmatlar, tahdid va haqorat, shaxsiy ma'lumotlarni ruxsatsiz tarqatish hamda boshqa foydalanuvchilarni ataylab aldash taqiqlanadi.</p>
 
                     <h2>Shaxsiy xavfsizlik</h2>
-                    <p>Parol va verification kodini boshqa foydalanuvchiga bermang. Offline uchrashuvlarda jamoat joylari va xavfsiz aloqa usullaridan foydalaning. Jobdagi location ma'lumotini joylashtirishdan oldin u qanchalik ochiq ko'rinishini hisobga oling.</p>
+                    <p>Parol va tasdiqlash kodini boshqa foydalanuvchiga bermang. Oflayn uchrashuvlarda jamoat joylari va xavfsiz aloqa usullaridan foydalaning. Ishdagi manzil ma'lumotini joylashtirishdan oldin u qanchalik ochiq ko'rinishini hisobga oling.</p>
 
                     <h2>Qoidabuzarlik</h2>
                     <p>Shubhali yoki zararli faoliyatni ko'rsangiz, platforma administratori tomonidan ko'rib chiqilishi uchun dalillarni saqlab qo'ying. FinJob qoidabuzarlik aniqlansa kontentni cheklashi yoki akkauntga nisbatan choralar ko'rishi mumkin.</p>
