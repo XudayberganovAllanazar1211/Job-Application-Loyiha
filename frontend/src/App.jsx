@@ -8,6 +8,9 @@ import Chat from "./pages/Chat"
 import Rating from "./pages/Rating"
 import Leaderboard from "./pages/Leaderboard" // IMPORT QILINDI
 import Profile from "./pages/Profile"
+import PrivacyPolicy from "./pages/PrivacyPolicy"
+import Terms from "./pages/Terms"
+import CommunityRules from "./pages/CommunityRules"
 
 function Protected({ children }) {
     const token = localStorage.getItem("token")
@@ -22,6 +25,9 @@ function PublicOnly({ children }) {
 export default function App() {
     return (
         <Routes>
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/terms" element={<Terms />} />
+            <Route path="/community-rules" element={<CommunityRules />} />
             <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />
             <Route path="/register" element={<PublicOnly><Register /></PublicOnly>} />
             <Route path="/" element={<Protected><Dashboard /></Protected>} />
