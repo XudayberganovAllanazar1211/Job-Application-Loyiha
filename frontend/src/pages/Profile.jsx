@@ -78,6 +78,8 @@ export default function Profile() {
     const [notice, setNotice] = useState("")
     const [loading, setLoading] = useState(false)
     const [initialLoad, setInitialLoad] = useState(true)
+    const [avatarUrl, setAvatarUrl] = useState("")
+    const [avatarLoading, setAvatarLoading] = useState(false)
 
     const serviceTree = buildServiceTree(services)
     const filteredServices = services.filter((service) => service.name.toLowerCase().includes(serviceSearch.trim().toLowerCase()))
@@ -113,6 +115,7 @@ export default function Profile() {
                 setSavedForm(profile)
                 setSkills(profileSkills)
                 setSavedSkills(profileSkills)
+                setAvatarUrl(result.avatar_url || "")
             }
 
             setInitialLoad(false)
@@ -180,6 +183,51 @@ export default function Profile() {
         setShowServicePicker(false)
     }
 
+    const uploadAvatar = async (event) => {
+        const file = event.target.files?.[0]
+        event.target.value = ""
+        if (!file) return
+
+        const allowedTypes = ["image/png", "image/jpeg", "image/webp"]
+        if (!allowedTypes.includes(file.type)) {
+            setNotice("Faqat PNG, JPG, JPEG yoki WEBP rasm yuklash mumkin")
+            return
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+            setNotice("Rasm hajmi 5 MB dan oshmasligi kerak")
+            return
+        }
+
+        setAvatarLoading(true)
+        setNotice("")
+
+        try {
+            const data = new FormData()
+            data.append("image", file)
+            const token = localStorage.getItem("token") || ""
+            const response = await fetch((import.meta.env.VITE_API_URL || "http://localhost:5000") + "/profile/avatar", {
+                method: "POST",
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+                body: data
+            })
+
+            const result = await response.json().catch(() => ({}))
+            if (!response.ok) {
+                setNotice(result?.msg || "Rasmni yuklashda xatolik yuz berdi")
+                return
+            }
+
+            setAvatarUrl(result.avatar_url || "")
+            setNotice("Profil rasmi muvaffaqiyatli yangilandi")
+            setTimeout(() => setNotice(""), 3000)
+        } catch {
+            setNotice("Rasmni yuklashda xatolik yuz berdi")
+        } finally {
+            setAvatarLoading(false)
+        }
+    }
+
     const addSkill = () => {
         const skill = newSkill.trim()
         if (skill && !skills.some((item) => item.toLowerCase() === skill.toLowerCase())) {
@@ -231,7 +279,17 @@ export default function Profile() {
 
                     <section className="profile-hero card">
                         <div className="profile-identity">
-                            <div className="profile-avatar">{initials}</div>
+                            <div className="profile-avatar-wrap">
+                                <div className="profile-avatar">
+                                    {avatarUrl ? <img src={(import.meta.env.VITE_API_URL || "http://localhost:5000") + avatarUrl} alt="Profil rasmi" /> : initials}
+                                </div>
+                                {isEditing && (
+                                    <label className="profile-avatar-upload">
+                                        {avatarLoading ? "..." : "Rasm"}
+                                        <input type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadAvatar} disabled={avatarLoading} />
+                                    </label>
+                                )}
+                            </div>
                             <div className="profile-identity-text">
                                 <div className="profile-name-row">
                                     <h2>{fullName}</h2>
