@@ -636,12 +636,17 @@ def add_job():
             seen_service_ids.add(service_id)
             valid_service_ids.append(service_id)
 
-    raw_custom_services = str(d.get("custom_service", ""))
+    raw_custom_services = d.get("custom_services")
+    if isinstance(raw_custom_services, list):
+        custom_service_values = raw_custom_services
+    else:
+        custom_service_values = str(d.get("custom_service", "")).split(",")
+
     custom_services = []
     seen_custom_services = set()
 
-    for item in raw_custom_services.split(","):
-        custom_service = item.strip()
+    for item in custom_service_values:
+        custom_service = str(item).strip()
         key = custom_service.casefold()
         if custom_service and key not in seen_custom_services:
             seen_custom_services.add(key)
