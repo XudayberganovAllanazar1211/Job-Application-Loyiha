@@ -169,9 +169,11 @@ export default function Dashboard() {
                     <div className="job-grid">
                         {filtered.map((job) => {
                             const workerName = `${job.worker_first || ""} ${job.worker_last || ""}`.trim() || job.worker_username;
-                            const isMyJob = String(job.user_id) === String(user?.id);
-                            const isIAccepted = String(job.worker_id) === String(user?.id);
-                            const canAccept = String(job.status || "").trim().toLowerCase() === "active" && !isMyJob && !job.worker_id;
+                            const status = String(job.status || "").trim().toLowerCase()
+                            const isMyJob = String(job.user_id) === String(user?.id)
+                            const isIAccepted = String(job.worker_id) === String(user?.id)
+                            const isParticipant = isMyJob || isIAccepted
+                            const canAccept = status === "active" && !isMyJob && job.worker_id == null
 
                             return (
                                 <article
