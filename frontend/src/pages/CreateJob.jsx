@@ -191,7 +191,11 @@ export default function CreateJob() {
                                     </div>
                                 ) : serviceSearch.trim() ? (
                                     (() => {
-                                        const parentIds = new Set(filteredServices.map((service) => String(service.parent_id)))
+                                        const parentIds = new Set(
+                                            services
+                                                .filter((service) => service.parent_id != null)
+                                                .map((service) => String(service.parent_id))
+                                        )
                                         const exactServices = filteredServices.filter(
                                             (service) => !parentIds.has(String(service.id))
                                         )
