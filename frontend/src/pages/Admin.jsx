@@ -194,8 +194,8 @@ export default function Admin() {
                                         <td>{item.email}</td>
                                         <td>
                                             <select className="admin-action-select" value={item.role} disabled={item.id === user.id} onChange={(event) => changeRol(item, event.target.value)}>
-                                                <option value="user">user</option>
-                                                <option value="admin">admin</option>
+                                                <option value="user">foydalanuvchi</option>
+                                                <option value="admin">administrator</option>
                                             </select>
                                         </td>
                                         <td>{Number(item.average_rating || 0).toFixed(1)}</td>
@@ -229,10 +229,10 @@ export default function Admin() {
                                         <td>{Number(item.price || 0).toLocaleString()} {item.currency || "UZS"}</td>
                                         <td>
                                             <select className="admin-action-select" value={item.status || "active"} onChange={(event) => updateJobHolat(item, event.target.value)}>
-                                                <option value="active">active</option>
-                                                <option value="accepted">accepted</option>
-                                                <option value="pending_finish">pending_finish</option>
-                                                <option value="finished">finished</option>
+                                                <option value="active">faol</option>
+                                                <option value="accepted">qabul qilingan</option>
+                                                <option value="pending_finish">tasdiqlash kutilmoqda</option>
+                                                <option value="finished">yakunlangan</option>
                                             </select>
                                         </td>
                                         <td>{item.location || "—"}</td>
@@ -268,7 +268,7 @@ export default function Admin() {
                                             <td>#{item.id}</td>
                                             <td><strong>{item.name}</strong></td>
                                             <td>{item.parent_name || "Asosiy kategoriya"}</td>
-                                            <td>{item.created_by || "System"}</td>
+                                            <td>{item.created_by || "Tizim"}</td>
                                             <td><button className="btn btn-danger admin-small-btn" onClick={() => deleteService(item)}>O'chirish</button></td>
                                         </tr>
                                     ))}
