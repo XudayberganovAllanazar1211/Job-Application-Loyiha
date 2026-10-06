@@ -35,7 +35,7 @@ export default function Leaderboard() {
 
     return (
         <AppLayout
-            title="Reyting jadvali 🏆
+            title="Reyting jadvali 🏆"
             subtitle="Eng ko‘p ish yaratgan va muvaffaqiyatli yakunlagan foydalanuvchilar (10 talik)"
         >
             {/* TABS (Tugmalar) QISMI */}
