@@ -561,6 +561,111 @@ export default function Jobs() {
                                 </div>
                             )}
 
+                            {offerJobId === job.id && canAccept && (
+                                <div className="offer-panel">
+                                    <div>
+                                        <strong>O‘z taklifingizni yuboring</strong>
+                                        <p className="muted">Ish egasiga narx va qisqa rejangizni yuboring.</p>
+                                    </div>
+                                    <div className="offer-form-grid">
+                                        <input
+                                            className="input"
+                                            type="number"
+                                            min="1"
+                                            placeholder="Narx (UZS)"
+                                            value={offerAmount}
+                                            onChange={(e) => setOfferAmount(e.target.value)}
+                                        />
+                                        <input
+                                            className="input"
+                                            maxLength={1500}
+                                            placeholder="Masalan: 2 kunda topshiraman"
+                                            value={offerMessage}
+                                            onChange={(e) => setOfferMessage(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="actions">
+                                        <button
+                                            type="button"
+                                            className="btn btn-primary"
+                                            disabled={!offerAmount || Number(offerAmount) <= 0}
+                                            onClick={() => submitOffer(job.id)}
+                                        >
+                                            Taklifni yuborish
+                                        </button>
+                                        <button type="button" className="btn btn-secondary" onClick={() => setOfferJobId(null)}>
+                                            Bekor qilish
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {offersJobId === job.id && isMyJob && (
+                                <div className="offers-panel">
+                                    <div className="offers-panel-head">
+                                        <strong>Kelgan takliflar</strong>
+                                        <button type="button" className="btn btn-secondary" onClick={() => setOffersJobId(null)}>
+                                            Yopish
+                                        </button>
+                                    </div>
+                                    {jobOffers.length ? jobOffers.map((offer) => (
+                                        <div className="offer-row" key={offer.id}>
+                                            <div>
+                                                <strong>@{offer.username}</strong>
+                                                <span>{Number(offer.average_rating || 0).toFixed(1)} ⭐</span>
+                                                <p>{offer.message || "Izoh kiritilmagan"}</p>
+                                            </div>
+                                            <div>
+                                                <strong>{Number(offer.amount).toLocaleString()} UZS</strong>
+                                                {offer.status === "pending" && (
+                                                    <button type="button" className="btn btn-success" onClick={() => acceptOffer(offer.id, job.id)}>
+                                                        Qabul qilish
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )) : <div className="empty-state">Hozircha taklif kelmagan.</div>}
+                                </div>
+                            )}
+
+                            {reportJobId === job.id && !isMyJob && (
+                                <div className="report-panel">
+                                    <strong>Shikoyat yuborish</strong>
+                                    <select
+                                        className="select"
+                                        value={reportReason}
+                                        onChange={(e) => setReportReason(e.target.value)}
+                                    >
+                                        <option value="">Sababni tanlang</option>
+                                        <option value="Firibgarlik yoki aldov">Firibgarlik yoki aldov</option>
+                                        <option value="Noto‘g‘ri yoki yolg‘on e’lon">Noto‘g‘ri yoki yolg‘on e’lon</option>
+                                        <option value="Haqorat yoki nomaqbul xatti-harakat">Haqorat yoki nomaqbul xatti-harakat</option>
+                                        <option value="Spam">Spam</option>
+                                        <option value="Boshqa">Boshqa</option>
+                                    </select>
+                                    <textarea
+                                        className="textarea"
+                                        maxLength={2000}
+                                        placeholder="Qo‘shimcha tafsilot..."
+                                        value={reportDetails}
+                                        onChange={(e) => setReportDetails(e.target.value)}
+                                    />
+                                    <div className="actions">
+                                        <button
+                                            type="button"
+                                            className="btn btn-danger"
+                                            disabled={!reportReason}
+                                            onClick={() => submitReport(job)}
+                                        >
+                                            Yuborish
+                                        </button>
+                                        <button type="button" className="btn btn-secondary" onClick={() => setReportJobId(null)}>
+                                            Bekor qilish
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="actions">
                                 {isParticipant && (
                                     <button className="btn btn-secondary" onClick={() => navigate(`/chat/${job.id}`, { state: { job } })}>
