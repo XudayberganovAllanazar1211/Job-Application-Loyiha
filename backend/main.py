@@ -897,11 +897,11 @@ def send_code():
 
     exists_u = db.q("SELECT id FROM users WHERE username=?", (d["username"].strip(),)).fetchone()
     if exists_u:
-        return jsonify({"msg": "Ushbu Username allaqachon band!"}), 400
+        return jsonify({"msg": "Ushbu foydalanuvchi nomi allaqachon band!"}), 400
 
     exists_e = db.q("SELECT id FROM users WHERE email=?", (d["email"].strip().lower(),)).fetchone()
     if exists_e:
-        return jsonify({"msg": "Ushbu Email allaqachon ro'yxatdan o'tgan!"}), 400
+        return jsonify({"msg": "Ushbu elektron pochta allaqachon ro‘yxatdan o‘tgan!"}), 400
 
     code = str(secrets.randbelow(900000) + 100000)
     email_key = d["email"].strip().lower()
@@ -922,13 +922,13 @@ def send_code():
 def verify_code():
     d = request.json
     if not d or "email" not in d or "code" not in d:
-        return jsonify({"msg": "Email va tasdiqlash kodi talab qilinadi"}), 400
+        return jsonify({"msg": "Elektron pochta va tasdiqlash kodi talab qilinadi"}), 400
 
     email = d["email"].strip().lower()
     code = str(d["code"]).strip()
 
     if email not in pending_verifications:
-        return jsonify({"msg": "Ushbu email uchun tasdiqlash kodi so'ralmagan yoki eskirgan!"}), 400
+        return jsonify({"msg": "Ushbu elektron pochta uchun tasdiqlash kodi so‘ralmagan yoki eskirgan!"}), 400
 
     record = pending_verifications[email]
 
@@ -1258,7 +1258,7 @@ def get_job_detail(job_id):
     ).fetchone()
 
     if not r:
-        return jsonify({"msg": "Job topilmadi"}), 404
+        return jsonify({"msg": "Ish topilmadi"}), 404
 
     return jsonify({
         "id": r[0],
@@ -1296,11 +1296,11 @@ def accept():
 
     job = db.q("SELECT user_id, status, worker_id FROM jobs WHERE id=?", (job_id,)).fetchone()
     if not job:
-        return jsonify({"msg": "Job topilmadi"}), 404
+        return jsonify({"msg": "Ish topilmadi"}), 404
     if job[0] == request.uid:
         return jsonify({"msg": "O'zingiz yaratgan ishni qabul qila olmaysiz!"}), 400
     if job[1] != "active":
-        return jsonify({"msg": "Bu job hozir qabul qilish uchun mavjud emas"}), 409
+        return jsonify({"msg": "Bu ish hozir qabul qilish uchun mavjud emas"}), 409
     if job[2] is not None:
         return jsonify({"msg": "Ushbu ish allaqachon qabul qilingan"}), 409
 
@@ -1332,7 +1332,7 @@ def finish():
 
     job = db.q("SELECT user_id, worker_id, status FROM jobs WHERE id=?", (job_id,)).fetchone()
     if not job:
-        return jsonify({"msg": "Job topilmadi"}), 404
+        return jsonify({"msg": "Ish topilmadi"}), 404
     if job[0] != request.uid:
         return jsonify({"msg": "Faqat ish yaratuvchisi yakunlash so'rovini yuborishi mumkin!"}), 403
     if not job[1]:
@@ -1362,7 +1362,7 @@ def confirm_finish():
 
     job = db.q("SELECT worker_id, status FROM jobs WHERE id=?", (job_id,)).fetchone()
     if not job:
-        return jsonify({"msg": "Job topilmadi"}), 404
+        return jsonify({"msg": "Ish topilmadi"}), 404
     if job[0] != request.uid:
         return jsonify({"msg": "Ruxsat berilmadi"}), 403
     if job[1] != "pending_finish":
@@ -1394,7 +1394,7 @@ def msg():
 
     job = db.q("SELECT user_id, worker_id, status FROM jobs WHERE id=?", (job_id,)).fetchone()
     if not job:
-        return jsonify({"msg": "Job topilmadi"}), 404
+        return jsonify({"msg": "Ish topilmadi"}), 404
 
     if request.uid == job[0]:
         receiver_id = job[1]
@@ -1419,7 +1419,7 @@ def msg():
 def get_msg(job_id):
     job = db.q("SELECT user_id, worker_id FROM jobs WHERE id=?", (job_id,)).fetchone()
     if not job:
-        return jsonify({"msg": "Job topilmadi"}), 404
+        return jsonify({"msg": "Ish topilmadi"}), 404
     if request.uid != job[0] and request.uid != job[1]:
         return jsonify({"msg": "Ruxsat berilmadi"}), 403
 
@@ -1470,7 +1470,7 @@ def add_rating():
 
     job = db.q("SELECT user_id, worker_id, status FROM jobs WHERE id=?", (job_id,)).fetchone()
     if not job:
-        return jsonify({"msg": "Job topilmadi"}), 404
+        return jsonify({"msg": "Ish topilmadi"}), 404
 
     if job[1] is None:
         return jsonify({"msg": "Bu ishda hali bajaruvchi yo'q"}), 400
@@ -1632,15 +1632,15 @@ def profile():
         email = d.get("email", "").strip().lower()
 
         if not username or not email:
-            return jsonify({"msg": "Username va email kiritilishi shart"}), 400
+            return jsonify({"msg": "Foydalanuvchi nomi va elektron pochta kiritilishi shart"}), 400
 
         exists_u = db.q("SELECT id FROM users WHERE username=? AND id!=?", (username, request.uid)).fetchone()
         if exists_u:
-            return jsonify({"msg": "Ushbu Username allaqachon band!"}), 400
+            return jsonify({"msg": "Ushbu foydalanuvchi nomi allaqachon band!"}), 400
 
         exists_e = db.q("SELECT id FROM users WHERE email=? AND id!=?", (email, request.uid)).fetchone()
         if exists_e:
-            return jsonify({"msg": "Ushbu Email allaqachon ro'yxatdan o'tgan!"}), 400
+            return jsonify({"msg": "Ushbu elektron pochta allaqachon ro‘yxatdan o‘tgan!"}), 400
 
         result = db.q(
             """UPDATE users 
