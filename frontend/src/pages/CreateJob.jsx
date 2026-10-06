@@ -114,24 +114,17 @@ export default function CreateJob() {
                     {notice && <div className="notice ok" style={{ marginBottom: 14 }}>{notice}</div>}
 
                     <form className="form" onSubmit={submit}>
-                        <div className="service-picker">
-                            <div className="service-picker-title">
-                                {form.service_id
-                                    ? services.find((service) => String(service.id) === String(form.service_id))?.name || "Xizmat"
-                                    : "Xizmatni tanlang"}
-                            </div>
-                            <div className="service-tree">
-                                {serviceTree.map((node) => (
-                                    <ServiceNode
-                                        key={node.id}
-                                        node={node}
-                                        level={0}
-                                        selected={form.service_id}
-                                        onSelect={(node) => setForm({ ...form, service_id: String(node.id) })}
-                                    />
-                                ))}
-                            </div>
-                        </div>
+                        <select
+                            className="input"
+                            value={form.service_id}
+                            onChange={(e) => setForm({ ...form, service_id: e.target.value })}
+                            required
+                        >
+                            <option value="">Xizmatni tanlang</option>
+                            {services.filter((service) => service.parent_id != null).map((service) => (
+                                <option key={service.id} value={service.id}>{service.name}</option>
+                            ))}
+                        </select>
 
                         <input
                             className="input"
