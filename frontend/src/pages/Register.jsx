@@ -165,7 +165,7 @@ export default function Register() {
 
                             <input
                                 className="input"
-                                placeholder="Username"
+                                placeholder="Foydalanuvchi nomi"
                                 value={form.username}
                                 onChange={(e) => setForm({ ...form, username: e.target.value })}
                                 required
@@ -174,7 +174,7 @@ export default function Register() {
                             <input
                                 className="input"
                                 type="email"
-                                placeholder="Email manzilingiz"
+                                placeholder="Elektron pochta manzilingiz"
                                 value={form.email}
                                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                                 required
