@@ -48,6 +48,7 @@ function ServiceNode({ node, level, selected, onSelect }) {
 export default function CreateJob() {
     const [services, setServices] = useState([])
     const [serviceSearch, setServiceSearch] = useState("")
+    const [showCategories, setShowCategories] = useState(false)
     const [form, setForm] = useState({
         service_id: "",
         title: "",
@@ -166,7 +167,10 @@ export default function CreateJob() {
                             <button
                                 type="button"
                                 className="service-select-button"
-                                onClick={() => setServiceSearch("")}
+                                onClick={() => {
+                                    setServiceSearch("")
+                                    setShowCategories(true)
+                                }}
                             >
                                 Soha tanlang
                             </button>
@@ -180,7 +184,11 @@ export default function CreateJob() {
                                 />
                             </div>
                             <div className="service-tree">
-                                {serviceSearch.trim() ? (
+                                {!showCategories && !serviceSearch.trim() ? (
+                                    <div className="service-category-placeholder">
+                                        Soha tanlash uchun yuqoridagi tugmani bosing
+                                    </div>
+                                ) : serviceSearch.trim() ? (
                                     (() => {
                                         const parentIds = new Set(filteredServices.map((service) => String(service.parent_id)))
                                         const exactServices = filteredServices.filter(
