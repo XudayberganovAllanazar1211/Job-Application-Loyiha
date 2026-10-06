@@ -85,7 +85,7 @@ export default function CreateJob() {
         load()
     }, [token])
 
-    const canJoylashtirish = useMemo(
+    const canSubmit = useMemo(
         () =>
             (selectedServiceIds.length > 0 || customServices.length > 0) &&
             form.title.trim() &&
@@ -96,7 +96,7 @@ export default function CreateJob() {
         [form, selectedServiceIds, customServices, priceError]
     )
 
-    const detectManzil = () => {
+    const detectLocation = () => {
         if (!navigator.geolocation) {
             setLocationError("Brauzeringiz joylashuvni aniqlashni qo'llab-quvvatlamaydi.")
             return
@@ -425,7 +425,7 @@ export default function CreateJob() {
                                     <button
                                         type="button"
                                         className="btn btn-secondary detect-location-button"
-                                        onClick={detectManzil}
+                                        onClick={detectLocation}
                                         disabled={locationLoading}
                                     >
                                         {locationLoading ? "Aniqlanmoqda..." : "Joylashuvimni aniqlash"}
@@ -438,7 +438,7 @@ export default function CreateJob() {
                             </div>
                         </div>
 
-                        <button className="btn btn-primary" disabled={!canJoylashtirish || loading}>
+                        <button className="btn btn-primary" disabled={!canSubmit || loading}>
                             {loading ? "Yuborilmoqda..." : "Joylashtirish"}
                         </button>
                     </form>
