@@ -9,21 +9,101 @@ export default function Admin() {
     const [data, setData] = useState(null)
     const [notice, setNotice] = useState("")
     const [tab, setTab] = useState("users")
+    const [serviceName, setServiceName] = useState("")
+    const [serviceParent, setServiceParent] = useState("")
+
+    const load = async () => {
+        const result = await api("/admin/overview", { token })
+        if (result?.ok) {
+            setData(result)
+            setNotice("")
+        } else {
+            setNotice(result?.msg || "Admin ma'lumotlarini yuklab bo'lmadi.")
+        }
+    }
 
     useEffect(() => {
         if (!token || user?.role !== "admin") return
-
-        const load = async () => {
-            const result = await api("/admin/overview", { token })
-            if (result?.ok) {
-                setData(result)
-            } else {
-                setNotice(result?.msg || "Admin ma'lumotlarini yuklab bo'lmadi.")
-            }
-        }
-
         load()
     }, [token, user?.role])
+
+    const action = async (path, options = {}, successMessage = "O'zgarish saqlandi.") => {
+        setNotice("")
+        const result = await api(path, { token, ...options })
+
+        if (!result?.ok) {
+            setNotice(result?.msg || "Amal bajarilmadi.")
+            return false
+        }
+
+        setNotice(result?.msg || successMessage)
+        await load()
+        return true
+    }
+
+    const changeRole = async (item, role) => {
+        if (role === item.role) return
+        await action(
+            "/admin/user-role",
+            { method: "PATCH", body: { user_id: item.id, role } },
+            "User roli o'zgartirildi."
+        )
+    }
+
+    const deleteUser = async (item) => {
+        if (!window.confirm("@"+item.username+" foydalanuvchisini va unga bog'liq ma'lumotlarni o'chirishni tasdiqlaysizmi?")) return
+        await action("/admin/user/"+item.id, { method: "DELETE" }, "Foydalanuvchi o'chirildi.")
+    }
+
+    const updateJobStatus = async (item, status) => {
+        if (status === item.status) return
+        await action(
+            "/admin/job/"+item.id,
+            { method: "PATCH", body: { status } },
+            "Job statusi o'zgartirildi."
+        )
+    }
+
+    const deleteJob = async (item) => {
+        if (!window.confirm("#"+item.id+" — "+item.title+" jobini o'chirishni tasdiqlaysizmi?")) return
+        await action("/admin/job/"+item.id, { method: "DELETE" }, "Job o'chirildi.")
+    }
+
+    const createService = async (event) => {
+        event.preventDefault()
+
+        if (!serviceName.trim()) {
+            setNotice("Xizmat nomini kiriting.")
+            return
+        }
+
+        const ok = await action(
+            "/admin/service",
+            {
+                method: "POST",
+                body: {
+                    name: serviceName.trim(),
+                    parent_id: serviceParent || null
+                }
+            },
+            "Xizmat qo'shildi."
+        )
+
+        if (ok) {
+            setServiceName("")
+            setServiceParent("")
+        }
+    }
+
+    const deleteService = async (item) => {
+        if (!window.confirm("\""+item.name+"\" xizmatini o'chirishni tasdiqlaysizmi?")) return
+        await action("/admin/service/"+item.id, { method: "DELETE" }, "Xizmat o'chirildi.")
+    }
+
+    const deleteRating = async (item) => {
+        if (!window.confirm("#"+item.id+" ratingni o'chirishni tasdiqlaysizmi?")) return
+        await action("/admin/rating/"+item.id, { method: "DELETE" }, "Rating o'chirildi.")
+    }
 
     if (!token) return <Navigate to="/login" replace />
     if (user?.role !== "admin") return <Navigate to="/" replace />
@@ -37,10 +117,7 @@ export default function Admin() {
     ]
 
     return (
-        <AppLayout
-            title="Admin Dashboard"
-            subtitle="FinJob platformasining umumiy holati va ma'lumotlarini boshqaring."
-        >
+        <AppLayout title="Admin Dashboard" subtitle="FinJob platformasini to'liq boshqaring.">
             {notice && <div className="notice warn" style={{ marginBottom: 16 }}>{notice}</div>}
 
             <div className="admin-stat-grid">
@@ -55,31 +132,37 @@ export default function Admin() {
             <div className="card admin-panel">
                 <div className="admin-tabs">
                     {tabs.map(([key, label]) => (
-                        <button
-                            key={key}
-                            className={tab === key ? "admin-tab active" : "admin-tab"}
-                            onClick={() => setTab(key)}
-                        >
+                        <button key={key} className={tab === key ? "admin-tab active" : "admin-tab"} onClick={() => setTab(key)}>
                             {label}
                         </button>
                     ))}
                 </div>
 
-                {!data && !notice && <div className="muted">Yuklanmoqda...</div>}
+                {!data && !notice && <div className="muted" style={{ padding: 20 }}>Yuklanmoqda...</div>}
 
                 {data && tab === "users" && (
                     <div className="admin-table-wrap">
                         <table className="admin-table">
-                            <thead><tr><th>ID</th><th>User</th><th>Email</th><th>Role</th><th>Rating</th><th>Qo'shilgan</th></tr></thead>
+                            <thead><tr><th>ID</th><th>User</th><th>Email</th><th>Role</th><th>Rating</th><th>Qo'shilgan</th><th>Amallar</th></tr></thead>
                             <tbody>
                                 {data.users.map((item) => (
                                     <tr key={item.id}>
                                         <td>#{item.id}</td>
                                         <td><strong>{item.username}</strong><small>{item.first_name} {item.last_name}</small></td>
                                         <td>{item.email}</td>
-                                        <td><span className={item.role === "admin" ? "admin-role" : "user-role"}>{item.role}</span></td>
+                                        <td>
+                                            <select className="admin-action-select" value={item.role} disabled={item.id === user.id} onChange={(event) => changeRole(item, event.target.value)}>
+                                                <option value="user">user</option>
+                                                <option value="admin">admin</option>
+                                            </select>
+                                        </td>
                                         <td>{Number(item.average_rating || 0).toFixed(1)}</td>
                                         <td>{item.created_at || "—"}</td>
+                                        <td>
+                                            <button className="btn btn-danger admin-small-btn" disabled={item.id === user.id || item.role === "admin"} onClick={() => deleteUser(item)}>
+                                                O'chirish
+                                            </button>
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -90,7 +173,7 @@ export default function Admin() {
                 {data && tab === "jobs" && (
                     <div className="admin-table-wrap">
                         <table className="admin-table">
-                            <thead><tr><th>ID</th><th>Job</th><th>Creator</th><th>Worker</th><th>Price</th><th>Status</th><th>Location</th></tr></thead>
+                            <thead><tr><th>ID</th><th>Job</th><th>Creator</th><th>Worker</th><th>Price</th><th>Status</th><th>Location</th><th>Amallar</th></tr></thead>
                             <tbody>
                                 {data.jobs.map((item) => (
                                     <tr key={item.id}>
@@ -99,8 +182,15 @@ export default function Admin() {
                                         <td>{item.creator_username || "—"}</td>
                                         <td>{item.worker_username || "—"}</td>
                                         <td>{Number(item.price || 0).toLocaleString()} {item.currency || "UZS"}</td>
-                                        <td><span className="admin-status">{item.status || "—"}</span></td>
+                                        <td>
+                                            <select className="admin-action-select" value={item.status || "active"} onChange={(event) => updateJobStatus(item, event.target.value)}>
+                                                <option value="active">active</option>
+                                                <option value="accepted">accepted</option>
+                                                <option value="finished">finished</option>
+                                            </select>
+                                        </td>
                                         <td>{item.location || "—"}</td>
+                                        <td><button className="btn btn-danger admin-small-btn" onClick={() => deleteJob(item)}>O'chirish</button></td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -109,27 +199,43 @@ export default function Admin() {
                 )}
 
                 {data && tab === "services" && (
-                    <div className="admin-table-wrap">
-                        <table className="admin-table">
-                            <thead><tr><th>ID</th><th>Xizmat</th><th>Ota kategoriya</th><th>Created by</th></tr></thead>
-                            <tbody>
-                                {data.services.map((item) => (
-                                    <tr key={item.id}>
-                                        <td>#{item.id}</td>
-                                        <td><strong>{item.name}</strong></td>
-                                        <td>{item.parent_name || "Asosiy kategoriya"}</td>
-                                        <td>{item.created_by || "System"}</td>
-                                    </tr>
+                    <div>
+                        <form className="admin-create-service" onSubmit={createService}>
+                            <input className="input" placeholder="Yangi xizmat yoki kategoriya nomi" value={serviceName} onChange={(event) => setServiceName(event.target.value)} />
+                            <select className="select admin-parent-select" value={serviceParent} onChange={(event) => setServiceParent(event.target.value)}>
+                                <option value="">Asosiy kategoriya</option>
+                                {(data.services || []).map((item) => (
+                                    <option key={item.id} value={item.id}>
+                                        {item.parent_name ? item.parent_name + " → " + item.name : item.name}
+                                    </option>
                                 ))}
-                            </tbody>
-                        </table>
+                            </select>
+                            <button className="btn btn-primary" type="submit">+ Xizmat qo'shish</button>
+                        </form>
+
+                        <div className="admin-table-wrap">
+                            <table className="admin-table">
+                                <thead><tr><th>ID</th><th>Xizmat</th><th>Ota kategoriya</th><th>Created by</th><th>Amal</th></tr></thead>
+                                <tbody>
+                                    {data.services.map((item) => (
+                                        <tr key={item.id}>
+                                            <td>#{item.id}</td>
+                                            <td><strong>{item.name}</strong></td>
+                                            <td>{item.parent_name || "Asosiy kategoriya"}</td>
+                                            <td>{item.created_by || "System"}</td>
+                                            <td><button className="btn btn-danger admin-small-btn" onClick={() => deleteService(item)}>O'chirish</button></td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 )}
 
                 {data && tab === "ratings" && (
                     <div className="admin-table-wrap">
                         <table className="admin-table">
-                            <thead><tr><th>ID</th><th>Job</th><th>From</th><th>To</th><th>Score</th><th>Comment</th></tr></thead>
+                            <thead><tr><th>ID</th><th>Job</th><th>From</th><th>To</th><th>Score</th><th>Comment</th><th>Amal</th></tr></thead>
                             <tbody>
                                 {data.ratings.map((item) => (
                                     <tr key={item.id}>
@@ -139,6 +245,7 @@ export default function Admin() {
                                         <td>{item.to_username || "—"}</td>
                                         <td><strong>{item.score}/5</strong></td>
                                         <td>{item.comment || "—"}</td>
+                                        <td><button className="btn btn-danger admin-small-btn" onClick={() => deleteRating(item)}>O'chirish</button></td>
                                     </tr>
                                 ))}
                             </tbody>
