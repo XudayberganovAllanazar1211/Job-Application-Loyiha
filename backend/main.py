@@ -56,11 +56,7 @@ def send_email_code(to_email, code):
         server.quit()
         return True
     except Exception as e:
-        print("\n" + "=" * 50)
-        print(f"!!! EMAIL YUBORISHDA XATO !!!: {e}")
-        print(f"!!! DIQQAT! TASDIQLASH KODI TERMINALDA !!!")
-        print(f"Email: {to_email}")
-        print("=" * 50 + "\n")
+        app.logger.exception("Tasdiqlash xatini yuborishda xatolik yuz berdi: %s", e)
         return False
 
 
@@ -873,6 +869,9 @@ def login():
     if not username_or_email or not password:
         return jsonify({"msg": "Foydalanuvchi nomi/elektron pochta va parol kiritilishi shart!"}), 400
 
+    if len(password) < 8:
+        return jsonify({"msg": "Parol kamida 8 ta belgidan iborat bo‘lishi kerak"}), 400
+
     u = db.q(
         "SELECT id, password, role FROM users WHERE username=? OR email=?",
         (username_or_email, username_or_email),
@@ -895,19 +894,32 @@ def send_code():
         if i not in d or not str(d[i]).strip():
             return jsonify({"msg": f"{i} maydoni to'ldirilishi shart"}), 400
 
-    exists_u = db.q("SELECT id FROM users WHERE username=?", (d["username"].strip(),)).fetchone()
+    username = str(d["username"]).strip()
+    email = str(d["email"]).strip().lower()
+    password = str(d["password"])
+
+    if len(username) < 3 or len(username) > 32:
+        return jsonify({"msg": "Foydalanuvchi nomi 3–32 belgidan iborat bo‘lishi kerak"}), 400
+
+    if len(password) < 8:
+        return jsonify({"msg": "Parol kamida 8 ta belgidan iborat bo‘lishi kerak"}), 400
+
+    if len(email) > 254 or "@" not in email or email.startswith("@") or email.endswith("@"):
+        return jsonify({"msg": "Elektron pochta manzili noto‘g‘ri"}), 400
+
+    exists_u = db.q("SELECT id FROM users WHERE username=?", (username,)).fetchone()
     if exists_u:
         return jsonify({"msg": "Ushbu foydalanuvchi nomi allaqachon band!"}), 400
 
-    exists_e = db.q("SELECT id FROM users WHERE email=?", (d["email"].strip().lower(),)).fetchone()
+    exists_e = db.q("SELECT id FROM users WHERE email=?", (email,)).fetchone()
     if exists_e:
         return jsonify({"msg": "Ushbu elektron pochta allaqachon ro‘yxatdan o‘tgan!"}), 400
 
     code = str(secrets.randbelow(900000) + 100000)
-    email_key = d["email"].strip().lower()
+    email_key = email
     pending_verifications[email_key] = {
         "code": code,
-        "data": {**d, "email": email_key, "username": d["username"].strip(), "password": generate_password_hash(d["password"])},
+        "data": {**d, "email": email_key, "username": username, "password": generate_password_hash(password)},
         "expiry": datetime.datetime.now() + datetime.timedelta(minutes=10),
     }
 
@@ -1119,6 +1131,15 @@ def add_job():
 
     if not title or not location:
         return jsonify({"msg": "Sarlavha va manzil maydonlarini to‘ldiring"}), 400
+
+    if len(title) > 160:
+        return jsonify({"msg": "Sarlavha 160 belgidan oshmasligi kerak"}), 400
+
+    if len(description) > 5000:
+        return jsonify({"msg": "Tavsif 5000 belgidan oshmasligi kerak"}), 400
+
+    if len(location) > 300:
+        return jsonify({"msg": "Manzil 300 belgidan oshmasligi kerak"}), 400
 
     if not valid_service_ids and not custom_services:
         return jsonify({"msg": "Kamida bitta xizmat tanlang yoki yangi xizmat nomini kiriting"}), 400
@@ -1431,8 +1452,14 @@ def confirm_finish():
         result.close()
         return jsonify({"msg": "ok", "status": "finished"})
 
-    result = db.q("UPDATE jobs SET status='accepted' WHERE id=?", (job_id,))
+    result = db.q(
+        "UPDATE jobs SET status='accepted' WHERE id=? AND status='pending_finish' AND worker_id=?",
+        (job_id, request.uid),
+    )
+    updated = result.rowcount
     result.close()
+    if updated != 1:
+        return jsonify({"msg": "Ish holati o‘zgardi. Qayta urinib ko‘ring"}), 409
     return jsonify({"msg": "rejected", "status": "accepted"})
 
 
