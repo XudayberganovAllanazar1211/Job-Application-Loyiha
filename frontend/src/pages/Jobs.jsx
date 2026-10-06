@@ -562,7 +562,7 @@ export default function Jobs() {
                                 </div>
                             )}
 
-                            {offerJobId === job.id && canAccept && (
+                            {offerJobId === job.id && canBid && (
                                 <div className="offer-panel">
                                     <div>
                                         <strong>O‘z taklifingizni yuboring</strong>
@@ -685,8 +685,8 @@ export default function Jobs() {
                                         Ishni qabul qilish
                                     </button>
                                 )}
-                                {canAccept && (
-                                    <button className="btn btn-secondary" onClick={() => { setOfferJobId(offerJobId === job.id ? null : job.id); setOfferAmount(String(job.price || "")) }}>
+                                {canBid && (
+                                    <button type="button" className="btn btn-secondary" onClick={() => { setOfferJobId(offerJobId === job.id ? null : job.id); setOfferAmount(String(job.price || "")); setOfferMessage("") }}>
                                         💼 Taklif yuborish
                                     </button>
                                 )}
