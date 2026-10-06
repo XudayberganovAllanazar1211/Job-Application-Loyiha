@@ -256,6 +256,15 @@ class DB:
             except Exception:
                 pass
 
+        # Active ish hech qachon biriktirilgan bajaruvchiga ega bo‘lmasligi kerak.
+        # Eski bazadagi active + worker_id holatini avtomatik tiklaymiz.
+        try:
+            cursor.execute(
+                "UPDATE jobs SET worker_id=NULL WHERE status='active' AND worker_id IS NOT NULL"
+            )
+        except Exception:
+            pass
+
         cursor.execute("PRAGMA table_info(ratings)")
         existing_rating_cols = [row[1] for row in cursor.fetchall()]
         if "created_at" not in existing_rating_cols:
