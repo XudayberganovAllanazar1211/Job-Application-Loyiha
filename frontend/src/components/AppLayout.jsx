@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { NavLink, useNavigate } from "react-router-dom"
+import { api } from "../api"
 
 const navItems = [
     ["/", "Boshqaruv paneli", "⌂"],
@@ -11,6 +12,10 @@ const navItems = [
 export default function AppLayout({ title, subtitle, children }) {
     const navigate = useNavigate()
     const [theme, setTheme] = useState(() => localStorage.getItem("finjob-theme") || "light")
+    const [notifications, setNotifications] = useState([])
+    const [unreadNotifications, setUnreadNotifications] = useState(0)
+    const [showNotifications, setShowNotifications] = useState(false)
+    const token = localStorage.getItem("token") || ""
     const user = JSON.parse(localStorage.getItem("user") || "null")
     const isAdmin = user?.role === "admin"
     const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(" ") || user?.username || "Mehmon"
@@ -23,6 +28,32 @@ export default function AppLayout({ title, subtitle, children }) {
         document.documentElement.dataset.theme = theme
         localStorage.setItem("finjob-theme", theme)
     }, [theme])
+
+    useEffect(() => {
+        let alive = true
+        const loadNotifications = async () => {
+            const result = await api("/notifications", { token })
+            if (alive && result?.items) {
+                setNotifications(result.items)
+                setUnreadNotifications(Number(result.unread || 0))
+            }
+        }
+        if (token) {
+            loadNotifications()
+            const timer = setInterval(loadNotifications, 30000)
+            return () => { alive = false; clearInterval(timer) }
+        }
+        return () => { alive = false }
+    }, [token])
+
+    const openNotifications = async () => {
+        setShowNotifications((value) => !value)
+        if (unreadNotifications > 0) {
+            setUnreadNotifications(0)
+            await api("/notifications/read", { method: "POST", token })
+            setNotifications((items) => items.map((item) => ({ ...item, is_read: 1 })))
+        }
+    }
 
     const logout = () => {
         localStorage.removeItem("token")
@@ -84,6 +115,24 @@ export default function AppLayout({ title, subtitle, children }) {
                         <p className="page-subtitle">{subtitle}</p>
                     </div>
                     <div className="topbar-actions">
+                        <div className="notification-wrap">
+                            <button className="notification-button" type="button" onClick={openNotifications} aria-label="Bildirishnomalar">
+                                <span>♢</span>
+                                {unreadNotifications > 0 && <b>{unreadNotifications > 99 ? "99+" : unreadNotifications}</b>}
+                            </button>
+                            {showNotifications && (
+                                <div className="notification-panel">
+                                    <div className="notification-head"><strong>Bildirishnomalar</strong><button onClick={() => setShowNotifications(false)}>×</button></div>
+                                    <div className="notification-list">
+                                        {notifications.length ? notifications.slice(0, 8).map((item) => (
+                                            <button key={item.id} className={item.is_read ? "notification-item" : "notification-item unread"} onClick={() => { setShowNotifications(false); if (item.link) navigate(item.link) }}>
+                                                <strong>{item.title}</strong><span>{item.message}</span><small>{item.created_at}</small>
+                                            </button>
+                                        )) : <div className="notification-empty">Hozircha yangi bildirishnoma yo‘q.</div>}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                         <button className="theme-toggle" type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label={theme === "dark" ? "Yorug‘ rejimga o‘tish" : "Qorong‘i rejimga o‘tish"}>
                             <span>{theme === "dark" ? "☀" : "☾"}</span>
                             <span>{theme === "dark" ? "Yorug‘" : "Qorong‘i"}</span>
