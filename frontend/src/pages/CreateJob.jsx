@@ -212,6 +212,7 @@ export default function CreateJob() {
                                                 className={String(form.service_id) === String(service.id) ? "service-search-result selected" : "service-search-result"}
                                                 onClick={() => {
                                                     setForm({ ...form, service_id: String(service.id) })
+                                                    setServiceSearch("")
                                                     setShowCategories(false)
                                                 }}
                                             >
