@@ -11,6 +11,7 @@ import Profile from "./pages/Profile"
 import PrivacyPolicy from "./pages/PrivacyPolicy"
 import Terms from "./pages/Terms"
 import CommunityRules from "./pages/CommunityRules"
+import Admin from "./pages/Admin"
 
 function Protected({ children }) {
     const token = localStorage.getItem("token")
@@ -39,6 +40,7 @@ export default function App() {
             {/* LEADERBOARD SAHIFASI QO'SHILDI */}
             <Route path="/leaderboard" element={<Protected><Leaderboard /></Protected>} />
             <Route path="/profile" element={<Protected><Profile /></Protected>} />
+            <Route path="/admin" element={<Protected><Admin /></Protected>} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
