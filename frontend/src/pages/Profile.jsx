@@ -83,6 +83,7 @@ export default function Profile() {
     const [cropImageUrl, setCropImageUrl] = useState("")
     const [cropZoom, setCropZoom] = useState(1)
     const [cropOffset, setCropOffset] = useState({ x: 0, y: 0 })
+    const [cropImageSize, setCropImageSize] = useState({ width: 500, height: 500 })
     const [cropDragging, setCropDragging] = useState(false)
     const cropImageRef = useRef(null)
     const cropAreaRef = useRef(null)
@@ -208,6 +209,7 @@ export default function Profile() {
         setCropImageUrl("")
         setCropZoom(1)
         setCropOffset({ x: 0, y: 0 })
+        setCropImageSize({ width: 500, height: 500 })
         setCropDragging(false)
     }
 
@@ -231,6 +233,7 @@ export default function Profile() {
         setCropImageUrl(URL.createObjectURL(file))
         setCropZoom(1)
         setCropOffset({ x: 0, y: 0 })
+        setCropImageSize({ width: 500, height: 500 })
         setCropDragging(false)
         setNotice("")
     }
@@ -749,8 +752,18 @@ export default function Profile() {
                                 src={cropImageUrl}
                                 alt="Profil rasmi tanlovi"
                                 draggable="false"
-                                style={{transform: `translate(calc(-50% + ${cropOffset.x}px), calc(-50% + ${cropOffset.y}px)) scale(${cropZoom})`}}
-                                onLoad={() => setCropOffset({ x: 0, y: 0 })}
+                                style={{width: `${cropImageSize.width}px`, height: `${cropImageSize.height}px`, transform: `translate(calc(-50% + ${cropOffset.x}px), calc(-50% + ${cropOffset.y}px)) scale(${cropZoom})`}}
+                                onLoad={(event) => {
+                                    const areaWidth = cropAreaRef.current?.clientWidth || 500
+                                    const naturalWidth = event.currentTarget.naturalWidth
+                                    const naturalHeight = event.currentTarget.naturalHeight
+                                    const scale = Math.max(areaWidth / naturalWidth, areaWidth / naturalHeight)
+                                    setCropImageSize({
+                                        width: naturalWidth * scale,
+                                        height: naturalHeight * scale
+                                    })
+                                    setCropOffset({ x: 0, y: 0 })
+                                }}
                             />
                             <div className="avatar-crop-circle" />
                         </div>
