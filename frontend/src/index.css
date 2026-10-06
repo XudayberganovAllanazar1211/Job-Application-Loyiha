@@ -93,3 +93,34 @@ input[type=range]{accent-color:#2563eb}
     background: rgba(99,102,241,.18);
     color: #fff;
 }
+
+
+.job-tips-card {
+    height: fit-content;
+}
+
+.tips-list {
+    display: grid;
+    gap: 12px;
+    margin-top: 18px;
+}
+
+.tip-item {
+    display: grid;
+    gap: 5px;
+    padding: 13px 14px;
+    border: 1px solid #e7ebf2;
+    border-radius: 14px;
+    background: #f8fafc;
+}
+
+.tip-item strong {
+    color: #172033;
+    font-size: 14px;
+}
+
+.tip-item span {
+    color: #64748b;
+    font-size: 13px;
+    line-height: 1.55;
+}
