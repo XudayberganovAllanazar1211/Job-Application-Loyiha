@@ -259,3 +259,5 @@ input[type=range]{accent-color:#2563eb}
 .service-picker-title{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .service-remove-button{width:28px;height:28px;flex:0 0 28px;border:1px solid #e2e8f0;border-radius:8px;background:#fff;color:#64748b;font-size:20px;line-height:1;cursor:pointer;display:grid;place-items:center;transition:.16s}
 .service-remove-button:hover{background:#fee2e2;border-color:#fecaca;color:#dc2626}
+
+.selected-services{display:flex;align-items:center;flex-wrap:wrap;gap:6px;min-width:0}.selected-service-chip{display:inline-flex;align-items:center;gap:5px;padding:5px 7px 5px 9px;border-radius:8px;background:#eff6ff;border:1px solid #dbeafe;color:#1d4ed8;font-size:13px;font-weight:700}.selected-service-chip button{width:16px;height:16px;padding:0;border:0;border-radius:50%;background:#dbeafe;color:#2563eb;cursor:pointer;font-size:13px;line-height:16px;display:grid;place-items:center}.selected-service-chip button:hover{background:#fecaca;color:#dc2626}.service-picker-title{display:flex;align-items:center;min-height:46px;padding:8px 12px}
