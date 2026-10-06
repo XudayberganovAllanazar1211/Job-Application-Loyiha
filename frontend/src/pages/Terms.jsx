@@ -20,11 +20,11 @@ export default function Terms() {
                     <h2>2. Hisob</h2>
                     <p>Foydalanuvchi ro'yxatdan o'tishda haqqoniy ma'lumot berishi va akkaunt ma'lumotlarini himoya qilishi kerak. Boshqa shaxs nomidan akkaunt yaratish, login yoki tasdiqlash kodidan ruxsatsiz foydalanish taqiqlanadi.</p>
 
-                    <h2>3. Job va xizmat e'lonlari</h2>
+                    <h2>3. Ish va xizmat e’lonlari</h2>
                     <p>E'lon joylashtirgan foydalanuvchi uning mazmuni, narxi, talablari va joylashuv ma'lumotlari uchun javobgardir. Qonunga zid, firibgarlikka qaratilgan, zararli yoki boshqa shaxslarning huquqlarini buzuvchi e'lonlar joylashtirilmasligi kerak.</p>
 
                     <h2>4. Qabul qilish va yakunlash</h2>
-                    <p>Jobni qabul qilish foydalanuvchi bilan ish yaratuvchisi o'rtasidagi kelishuv jarayonining bir qismi hisoblanadi. FinJob platformasi bajariladigan ishning sifati, natijasi yoki foydalanuvchilar o'rtasidagi kelishuvni alohida shartnoma bilan kafolatlamaydi.</p>
+                    <p>Ishni qabul qilish foydalanuvchi bilan ish yaratuvchisi o'rtasidagi kelishuv jarayonining bir qismi hisoblanadi. FinJob platformasi bajariladigan ishning sifati, natijasi yoki foydalanuvchilar o'rtasidagi kelishuvni alohida shartnoma bilan kafolatlamaydi.</p>
 
                     <h2>5. To'lovlar</h2>
                     <p>FinJobning hozirgi versiyasida ko'rsatilgan narx/valyuta ma'lumotlari ish shartlarini ifodalaydi. Foydalanuvchilar o'rtasida haqiqiy to'lovni amalga oshirish tartibi ular o'rtasidagi qonuniy kelishuvga bog'liq. FinJob alohida to‘lov operatori sifatida ko'rsatilmagan.</p>
@@ -32,8 +32,8 @@ export default function Terms() {
                     <h2>6. Chat va kontent</h2>
                     <p>Foydalanuvchi chat, profil, ish va baho orqali yuborgan kontent uchun javobgardir. Spam, tahdid, firibgarlik, zararli kod yoki boshqa noqonuniy kontent tarqatish taqiqlanadi.</p>
 
-                    <h2>7. Rating</h2>
-                    <p>Rating haqiqiy ish tajribasini adolatli aks ettirishi kerak. Soxta, manipulyativ yoki qasos sifatidagi baholardan foydalanmaslik kerak.</p>
+                    <h2>7. Baho berish</h2>
+                    <p>Baholash haqiqiy ish tajribasini adolatli aks ettirishi kerak. Soxta, manipulyativ yoki qasos sifatidagi baholardan foydalanmaslik kerak.</p>
 
                     <h2>8. Joylashuv</h2>
                     <p>Avtomatik manzil funksiyasidan foydalanish ixtiyoriy. Foydalanuvchi aniqlangan manzilni ish yuborilishidan oldin tekshirishi va zarur bo'lsa o'zgartirishi kerak.</p>
