@@ -64,45 +64,20 @@ export default function Leaderboard() {
                     {activeTab === "creators" ? "Ish Beruvchilar Reytingi" : "Ustalar Reytingi"}
                 </h3>
 
-                <div style={{ display: "grid", gap: "12px" }}>
+                <div className="leaderboard-list">
                     {loading ? (
                         <div className="empty-state">Yuklanmoqda...</div>
                     ) : currentList.length > 0 ? (
                         currentList.map((user, idx) => (
-                            <div key={user.id} style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                                padding: "16px 20px",
-                                background: "rgba(255,255,255,.04)",
-                                border: "1px solid rgba(148,163,184,.14)",
-                                borderRadius: "16px",
-                                transition: "transform 0.2s"
-                            }}>
+                            <div key={user.id} className={idx < 3 ? "leaderboard-item top" : "leaderboard-item"}>
                                 <div style={{ display: "flex", alignItems: "center", gap: "18px" }}>
-                                    <div style={{
-                                        fontSize: idx < 3 ? "28px" : "18px",
-                                        width: "40px",
-                                        textAlign: "center",
-                                        fontWeight: "900",
-                                        color: idx < 3 ? "#fff" : "#94a3b8"
-                                    }}>
-                                        {getRankIcon(idx)}
-                                    </div>
+                                    <div className="leaderboard-rank">{getRankIcon(idx)}</div>
                                     <div>
                                         <div style={{ fontWeight: 800, fontSize: "16px" }}>{user.name}</div>
                                         <div className="helper">Foydalanuvchi #{user.id}</div>
                                     </div>
                                 </div>
-                                <div className="chip" style={{
-                                    fontSize: "14px",
-                                    padding: "8px 14px",
-                                    background: "rgba(59,130,246,.15)",
-                                    color: "#60a5fa",
-                                    border: "1px solid rgba(59,130,246,.3)"
-                                }}>
-                                    ⭐ {user.count} ta ish
-                                </div>
+                                <div className="leaderboard-count">⭐ {user.count} ta ish</div>
                             </div>
                         ))
                     ) : (
