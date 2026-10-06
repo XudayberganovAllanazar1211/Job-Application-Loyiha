@@ -30,7 +30,7 @@ export default function PrivacyPolicy() {
                     <p>Ma'lumotlar hisobni yaratish va boshqarish, elektron pochta tasdiqlash, ishlarni joylashtirish va topish, foydalanuvchilar o'rtasida aloqa, baholash va platforma xavfsizligini ta'minlash uchun ishlatiladi.</p>
 
                     <h2>4. Elektron pochta va uchinchi tomon xizmatlari</h2>
-                    <p>Ro'yxatdan o'tish kodi siz ko'rsatgan elektron pochta manziliga SMTP orqali yuboriladi. Elektron pochta manzilingiz va tasdiqlash xabari email yetkazib berish xizmatidan foydalanish uchun tegishli elektron pochta provayderiga uzatilishi mumkin.</p>
+                    <p>Ro'yxatdan o'tish kodi siz ko'rsatgan elektron pochta manziliga SMTP orqali yuboriladi. Elektron pochta manzilingiz va tasdiqlash xabari elektron pochta yetkazib berish xizmatidan foydalanish uchun tegishli elektron pochta provayderiga uzatilishi mumkin.</p>
                     <p>FinJob foydalanuvchi ma'lumotlarini sotmaydi. Ma'lumotlar faqat platforma ishlashi uchun zarur bo'lgan xizmatlar yoki qonunchilik talab qilgan holatlarda uzatiladi.</p>
 
                     <h2>5. Saqlash va xavfsizlik</h2>
