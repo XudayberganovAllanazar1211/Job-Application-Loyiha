@@ -156,3 +156,21 @@ input[type=range]{accent-color:#2563eb}
     background: rgba(99,102,241,.18);
     color: #fff;
 }
+
+.service-select-button {
+    width: calc(100% - 20px);
+    margin: 10px;
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: rgba(255,255,255,.04);
+    color: var(--text);
+    font: inherit;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+}
+
+.service-select-button:hover {
+    background: rgba(255,255,255,.08);
+}
