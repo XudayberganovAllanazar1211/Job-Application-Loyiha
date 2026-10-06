@@ -92,6 +92,11 @@ export default function Login() {
                     <p style={{ marginTop: 16 }}>
                         Account yo‘qmi? <Link className="link" to="/register">Register</Link>
                     </p>
+                    <div className="auth-legal-links">
+                        <Link to="/privacy">Privacy</Link>
+                        <Link to="/terms">Terms</Link>
+                        <Link to="/community-rules">Community Rules</Link>
+                    </div>
                 </div>
             </section>
         </div>
