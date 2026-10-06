@@ -522,6 +522,64 @@ def admin_user_role():
     return jsonify({"msg": "Foydalanuvchi roli yangilandi."})
 
 
+@app.route("/admin/user/<int:user_id>", methods=["PATCH"])
+@admin_required
+def admin_update_user(user_id):
+    d = request.json or {}
+
+    target = db.q(
+        "SELECT id, username, email, role FROM users WHERE id=?",
+        (user_id,)
+    ).fetchone()
+
+    if not target:
+        return jsonify({"msg": "Foydalanuvchi topilmadi."}), 404
+
+    username = str(d.get("username", "")).strip()
+    email = str(d.get("email", "")).strip().lower()
+    first_name = str(d.get("first_name", "")).strip()
+    last_name = str(d.get("last_name", "")).strip()
+    birthday = str(d.get("birthday", "")).strip()
+    bio = str(d.get("bio", "")).strip()
+    skills = str(d.get("skills", "")).strip()
+    password = str(d.get("password", ""))
+
+    if not username or not email:
+        return jsonify({"msg": "Username va email bo'sh bo'lishi mumkin emas."}), 400
+
+    duplicate = db.q(
+        """SELECT id FROM users
+           WHERE (username=? OR email=?) AND id!=?""",
+        (username, email, user_id)
+    ).fetchone()
+
+    if duplicate:
+        return jsonify({"msg": "Bu username yoki email boshqa userda mavjud."}), 409
+
+    if password:
+        if len(password) < 8:
+            return jsonify({"msg": "Yangi parol kamida 8 ta belgidan iborat bo'lishi kerak."}), 400
+
+        hashed = generate_password_hash(password)
+        db.q(
+            """UPDATE users
+               SET username=?, email=?, first_name=?, last_name=?, birthday=?,
+                   bio=?, skills=?, password=?
+               WHERE id=?""",
+            (username, email, first_name, last_name, birthday, bio, skills, hashed, user_id)
+        ).close()
+    else:
+        db.q(
+            """UPDATE users
+               SET username=?, email=?, first_name=?, last_name=?, birthday=?,
+                   bio=?, skills=?
+               WHERE id=?""",
+            (username, email, first_name, last_name, birthday, bio, skills, user_id)
+        ).close()
+
+    return jsonify({"msg": "Foydalanuvchi ma'lumotlari yangilandi."})
+
+
 @app.route("/admin/user/<int:user_id>", methods=["DELETE"])
 @admin_required
 def admin_delete_user(user_id):
