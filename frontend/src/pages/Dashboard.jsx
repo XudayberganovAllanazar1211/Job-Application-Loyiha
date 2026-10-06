@@ -12,7 +12,7 @@ export default function Dashboard() {
     const [notice, setNotice] = useState("")
     const [noticeType, setNoticeType] = useState("ok")
     const token = localStorage.getItem("token") || ""
-    const user = JSON.parse(localStorage.getItem("foydalanuvchi") || "null")
+    const user = JSON.parse(localStorage.getItem("user") || localStorage.getItem("foydalanuvchi") || "null")
     const navigate = useNavigate()
 
     const [activeConfirmJobId, setActiveConfirmJobId] = useState(null)
@@ -358,12 +358,15 @@ export default function Dashboard() {
                             </div>
 
                             <div className="message-list">
-                                {messages.map((message, index) => (
-                                    <div className="message them" key={index}>
-                                        <div className="message-meta">{message.sender_name} • {message.sent_at}</div>
-                                        <div>{message.message}</div>
-                                    </div>
-                                ))}
+                                {messages.map((message, index) => {
+                                    const mine = String(message.sender_id) === String(user?.id)
+                                    return (
+                                        <div className={`message ${mine ? "me" : "them"}`} key={index}>
+                                            <div className="message-meta">{mine ? "Siz" : (message.sender_name || "Foydalanuvchi")} • {message.sent_at}</div>
+                                            <div>{message.message}</div>
+                                        </div>
+                                    )
+                                })}
                                 {!messages.length && <div className="empty-state">Hozircha xabar yo‘q.</div>}
                             </div>
                         </>
