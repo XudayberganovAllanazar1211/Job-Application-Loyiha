@@ -49,6 +49,7 @@ export default function CreateJob() {
     const [services, setServices] = useState([])
     const [serviceSearch, setServiceSearch] = useState("")
     const [showCategories, setShowCategories] = useState(false)
+    const [customService, setCustomService] = useState("")
     const [form, setForm] = useState({
         service_id: "",
         title: "",
@@ -115,7 +116,7 @@ export default function CreateJob() {
     }, [token])
 
     const canSubmit = useMemo(
-        () => form.service_id && form.title && form.description && form.price && !priceError && form.location,
+        () => (form.service_id || customService.trim()) && form.title && form.description && form.price && !priceError && form.location,
         [form]
     )
 
@@ -133,7 +134,8 @@ export default function CreateJob() {
         const result = await api("/job", {
             method: "POST",
             body: {
-                service_id: Number(form.service_id),
+                service_id: form.service_id ? Number(form.service_id) : null,
+                custom_service: customService.trim(),
                 title: form.title,
                 description: form.description,
                 price,
@@ -220,7 +222,19 @@ export default function CreateJob() {
                                                 {service.name}
                                             </button>
                                         )) : (
-                                            <div className="empty-state">Bunday xizmat topilmadi</div>
+                                            <div>
+                                                <div className="empty-state">Bunday xizmat topilmadi</div>
+                                                <input
+                                                    className="input"
+                                                    style={{ marginTop: 10 }}
+                                                    placeholder="Boshqa soha nomini qo'shing..."
+                                                    value={customService}
+                                                    onChange={(e) => {
+                                                        setCustomService(e.target.value)
+                                                        setForm({ ...form, service_id: "" })
+                                                    }}
+                                                />
+                                            </div>
                                         )
                                     })()
                                 ) : (
