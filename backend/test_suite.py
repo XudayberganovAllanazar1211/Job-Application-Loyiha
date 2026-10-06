@@ -279,7 +279,7 @@ class JobPlatformTestCase(unittest.TestCase):
 
         # Non-admin attempts to add service -> 403 Forbidden
         res_fail = self.client.post(
-            "/service",
+            "/admin/service",
             headers={"Authorization": f"Bearer {token_worker}"},
             json={"name": "Forbidden Category"}
         )
