@@ -61,6 +61,9 @@ export default function Jobs() {
     const [offerMessage, setOfferMessage] = useState("")
     const [offersJobId, setOffersJobId] = useState(null)
     const [jobOffers, setJobOffers] = useState([])
+    const [reportJobId, setReportJobId] = useState(null)
+    const [reportReason, setReportReason] = useState("")
+    const [reportDetails, setReportDetails] = useState("")
 
     const serviceMap = useMemo(
         () => Object.fromEntries(services.map((service) => [String(service.id), service.name])),
@@ -270,6 +273,20 @@ export default function Jobs() {
     }
 
     // Tasdiqlash natijasini yuborish (Ha yoki Yo'q)
+    const submitReport = async (job) => {
+        const result = await api("/report", { method: "POST", body: { job_id: job.id, reported_user_id: job.worker_id || job.user_id, reason: reportReason, details: reportDetails }, token })
+        if (result?.status === 201) {
+            setNoticeType("ok")
+            setNotice("Shikoyatingiz qabul qilindi. Administratorlar ko‘rib chiqadi.")
+            setReportJobId(null)
+            setReportReason("")
+            setReportDetails("")
+        } else {
+            setNoticeType("warn")
+            setNotice(result?.msg || "Shikoyat yuborilmadi.")
+        }
+    }
+
     const submitOffer = async (jobId) => {
         const result = await api("/offer", { method: "POST", body: { job_id: jobId, amount: Number(offerAmount), message: offerMessage }, token })
         if (result?.status === 201 || result?.msg === "Taklif yuborildi.") {
@@ -570,6 +587,11 @@ export default function Jobs() {
                                 {isMyJob && status === "active" && (
                                     <button className="btn btn-secondary" onClick={() => loadOffers(job.id)}>
                                         📩 Takliflarni ko‘rish
+                                    </button>
+                                )}
+                                {!isMyJob && (
+                                    <button className="btn btn-secondary" onClick={() => setReportJobId(reportJobId === job.id ? null : job.id)}>
+                                        ⚑ Shikoyat
                                     </button>
                                 )}
 
