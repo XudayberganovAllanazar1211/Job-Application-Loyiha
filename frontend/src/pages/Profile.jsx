@@ -369,7 +369,7 @@ export default function Profile() {
                         <section className="card">
                             <div className="profile-section-head">
                                 <div>
-                                    <span className="profile-eyebrow">ACCOUNT</span>
+                                    <span className="profile-eyebrow">HISOB</span>
                                     <h3 className="section-title">Shaxsiy ma'lumotlar</h3>
                                 </div>
                                 {!isEditing && <span className="profile-status">Ko'rish rejimi</span>}
@@ -412,7 +412,7 @@ export default function Profile() {
                                         />
                                     </div>
                                     <div>
-                                        <label className="helper profile-label">Username</label>
+                                        <label className="helper profile-label">Foydalanuvchi nomi</label>
                                         <input
                                             className="input"
                                             value={form.username}
@@ -424,7 +424,7 @@ export default function Profile() {
                                 </div>
 
                                 <div>
-                                    <label className="helper profile-label">Email manzil</label>
+                                    <label className="helper profile-label">Elektron pochta manzili</label>
                                     <input
                                         className="input"
                                         type="email"
@@ -463,7 +463,7 @@ export default function Profile() {
                             <section className="card">
                                 <div className="profile-section-head">
                                     <div>
-                                        <span className="profile-eyebrow">EXPERTISE</span>
+                                        <span className="profile-eyebrow">KO‘NIKMALAR</span>
                                         <h3 className="section-title">Ko'nikmalar</h3>
                                     </div>
                                     <span className="profile-count">{skills.length}</span>
@@ -475,7 +475,7 @@ export default function Profile() {
                                             <span key={index} className="profile-skill">
                                                 {skill}
                                                 {isEditing && (
-                                                    <button type="button" onClick={() => removeSkill(index)} aria-label={`Remove ${skill}`}>
+                                                    <button type="button" onClick={() => removeSkill(index)} aria-label={`Olib tashlash: ${skill}`}>
                                                         ×
                                                     </button>
                                                 )}
@@ -562,7 +562,7 @@ export default function Profile() {
                             </section>
 
                             <section className="card profile-info-card">
-                                <span className="profile-eyebrow">ACCOUNT STATUS</span>
+                                <span className="profile-eyebrow">HISOB HOLATI</span>
                                 <div className="profile-info-row">
                                     <span>Holat</span>
                                     <strong><i className="profile-online-dot" /> Faol</strong>
