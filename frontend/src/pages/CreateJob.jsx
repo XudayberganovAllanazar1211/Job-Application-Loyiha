@@ -31,7 +31,7 @@ function ServiceNode({ node, level, selected, onSelect }) {
                 ) : <span className="service-tree-spacer" />}
                 <button
                     type="button"
-                    className={String(selected) === String(node.id) ? "service-tree-item selected" : "service-tree-item"}
+                    className={selected.includes(String(node.id)) ? "service-tree-item selected" : "service-tree-item"}
                     disabled={hasChildren}
                     onClick={() => onSelect(node)}
                 >
@@ -49,6 +49,7 @@ export default function CreateJob() {
     const [services, setServices] = useState([])
     const [serviceSearch, setServiceSearch] = useState("")
     const [showCategories, setShowCategories] = useState(false)
+    const [selectedServiceIds, setSelectedServiceIds] = useState([])
     const [customServices, setCustomServices] = useState([])
     const [form, setForm] = useState({
         service_id: "",
@@ -116,8 +117,8 @@ export default function CreateJob() {
     }, [token])
 
     const canSubmit = useMemo(
-        () => (form.service_id || customServices.length > 0) && form.title && form.description && form.price && !priceError && form.location,
-        [form, customServices]
+        () => (selectedServiceIds.length > 0 || customServices.length > 0) && form.title && form.description && form.price && !priceError && form.location,
+        [form, selectedServiceIds, customServices]
     )
 
     const submit = async (e) => {
@@ -134,7 +135,8 @@ export default function CreateJob() {
         const result = await api("/job", {
             method: "POST",
             body: {
-                service_id: form.service_id ? Number(form.service_id) : null,
+                service_id: selectedServiceIds.length ? Number(selectedServiceIds[0]) : null,
+                service_ids: selectedServiceIds.map(Number),
                 custom_service: customServices.join(", "),
                 title: form.title,
                 description: form.description,
@@ -172,19 +174,19 @@ export default function CreateJob() {
                         <div className="service-picker">
                             <div className="service-picker-title">
                                 <div className="selected-services">
-                                    {form.service_id && (
-                                        <span className="selected-service-chip">
-                                            {services.find((service) => String(service.id) === String(form.service_id))?.name || "Xizmat"}
-                                            <button type="button" onClick={() => setForm({ ...form, service_id: "" })} aria-label="Sohani olib tashlash">×</button>
+                                    {selectedServiceIds.map((id) => (
+                                        <span className="selected-service-chip" key={id}>
+                                            {services.find((service) => String(service.id) === String(id))?.name || "Xizmat"}
+                                            <button type="button" onClick={() => setSelectedServiceIds(selectedServiceIds.filter((serviceId) => serviceId !== id))} aria-label="Sohani olib tashlash">×</button>
                                         </span>
-                                    )}
+                                    ))}
                                     {customServices.map((service, index) => (
                                         <span className="selected-service-chip" key={service}>
                                             {service}
                                             <button type="button" onClick={() => setCustomServices(customServices.filter((_, i) => i !== index))} aria-label="Sohani olib tashlash">×</button>
                                         </span>
                                     ))}
-                                    {!form.service_id && !customServices.length && <span>Xizmatni tanlang</span>}
+                                    {!selectedServiceIds.length && !customServices.length && <span>Xizmatni tanlang</span>}
                                 </div>
                             </div>
                             <button
@@ -224,9 +226,9 @@ export default function CreateJob() {
                                             <button
                                                 key={service.id}
                                                 type="button"
-                                                className={String(form.service_id) === String(service.id) ? "service-search-result selected" : "service-search-result"}
+                                                className={selectedServiceIds.includes(String(service.id)) ? "service-search-result selected" : "service-search-result"}
                                                 onClick={() => {
-                                                    setForm({ ...form, service_id: String(service.id) })
+                                                    if (!selectedServiceIds.includes(String(service.id))) setSelectedServiceIds([...selectedServiceIds, String(service.id)])
                                                     setServiceSearch("")
                                                     setShowCategories(false)
                                                 }}
@@ -242,7 +244,6 @@ export default function CreateJob() {
                                                     style={{ marginTop: 10, width: "100%" }}
                                                     onClick={() => {
                                                         setCustomServices([...customServices, serviceSearch.trim()])
-                                                        setForm({ ...form, service_id: "" })
                                                         setServiceSearch("")
                                                         setShowCategories(false)
                                                     }}
@@ -258,9 +259,9 @@ export default function CreateJob() {
                                             key={node.id}
                                             node={node}
                                             level={0}
-                                            selected={form.service_id}
+                                            selected={selectedServiceIds}
                                             onSelect={(node) => {
-                                                setForm({ ...form, service_id: String(node.id) })
+                                                if (!selectedServiceIds.includes(String(node.id))) setSelectedServiceIds([...selectedServiceIds, String(node.id)])
                                                 setShowCategories(false)
                                             }}
                                         />
