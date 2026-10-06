@@ -13,7 +13,7 @@ export default function Rating() {
     const [form, setForm] = useState({
         score: 5,
         comment: "",
-        to_user: String(location.state?.job?.worker_id || location.state?.job?.user_id || "")
+        to_user: ""
     })
     const [notice, setNotice] = useState("")
     const [loading, setLoading] = useState(false)
@@ -24,8 +24,10 @@ export default function Rating() {
                 const jobData = await api(`/jobs/${jobId}`, { token })
                 if (jobData?.id) {
                     setJob(jobData)
-                    const targetId = jobData.user_id === me?.id ? jobData.worker_id : jobData.user_id
-                    if (targetId) {
+                    const targetId = String(jobData.user_id) === String(me?.id)
+                        ? jobData.worker_id
+                        : jobData.user_id
+                    if (targetId && String(targetId) !== String(me?.id)) {
                         setForm((prev) => ({ ...prev, to_user: String(targetId) }))
                     }
                 }
@@ -35,8 +37,13 @@ export default function Rating() {
     }, [jobId, job, me?.id, token])
 
     const ready = useMemo(
-        () => Number(form.score) >= 1 && Number(form.score) <= 10 && form.to_user,
-        [form]
+        () =>
+            job?.status === "finished" &&
+            Number(form.score) >= 1 &&
+            Number(form.score) <= 10 &&
+            form.to_user &&
+            String(form.to_user) !== String(me?.id),
+        [job, form, me?.id]
     )
 
     const submit = async (e) => {
@@ -82,6 +89,12 @@ export default function Rating() {
                         </div>
                     )}
 
+                    {job && job.status !== "finished" && (
+                        <div className="notice warn" style={{ marginBottom: 14 }}>
+                            Rating faqat job tugagandan keyin beriladi.
+                        </div>
+                    )}
+
                     <form className="form" onSubmit={submit}>
                         <div>
                             <div className="helper" style={{ marginBottom: 8 }}>Baho (Score): <strong>{form.score} / 10</strong></div>
@@ -96,14 +109,14 @@ export default function Rating() {
                         </div>
 
                         <div>
-                            <label className="helper" style={{ display: "block", marginBottom: 4 }}>Baho berilayotgan foydalanuvchi ID</label>
-                            <input
-                                className="input"
-                                placeholder="To user ID"
-                                value={form.to_user}
-                                onChange={(e) => setForm({ ...form, to_user: e.target.value })}
-                                required
-                            />
+                            <label className="helper" style={{ display: "block", marginBottom: 4 }}>Baho berilayotgan foydalanuvchi</label>
+                            <div className="input" style={{ background: "#f8fafc", color: "#334155" }}>
+                                {job
+                                    ? (String(job.worker_id) === String(me?.id)
+                                        ? ([job.creator_first, job.creator_last].filter(Boolean).join(" ") || job.creator_username || "Foydalanuvchi")
+                                        : ([job.worker_first, job.worker_last].filter(Boolean).join(" ") || job.worker_username || "Foydalanuvchi"))
+                                    : "Job ma'lumotlari yuklanmoqda..."}
+                            </div>
                         </div>
 
                         <div>
