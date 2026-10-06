@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom"
 
-export default function Privacysiyosat() {
+export default function PrivacyPolicy() {
     return (
         <div className="legal-page">
             <div className="legal-shell">
@@ -38,7 +38,7 @@ export default function Privacysiyosat() {
                     <p>Email tasdiqlash kodi vaqtincha server xotirasida saqlanadi va tasdiqlash jarayoni tugagach yoki kodning amal qilish muddati tugagach o'chiriladi.</p>
 
                     <h2>6. Brauzer xotirasi</h2>
-                    <p>FinJob sessiya tokeni va ayrim foydalanuvchi ma'lumotlarini brauzerning brauzer xotirasi xotirasida saqlashi mumkin. Bu klassik brauzer cookie'sidan farq qiladi. Shu sababli FinJob hozircha majburiy reklama tracking cookie'lariga tayanmaydi.</p>
+                    <p>FinJob sessiya tokeni va ayrim foydalanuvchi ma'lumotlarini brauzer xotirasida saqlashi mumkin. Bu klassik brauzer cookie'sidan farq qiladi. Shu sababli FinJob hozircha majburiy reklama tracking cookie'lariga tayanmaydi.</p>
 
                     <h2>7. Sizning huquqlaringiz</h2>
                     <p>Siz o'zingiz haqingizdagi ma'lumotlarni ko'rish, tuzatish va qonunchilik doirasida o'chirishni so'rash huquqiga egasiz. Shuningdek, avtomatik geolokatsiya ruxsatini brauzer sozlamalaridan boshqarishingiz mumkin.</p>
@@ -46,7 +46,7 @@ export default function Privacysiyosat() {
                     <h2>8. Voyaga yetmaganlar</h2>
                     <p>Platformadan foydalanishdan oldin foydalanuvchi o'z hududidagi yosh va xizmatlardan foydalanish talablariga rioya qilishi kerak. Zarur hollarda voyaga yetmagan foydalanuvchi ota-ona yoki qonuniy vakilining roziligini olishi lozim.</p>
 
-                    <h2>9. siyosat o'zgarishlari</h2>
+                    <h2>9. Siyosat o‘zgarishlari</h2>
                     <p>Platforma yoki qonunchilikdagi o'zgarishlar sabab ushbu siyosat yangilanishi mumkin. Yangilangan versiya FinJob saytida e'lon qilinadi va kuchga kirish sanasi ko'rsatiladi.</p>
 
                     <h2>10. Huquqiy asos</h2>
