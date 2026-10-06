@@ -501,6 +501,175 @@ def admin_overview():
     })
 
 
+@app.route("/admin/user-role", methods=["PATCH"])
+@admin_required
+def admin_user_role():
+    d = request.json or {}
+    user_id = d.get("user_id")
+    role = str(d.get("role", "")).strip().lower()
+
+    if not user_id or role not in ("user", "admin"):
+        return jsonify({"msg": "User ID va role to'g'ri kiritilishi kerak."}), 400
+
+    if int(user_id) == int(request.uid):
+        return jsonify({"msg": "O'zingizning admin rolingizni bu yerdan o'zgartira olmaysiz."}), 400
+
+    target = db.q("SELECT id, role FROM users WHERE id=?", (user_id,)).fetchone()
+    if not target:
+        return jsonify({"msg": "Foydalanuvchi topilmadi."}), 404
+
+    db.q("UPDATE users SET role=? WHERE id=?", (role, user_id)).close()
+    return jsonify({"msg": "Foydalanuvchi roli yangilandi."})
+
+
+@app.route("/admin/user/<int:user_id>", methods=["DELETE"])
+@admin_required
+def admin_delete_user(user_id):
+    if user_id == int(request.uid):
+        return jsonify({"msg": "O'zingizni o'chira olmaysiz."}), 400
+
+    target = db.q("SELECT id, role FROM users WHERE id=?", (user_id,)).fetchone()
+    if not target:
+        return jsonify({"msg": "Foydalanuvchi topilmadi."}), 404
+
+    if target[1] == "admin":
+        return jsonify({"msg": "Boshqa adminni o'chirish uchun avval uning rolini user qiling."}), 400
+
+    conn = db.get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM messages WHERE sender_id=? OR receiver_id=?", (user_id, user_id))
+        cur.execute("DELETE FROM ratings WHERE from_user=? OR to_user=?", (user_id, user_id))
+        cur.execute("DELETE FROM job_services WHERE job_id IN (SELECT id FROM jobs WHERE user_id=? OR worker_id=?)", (user_id, user_id))
+        cur.execute("DELETE FROM jobs WHERE user_id=? OR worker_id=?", (user_id, user_id))
+        cur.execute("UPDATE services SET created_by=NULL WHERE created_by=?", (user_id,))
+        cur.execute("DELETE FROM users WHERE id=?", (user_id,))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    return jsonify({"msg": "Foydalanuvchi va unga bog'liq ma'lumotlar o'chirildi."})
+
+
+@app.route("/admin/job/<int:job_id>", methods=["PATCH"])
+@admin_required
+def admin_update_job(job_id):
+    d = request.json or {}
+    status = str(d.get("status", "")).strip().lower()
+    allowed = {"active", "accepted", "finished"}
+
+    if status not in allowed:
+        return jsonify({"msg": "Noto'g'ri job statusi."}), 400
+
+    job = db.q("SELECT id FROM jobs WHERE id=?", (job_id,)).fetchone()
+    if not job:
+        return jsonify({"msg": "Job topilmadi."}), 404
+
+    finished_at = datetime.datetime.now(datetime.timezone.utc).isoformat() if status == "finished" else None
+    db.q("UPDATE jobs SET status=?, finished_at=? WHERE id=?", (status, finished_at, job_id)).close()
+
+    return jsonify({"msg": "Job statusi yangilandi."})
+
+
+@app.route("/admin/job/<int:job_id>", methods=["DELETE"])
+@admin_required
+def admin_delete_job(job_id):
+    job = db.q("SELECT id FROM jobs WHERE id=?", (job_id,)).fetchone()
+    if not job:
+        return jsonify({"msg": "Job topilmadi."}), 404
+
+    conn = db.get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM messages WHERE job_id=?", (job_id,))
+        cur.execute("DELETE FROM ratings WHERE job_id=?", (job_id,))
+        cur.execute("DELETE FROM job_services WHERE job_id=?", (job_id,))
+        cur.execute("DELETE FROM jobs WHERE id=?", (job_id,))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    return jsonify({"msg": "Job o'chirildi."})
+
+
+@app.route("/admin/service", methods=["POST"])
+@admin_required
+def admin_create_service():
+    d = request.json or {}
+    name = str(d.get("name", "")).strip()
+    parent_id = d.get("parent_id")
+
+    if not name:
+        return jsonify({"msg": "Xizmat nomi kiritilishi kerak."}), 400
+
+    if parent_id in ("", None):
+        parent_id = None
+    else:
+        try:
+            parent_id = int(parent_id)
+        except (TypeError, ValueError):
+            return jsonify({"msg": "Ota kategoriya noto'g'ri."}), 400
+
+        parent = db.q("SELECT id FROM services WHERE id=?", (parent_id,)).fetchone()
+        if not parent:
+            return jsonify({"msg": "Ota kategoriya topilmadi."}), 404
+
+    duplicate = db.q(
+        "SELECT id FROM services WHERE name=? AND parent_id IS ?",
+        (name, parent_id)
+    ).fetchone()
+    if duplicate:
+        return jsonify({"msg": "Bunday xizmat allaqachon mavjud."}), 409
+
+    result = db.q(
+        "INSERT INTO services(name,parent_id,created_by) VALUES(?,?,?)",
+        (name, parent_id, request.uid)
+    )
+    new_id = result.lastrowid
+    result.close()
+
+    return jsonify({"msg": "Xizmat qo'shildi.", "id": new_id}), 201
+
+
+@app.route("/admin/service/<int:service_id>", methods=["DELETE"])
+@admin_required
+def admin_delete_service(service_id):
+    service = db.q("SELECT id FROM services WHERE id=?", (service_id,)).fetchone()
+    if not service:
+        return jsonify({"msg": "Xizmat topilmadi."}), 404
+
+    child = db.q("SELECT id FROM services WHERE parent_id=? LIMIT 1", (service_id,)).fetchone()
+    if child:
+        return jsonify({"msg": "Avval uning ichidagi xizmatlarni o'chiring."}), 409
+
+    used = db.q(
+        "SELECT id FROM jobs WHERE service_id=? OR id IN (SELECT job_id FROM job_services WHERE service_id=?) LIMIT 1",
+        (service_id, service_id)
+    ).fetchone()
+    if used:
+        return jsonify({"msg": "Bu xizmat mavjud joblarda ishlatilgan, o'chirib bo'lmaydi."}), 409
+
+    db.q("DELETE FROM services WHERE id=?", (service_id,)).close()
+    return jsonify({"msg": "Xizmat o'chirildi."})
+
+
+@app.route("/admin/rating/<int:rating_id>", methods=["DELETE"])
+@admin_required
+def admin_delete_rating(rating_id):
+    rating = db.q("SELECT id FROM ratings WHERE id=?", (rating_id,)).fetchone()
+    if not rating:
+        return jsonify({"msg": "Rating topilmadi."}), 404
+
+    db.q("DELETE FROM ratings WHERE id=?", (rating_id,)).close()
+    return jsonify({"msg": "Rating o'chirildi."})
+
+
 # -------- AUTH --------
 @app.route("/login", methods=["POST"])
 def login():
