@@ -3,48 +3,6 @@ import { useNavigate } from "react-router-dom"
 import AppLayout from "../components/AppLayout"
 import { api } from "../api"
 
-function buildServiceTree(services) {
-    const nodes = Object.fromEntries(services.map((service) => [
-        String(service.id),
-        { ...service, children: [] }
-    ]))
-    const roots = []
-    services.forEach((service) => {
-        const node = nodes[String(service.id)]
-        if (service.parent_id == null) roots.push(node)
-        else if (nodes[String(service.parent_id)]) nodes[String(service.parent_id)].children.push(node)
-    })
-    return roots
-}
-
-function ServiceNode({ node, level, selected, onSelect }) {
-    const [open, setOpen] = useState(level < 2)
-    const hasChildren = node.children.length > 0
-
-    return (
-        <div>
-            <div className="service-tree-row" style={{ paddingLeft: 10 + level * 20 }}>
-                {hasChildren ? (
-                    <button type="button" className="service-tree-toggle" onClick={() => setOpen(!open)}>
-                        {open ? "▾" : "▸"}
-                    </button>
-                ) : <span className="service-tree-spacer" />}
-                <button
-                    type="button"
-                    className={String(selected) === String(node.id) ? "service-tree-item selected" : "service-tree-item"}
-                    disabled={hasChildren}
-                    onClick={() => onSelect(node)}
-                >
-                    {node.name}
-                </button>
-            </div>
-            {open && hasChildren && node.children.map((child) => (
-                <ServiceNode key={child.id} node={child} level={level + 1} selected={selected} onSelect={onSelect} />
-            ))}
-        </div>
-    )
-}
-
 export default function CreateJob() {
     const [services, setServices] = useState([])
     const [form, setForm] = useState({
@@ -58,7 +16,6 @@ export default function CreateJob() {
     const [loading, setLoading] = useState(false)
     const navigate = useNavigate()
     const token = localStorage.getItem("token") || ""
-    const serviceTree = useMemo(() => buildServiceTree(services), [services])
 
     useEffect(() => {
         const load = async () => {
