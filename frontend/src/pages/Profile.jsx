@@ -135,6 +135,8 @@ export default function Profile() {
     const startEditing = () => {
         setSavedForm({ ...form })
         setSavedSkills([...skills])
+        setServiceSearch("")
+        setShowServicePicker(false)
         setNotice("")
         setIsEditing(true)
     }
@@ -143,6 +145,8 @@ export default function Profile() {
         if (savedForm) setForm({ ...savedForm })
         setSkills([...savedSkills])
         setNewSkill("")
+        setServiceSearch("")
+        setShowServicePicker(false)
         setNotice("")
         setIsEditing(false)
     }
@@ -165,8 +169,17 @@ export default function Profile() {
         setLoading(false)
 
         if (result?.msg === "ok") {
+            const updatedUser = {
+                ...(JSON.parse(localStorage.getItem("user") || "null") || {}),
+                ...form,
+                skills: skills.join(", ")
+            }
+            localStorage.setItem("user", JSON.stringify(updatedUser))
+
             setSavedForm({ ...form })
             setSavedSkills([...skills])
+            setServiceSearch("")
+            setShowServicePicker(false)
             setNotice("Profil muvaffaqiyatli yangilandi")
             setIsEditing(false)
             setTimeout(() => setNotice(""), 3000)
@@ -218,7 +231,17 @@ export default function Profile() {
                 return
             }
 
-            setAvatarUrl(result.avatar_url || "")
+            const nextAvatarUrl = result.avatar_url || ""
+            setAvatarUrl(nextAvatarUrl)
+
+            const currentUser = JSON.parse(localStorage.getItem("user") || "null")
+            if (currentUser) {
+                localStorage.setItem("user", JSON.stringify({
+                    ...currentUser,
+                    avatar_url: nextAvatarUrl
+                }))
+            }
+
             setNotice("Profil rasmi muvaffaqiyatli yangilandi")
             setTimeout(() => setNotice(""), 3000)
         } catch {
