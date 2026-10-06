@@ -177,8 +177,8 @@ export default function CreateJob() {
                                 type="button"
                                 className="service-select-button"
                                 onClick={() => {
+                                    setShowCategories(true)
                                     setServiceSearch("")
-                                    setShowCategories(!showCategories)
                                 }}
                             >
                                 {showCategories ? "Soha tanlashni yopish" : "Soha tanlang"}
@@ -186,6 +186,7 @@ export default function CreateJob() {
                             {showCategories && (
                                 <div className="service-search">
                                     <input
+                                        autoFocus
                                         className="input"
                                         type="search"
                                         placeholder="Xizmatni qidiring..."
