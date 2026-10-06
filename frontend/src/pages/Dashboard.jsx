@@ -129,6 +129,28 @@ export default function Dashboard() {
         load()
     }
 
+    const cancelWorker = async (job) => {
+        const workerName = ((job.worker_first || "") + " " + (job.worker_last || "")).trim() || job.worker_username || "bajaruvchi"
+        const confirmed = window.confirm(
+            '"' + job.title + '" ishidan "' + workerName + '"ni olib tashlamoqchimisiz? Ish yana barcha foydalanuvchilar uchun ochiladi.'
+        )
+        if (!confirmed) return
+
+        const result = await api("/cancel_worker", {
+            method: "POST",
+            body: { job_id: job.id },
+            token
+        })
+        const cancelled = result?.msg === "ok"
+        setNoticeType(cancelled ? "ok" : "warn")
+        setNotice(
+            cancelled
+                ? "Bajaruvchi bekor qilindi. Ish yana barcha uchun ochiq."
+                : (result?.msg || "Xatolik yuz berdi")
+        )
+        load()
+    }
+
     // Ish bajaruvchi uchun panelni ochish
     const openConfirmPanel = (jobId) => {
         setActiveConfirmJobId(jobId)
@@ -321,6 +343,19 @@ export default function Dashboard() {
                                             <span className="chip" style={{ background: "rgba(34, 197, 94, 0.2)", color: "#4ade80" }}>
                                                 ✅ Qabul qilgansiz
                                             </span>
+                                        )}
+
+                                        {/* --- ISHCHINI BEKOR QILISH (Ish beruvchi uchun) --- */}
+                                        {isMyJob && status === "accepted" && (
+                                            <button
+                                                className="btn btn-warn"
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    cancelWorker(job)
+                                                }}
+                                            >
+                                                Ishchini almashtirish
+                                            </button>
                                         )}
 
                                         {/* --- FINISH TUGMASI (Ish beruvchi uchun) --- */}
