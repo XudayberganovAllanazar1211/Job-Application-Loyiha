@@ -154,7 +154,8 @@ export default function Admin() {
         ["users", "Foydalanuvchilar"],
         ["jobs", "Ishlar"],
         ["services", "Xizmatlar"],
-        ["ratings", "Baholar"]
+        ["ratings", "Baholar"],
+        ["reports", "Shikoyatlar"]
     ]
 
     return (
