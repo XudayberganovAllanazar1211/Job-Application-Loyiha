@@ -128,6 +128,28 @@ class JobPlatformTestCase(unittest.TestCase):
         self.assertIn(leaf_services[0]["name"], created["service_name"])
         self.assertIn(leaf_services[1]["name"], created["service_name"])
 
+        # Create a custom-only service containing a comma.
+        custom_job = self.client.post(
+            "/job",
+            headers={"Authorization": f"Bearer {token_creator}"},
+            json={
+                "service_ids": [],
+                "custom_services": ["Custom Design, Advanced"],
+                "title": "Custom Service Job",
+                "description": "Checks structured custom service handling",
+                "price": 250000,
+                "location": "Remote"
+            }
+        )
+        self.assertEqual(custom_job.status_code, 200)
+
+        custom_jobs = self.client.get(
+            "/jobs",
+            headers={"Authorization": f"Bearer {token_creator}"}
+        ).get_json()
+        custom_created = [j for j in custom_jobs if j["title"] == "Custom Service Job"][0]
+        self.assertEqual(custom_created["service_name"], "Custom Design, Advanced")
+
     def test_04_full_lifecycle_and_rating(self):
         # Register worker (Second user -> regular 'user' role)
         res_reg = self.client.post("/register/send-code", json={
