@@ -84,7 +84,7 @@ export default function Dashboard() {
         })
         const accepted = result?.msg === "ok"
         setNoticeType(accepted ? "ok" : "warn")
-        setNotice(accepted ? "Job qabul qilindi" : (result?.msg || "Xato"))
+        setNotice(accepted ? "Ish qabul qilindi" : (result?.msg || "Xato"))
         load()
     }
 
