@@ -90,7 +90,7 @@ export default function Admin() {
         }
     }
 
-    const deleteFoydalanuvchi = async (item) => {
+    const deleteUser = async (item) => {
         if (!window.confirm("@"+item.username+" foydalanuvchisini va unga bog'liq ma'lumotlarni o'chirishni tasdiqlaysizmi?")) return
         await action("/admin/user/"+item.id, { method: "DELETE" }, "Foydalanuvchi o'chirildi.")
     }
@@ -204,7 +204,7 @@ export default function Admin() {
                                             <button className="btn btn-secondary admin-small-btn" onClick={() => editFoydalanuvchi(item)}>
                                                 Tahrirlash
                                             </button>
-                                            <button className="btn btn-danger admin-small-btn" disabled={item.id === user.id || item.role === "admin"} onClick={() => deleteFoydalanuvchi(item)}>
+                                            <button className="btn btn-danger admin-small-btn" disabled={item.id === user.id || item.role === "admin"} onClick={() => deleteUser(item)}>
                                                 O'chirish
                                             </button>
                                         </td>
