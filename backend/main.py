@@ -159,7 +159,6 @@ class DB:
         cursor.execute("PRAGMA table_info(users)")
         existing_user_cols = [row[1] for row in cursor.fetchall()]
         migrations = [
-            ("currency", "ALTER TABLE jobs ADD COLUMN currency TEXT DEFAULT 'UZS'"),
             ("bio", "ALTER TABLE users ADD COLUMN bio TEXT DEFAULT ''"),
             ("skills", "ALTER TABLE users ADD COLUMN skills TEXT DEFAULT ''"),
             ("created_at", "ALTER TABLE users ADD COLUMN created_at TEXT"),
@@ -172,6 +171,14 @@ class DB:
                     cursor.execute(sql)
                 except Exception:
                     pass
+
+        cursor.execute("PRAGMA table_info(jobs)")
+        existing_job_cols = [row[1] for row in cursor.fetchall()]
+        if "currency" not in existing_job_cols:
+            try:
+                cursor.execute("ALTER TABLE jobs ADD COLUMN currency TEXT DEFAULT 'UZS'")
+            except Exception:
+                pass
 
         cursor.execute("PRAGMA table_info(ratings)")
         existing_rating_cols = [row[1] for row in cursor.fetchall()]
@@ -564,7 +571,7 @@ def add_job():
 
     now_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     db.q(
-        """INSERT INTO jobs(user_id,service_id,title,description,price,location,worker_id,status,created_at)
+        """INSERT INTO jobs(user_id,service_id,title,description,price,location,worker_id,status,created_at,currency)
            VALUES(?,?,?,?,?,?,?,?,?,?)""",
         (
             request.uid,
@@ -587,7 +594,7 @@ def add_job():
 def get_jobs():
     r = db.q(
         """
-        SELECT j.id, j.title, j.price, j.location, j.status, j.user_id, j.worker_id,
+        SELECT j.id, j.title, j.price, j.currency, j.location, j.status, j.user_id, j.worker_id,
                u.first_name, u.last_name, u.username, j.description, j.service_id, s.name as service_name
         FROM jobs j
         LEFT JOIN users u ON j.worker_id = u.id
