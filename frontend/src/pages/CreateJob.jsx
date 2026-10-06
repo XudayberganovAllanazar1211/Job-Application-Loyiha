@@ -66,8 +66,6 @@ export default function CreateJob() {
     const [locationError, setLocationError] = useState("")
     const navigate = useNavigate()
     const token = localStorage.getItem("token") || ""
-    const serviceTree = useMemo(() => buildServiceTree(services), [services])
-
     const filteredServices = useMemo(() => {
         const query = serviceSearch.trim().toLowerCase()
         if (!query) return services
