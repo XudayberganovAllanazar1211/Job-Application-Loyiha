@@ -1,7 +1,6 @@
 import os
 import sqlite3
 import datetime
-import random
 import secrets
 import smtplib
 import uuid
