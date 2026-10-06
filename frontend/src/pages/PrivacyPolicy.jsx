@@ -29,13 +29,13 @@ export default function PrivacyPolicy() {
                     <h2>3. Ma'lumotlardan nima uchun foydalanamiz?</h2>
                     <p>Ma'lumotlar hisobni yaratish va boshqarish, elektron pochta tasdiqlash, ishlarni joylashtirish va topish, foydalanuvchilar o'rtasida aloqa, baholash va platforma xavfsizligini ta'minlash uchun ishlatiladi.</p>
 
-                    <h2>4. Email va uchinchi tomon xizmatlari</h2>
-                    <p>Ro'yxatdan o'tish kodi siz ko'rsatgan email manziliga SMTP orqali yuboriladi. Email manzilingiz va tasdiqlash xabari email yetkazib berish xizmatidan foydalanish uchun tegishli elektron pochta provayderiga uzatilishi mumkin.</p>
+                    <h2>4. Elektron pochta va uchinchi tomon xizmatlari</h2>
+                    <p>Ro'yxatdan o'tish kodi siz ko'rsatgan elektron pochta manziliga SMTP orqali yuboriladi. Elektron pochta manzilingiz va tasdiqlash xabari email yetkazib berish xizmatidan foydalanish uchun tegishli elektron pochta provayderiga uzatilishi mumkin.</p>
                     <p>FinJob foydalanuvchi ma'lumotlarini sotmaydi. Ma'lumotlar faqat platforma ishlashi uchun zarur bo'lgan xizmatlar yoki qonunchilik talab qilgan holatlarda uzatiladi.</p>
 
                     <h2>5. Saqlash va xavfsizlik</h2>
                     <p>FinJob ruxsatsiz kirish, ma'lumotlarni yo'qotish yoki o'zgartirish xavfini kamaytirish uchun texnik choralarni qo'llaydi. Shunga qaramay, internet orqali uzatiladigan hech bir tizim mutlaq xavfsiz deb kafolatlanmaydi.</p>
-                    <p>Email tasdiqlash kodi vaqtincha server xotirasida saqlanadi va tasdiqlash jarayoni tugagach yoki kodning amal qilish muddati tugagach o'chiriladi.</p>
+                    <p>Elektron pochta tasdiqlash kodi vaqtincha server xotirasida saqlanadi va tasdiqlash jarayoni tugagach yoki kodning amal qilish muddati tugagach o'chiriladi.</p>
 
                     <h2>6. Brauzer xotirasi</h2>
                     <p>FinJob sessiya belgisi va ayrim foydalanuvchi ma'lumotlarini brauzer xotirasida saqlashi mumkin. Bu klassik brauzer cookie'sidan farq qiladi. Shu sababli FinJob hozircha majburiy reklama kuzatuv cookie fayllari'lariga tayanmaydi.</p>
