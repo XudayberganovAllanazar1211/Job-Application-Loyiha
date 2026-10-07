@@ -1523,3 +1523,21 @@ html[data-theme="dark"] .profile-wallet-empty{border-color:#334155;background:rg
 .profile-link-button{border:0;background:none;padding:0;margin:0;color:inherit;font:inherit;font-weight:700;text-decoration:underline;cursor:pointer}.profile-link-button:hover{opacity:.75}.profile-public-layout{display:grid;gap:18px}.profile-public-hero{display:flex;align-items:center;gap:22px;padding:28px}.profile-public-avatar{width:104px;height:104px;flex:0 0 104px;border-radius:50%;display:grid;place-items:center;overflow:hidden;background:var(--surface-muted,#eef2f7);font-size:30px;font-weight:800}.profile-public-avatar img{width:100%;height:100%;object-fit:cover}.profile-public-main h1{margin:4px 0 2px}.profile-public-username{margin:0;color:var(--text-muted,#6b7280)}.profile-public-label{font-size:11px;font-weight:800;letter-spacing:.12em;color:var(--text-muted,#6b7280)}.profile-public-bio{margin:12px 0 0;max-width:760px}.profile-public-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.profile-public-stats .card{display:flex;flex-direction:column;gap:5px;padding:20px}.profile-public-stats strong{font-size:25px}.profile-public-stats span,.profile-public-muted{color:var(--text-muted,#6b7280)}.profile-public-content{padding:24px}.profile-public-skills{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}@media(max-width:700px){.profile-public-hero{align-items:flex-start;flex-direction:column}.profile-public-stats{grid-template-columns:1fr}.profile-public-avatar{width:88px;height:88px;flex-basis:88px}}
 
 .leaderboard-profile-link{border:0;background:none;padding:0;font:inherit;font-weight:800;font-size:16px;color:inherit;cursor:pointer;text-align:left}.leaderboard-profile-link:hover{text-decoration:underline;opacity:.78}
+
+.job-card{min-width:0}
+.job-desc{overflow-wrap:anywhere}
+.job-worker-chip{max-width:100%}
+.job-worker-chip .profile-link-button{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dashboard-selected-job{display:grid;gap:10px}
+.dashboard-job-detail-title{font:800 19px/1.35 Manrope,sans-serif;color:var(--text,#172033)}
+.jobs-pagination{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:18px;padding:14px 0 2px;border-top:1px solid var(--border,#e2e8f0)}
+.jobs-page-size,.jobs-page-controls{display:flex;align-items:center;gap:8px;color:var(--muted,#64748b);font-size:12px;font-weight:700}
+.jobs-page-size .input{width:86px;padding:9px 10px}
+.jobs-page-controls .btn{min-width:42px;padding:9px 12px}
+.jobs-page-indicator{min-width:72px;text-align:center;font-weight:900;color:var(--text,#172033)}
+.jobs-page-summary{margin-left:auto;color:var(--muted,#64748b);font-size:12px;font-weight:700}
+@media(max-width:760px){
+    .jobs-pagination{align-items:stretch;flex-wrap:wrap}
+    .jobs-page-size{flex:1}
+    .jobs-page-summary{order:3;width:100%;text-align:center;margin-left:0}
+}
