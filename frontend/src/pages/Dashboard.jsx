@@ -39,6 +39,11 @@ export default function Dashboard() {
     const [search, setSearch] = useState("")
     const [notice, setNotice] = useState("")
     const [noticeType, setNoticeType] = useState("ok")
+    const [pageSize, setPageSize] = useState(10)
+    const [currentPage, setCurrentPage] = useState(1)
+    const [reportJobId, setReportJobId] = useState(null)
+    const [reportReason, setReportReason] = useState("")
+    const [reportDetails, setReportDetails] = useState("")
     const token = localStorage.getItem("token") || ""
     const user = JSON.parse(localStorage.getItem("user") || localStorage.getItem("foydalanuvchi") || "null")
     const navigate = useNavigate()
@@ -163,6 +168,50 @@ export default function Dashboard() {
         })
     }, [jobs, search])
 
+    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
+    const pagedJobs = useMemo(() => {
+        const start = (currentPage - 1) * pageSize
+        return filtered.slice(start, start + pageSize)
+    }, [filtered, currentPage, pageSize])
+
+    useEffect(() => {
+        setCurrentPage(1)
+    }, [search, pageSize])
+
+    useEffect(() => {
+        if (currentPage > totalPages) setCurrentPage(totalPages)
+    }, [currentPage, totalPages])
+
+    const submitReport = async (job) => {
+        const reportedUserId = String(job.user_id) === String(user?.id) ? job.worker_id : job.user_id
+        if (!reportedUserId) {
+            setNoticeType("warn")
+            setNotice("Shikoyat qilish uchun ishda boshqa ishtirokchi bo‘lishi kerak.")
+            return
+        }
+        if (!reportReason) {
+            setNoticeType("warn")
+            setNotice("Shikoyat sababini tanlang.")
+            return
+        }
+        const result = await api("/report", {
+            method: "POST",
+            body: { job_id: job.id, reported_user_id: Number(reportedUserId), reason: reportReason, details: reportDetails.trim() },
+            token
+        })
+        if (result?.msg === "Shikoyatingiz qabul qilindi.") {
+            setNoticeType("ok")
+            setNotice("Shikoyatingiz yuborildi.")
+            setReportJobId(null)
+            setReportReason("")
+            setReportDetails("")
+        } else {
+            setNoticeType("warn")
+            setNotice(result?.msg || "Shikoyat yuborishda xatolik yuz berdi.")
+        }
+    }
+
+    
     return (
         <AppLayout
             title="Boshqaruv paneli"
@@ -217,7 +266,7 @@ export default function Dashboard() {
                     </div>
 
                     <div className="job-grid">
-                        {filtered.map((job) => {
+                        {pagedJobs.map((job) => {
                             const status = String(job.status || "").trim().toLowerCase()
                             const isMyJob = String(job.user_id) === String(user?.id)
                             const isIAccepted = String(job.worker_id) === String(user?.id)
@@ -246,6 +295,12 @@ export default function Dashboard() {
                                         <span className="chip">📍 {job.location || "-"}</span>
                                         <span className="chip job-service-chip">🧩 {job.service_name || serviceMap[String(job.service_id)] || job.service_id || "Noma’lum"}</span>
                                         <span className={`chip status-chip status-${status}`}><span className="status-dot" />{statusLabel}</span>
+                                        <span className="chip">📅 {job.created_at || "Sana noma’lum"}</span>
+                                        <span className="chip job-worker-chip">👤 Bajaruvchi: {job.worker_id ? (
+                                            <button type="button" className="profile-link-button" onClick={(e) => { e.stopPropagation(); navigate(`/profiles/${job.worker_username}`) }}>
+                                                {((job.worker_first || "") + " " + (job.worker_last || "")).trim() || job.worker_username}
+                                            </button>
+                                        ) : "Hali qabul qilinmagan"}</span>
                                     </div>
 
                                     <div className="actions">
@@ -285,6 +340,31 @@ export default function Dashboard() {
                                             </button>
                                         )}
 
+                                        {isParticipant && job.worker_id != null && ["accepted", "pending_finish", "finished"].includes(status) && (
+                                            <button className="btn btn-secondary" onClick={(e) => { e.stopPropagation(); setReportJobId(reportJobId === job.id ? null : job.id) }}>⚑ Shikoyat</button>
+                                        )}
+                                        {isMyJob && status === "payment_pending" && (
+                                            <button className="btn btn-primary" onClick={(e) => { e.stopPropagation(); navigate(`/payments/job/${job.id}`) }}>💳 To‘lovni amalga oshirish</button>
+                                        )}
+
+                                        {reportJobId === job.id && (
+                                            <div className="report-panel">
+                                                <strong>{isMyJob ? "Ishchi haqida shikoyat" : "Ish egasi haqida shikoyat"}</strong>
+                                                <select className="select" value={reportReason} onChange={(e) => setReportReason(e.target.value)}>
+                                                    <option value="">Sababni tanlang</option>
+                                                    <option value="Firibgarlik yoki aldov">Firibgarlik yoki aldov</option>
+                                                    <option value="Noto‘g‘ri yoki yolg‘on e’lon">Noto‘g‘ri yoki yolg‘on e’lon</option>
+                                                    <option value="Haqorat yoki nomaqbul xatti-harakat">Haqorat yoki nomaqbul xatti-harakat</option>
+                                                    <option value="Spam">Spam</option>
+                                                    <option value="Boshqa">Boshqa</option>
+                                                </select>
+                                                <textarea className="textarea" maxLength={2000} placeholder="Qo‘shimcha tafsilot..." value={reportDetails} onChange={(e) => setReportDetails(e.target.value)} />
+                                                <div className="actions">
+                                                    <button type="button" className="btn btn-danger" disabled={!reportReason} onClick={(e) => { e.stopPropagation(); submitReport(job) }}>Yuborish</button>
+                                                    <button type="button" className="btn btn-secondary" onClick={(e) => { e.stopPropagation(); setReportJobId(null) }}>Bekor qilish</button>
+                                                </div>
+                                            </div>
+                                        )}
                                         {/* --- SIZ QABUL QILGANSIS CHIP --- */}
                                         {isIAccepted && status === "accepted" && (
                                             <span className="chip" style={{ background: "rgba(34, 197, 94, 0.2)", color: "#4ade80" }}>
@@ -343,6 +423,26 @@ export default function Dashboard() {
 
                         {!filtered.length && <div className="empty-state">Hozircha ishlar yo‘q.</div>}
                     </div>
+
+                    {filtered.length > 0 && (
+                        <div className="jobs-pagination">
+                            <div className="jobs-page-size">
+                                <span>Bir sahifada</span>
+                                <select className="input" value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
+                                    <option value="5">5 ta</option>
+                                    <option value="10">10 ta</option>
+                                    <option value="20">20 ta</option>
+                                    <option value="50">50 ta</option>
+                                </select>
+                                <span>job</span>
+                            </div>
+                            <div className="jobs-page-controls">
+                                <button className="btn btn-secondary" disabled={currentPage === 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}>‹</button>
+                                <span className="jobs-page-indicator">{currentPage} / {totalPages}</span>
+                                <button className="btn btn-secondary" disabled={currentPage === totalPages} onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}>›</button>
+                            </div>
+                        </div>
+                    )}
                 </section>
 
                 <aside className="card chat-wrap">
