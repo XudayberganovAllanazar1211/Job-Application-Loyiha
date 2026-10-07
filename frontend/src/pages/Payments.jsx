@@ -159,9 +159,15 @@ export default function Payments() {
                                 Bu vaqtinchalik dummy/test to‘lov. To‘lov darhol ishchiga berilmaydi: mablag‘ FinJob escrowida waiting holatida turadi va ish ikki tomon tomonidan yakunlangachgina ishchiga o‘tadi. Ishchi almashtirilsa ham shu to‘lov saqlanadi.
                             </div>
 
-                            <button className="btn btn-primary" disabled={creating || !payment?.payment_uuid} onClick={dummyPay}>
-                                {creating ? "To‘lanmoqda..." : "Test balansidan to‘lash"}
-                            </button>
+                            {payment?.status === "held" ? (
+                                <div className="notice ok" style={{ marginBottom: 16 }}>
+                                    To‘lov qabul qilindi. {Number(payment.amount || 0).toLocaleString("uz-UZ")} UZS hozir waiting holatida turibdi. Ish ikki tomon tomonidan yakunlangach pul ishchiga o‘tadi.
+                                </div>
+                            ) : (
+                                <button className="btn btn-primary" disabled={creating || !payment?.payment_uuid} onClick={dummyPay}>
+                                    {creating ? "To‘lanmoqda..." : "Test balansidan to‘lash"}
+                                </button>
+                            )}
                             <button className="btn btn-secondary" style={{ marginLeft: 8 }} onClick={() => navigate("/jobs")}>
                                 Keyinroq
                             </button>
