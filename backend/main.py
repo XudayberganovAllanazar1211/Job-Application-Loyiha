@@ -2466,7 +2466,8 @@ def get_job_detail(job_id):
 
 @app.route("/jobs/<int:job_id>/proposals", methods=["GET", "POST"])
 @auth
-def job_proposals(job_id):    block_response=enforce_block("proposal" if request.method=="POST" else "full")
+def job_proposals(job_id):
+    block_response=enforce_block("proposal" if request.method=="POST" else "full")
     if block_response: return block_response
 
     
@@ -2986,7 +2987,8 @@ def send_message():
 
 @app.route("/messages/<int:job_id>")
 @auth
-def get_messages(job_id):    block_response=enforce_block("chat")
+def get_messages(job_id):
+    block_response=enforce_block("chat")
     if block_response: return block_response
 
     
@@ -3384,7 +3386,8 @@ def get_presence(user_id):
 
 @app.route("/typing/<int:job_id>", methods=["GET", "POST"])
 @auth
-def typing(job_id):    block_response=enforce_block("chat")
+def typing(job_id):
+    block_response=enforce_block("chat")
     if block_response: return block_response
 
     
