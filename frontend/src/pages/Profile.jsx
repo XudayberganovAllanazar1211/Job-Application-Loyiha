@@ -140,6 +140,18 @@ export default function Profile() {
     }, [])
 
     useEffect(() => {
+        const loadWallet = async () => {
+            const token = localStorage.getItem("token") || ""
+            const result = await api("/wallet", { token })
+            if (result && typeof result === "object") {
+                setForm((current) => ({ ...current, balance: Number(result.balance) || 0 }))
+                setWalletTransactions(Array.isArray(result.transactions) ? result.transactions : [])
+            }
+            setWalletLoading(false)
+        }
+        loadWallet()
+    }, [])
+    useEffect(() => {
         const loadServices = async () => {
             const result = await api("/services", { token: localStorage.getItem("token") || "" })
             if (Array.isArray(result)) setServices(result)
