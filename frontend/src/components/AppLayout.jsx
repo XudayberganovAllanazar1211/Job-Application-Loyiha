@@ -163,6 +163,9 @@ export default function AppLayout({ title, subtitle, children }) {
                     <span className="nav-link-label">Suhbatlar</span>
                     {unreadMessages > 0 && <span className="notification-sidebar-badge">{unreadMessages > 99 ? "99+" : unreadMessages}</span>}
                 </NavLink>
+                <NavLink to="/appeals" className={({isActive}) => `nav-link ${isActive ? "active" : ""}`}>
+                    <span className="nav-link-icon">⚑</span><span className="nav-link-label">Appeals</span>
+                </NavLink>
                 {isAdmin && (
                     <NavLink to="/admin" className={({isActive}) => `nav-link admin-nav-link ${isActive ? "active" : ""}`}>
                         <span className="nav-link-icon">⚙</span><span className="nav-link-label">Administrator</span>
