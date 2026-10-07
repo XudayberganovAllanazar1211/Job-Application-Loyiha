@@ -321,6 +321,49 @@ export default function Jobs() {
         load()
     }
 
+    const submitReport = async (job) => {
+        const reportedUserId = String(job.user_id) === String(user?.id) ? job.worker_id : job.user_id
+
+        if (!reportedUserId) {
+            setNoticeType("warn")
+            setNotice("Shikoyat qilish uchun ishda boshqa ishtirokchi bo‘lishi kerak.")
+            return
+        }
+
+        if (!reportReason) {
+            setNoticeType("warn")
+            setNotice("Shikoyat sababini tanlang.")
+            return
+        }
+
+        try {
+            const result = await api("/report", {
+                method: "POST",
+                body: {
+                    job_id: job.id,
+                    reported_user_id: Number(reportedUserId),
+                    reason: reportReason,
+                    details: reportDetails.trim()
+                },
+                token
+            })
+
+            if (result?.msg === "Shikoyatingiz qabul qilindi.") {
+                setNoticeType("ok")
+                setNotice("Shikoyatingiz yuborildi.")
+                setReportJobId(null)
+                setReportReason("")
+                setReportDetails("")
+            } else {
+                setNoticeType("warn")
+                setNotice(result?.msg || "Shikoyat yuborishda xatolik yuz berdi.")
+            }
+        } catch {
+            setNoticeType("warn")
+            setNotice("Shikoyat yuborishda xatolik yuz berdi.")
+        }
+    }
+
     return (
         <AppLayout
             title="Ishlar"
