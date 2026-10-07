@@ -59,6 +59,7 @@ export default function Jobs() {
     const [reportDetails, setReportDetails] = useState("")
     const [pageSize, setPageSize] = useState(10)
     const [currentPage, setCurrentPage] = useState(1)
+    const [selectedJob, setSelectedJob] = useState(null)
 
     const serviceMap = useMemo(
         () => Object.fromEntries(services.map((service) => [String(service.id), service.name])),
@@ -209,6 +210,10 @@ export default function Jobs() {
             document.removeEventListener("touchstart", handleOutsideClick)
         }
     }, [showServiceMenu, showFilters])
+
+    const selectJob = (job) => {
+        setSelectedJob(job)
+    }
 
     const addServiceFilter = (service) => {
         setSelectedServices([...selectedServices, service])
