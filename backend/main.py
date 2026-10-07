@@ -910,10 +910,26 @@ def auth(f):
                 return jsonify({"msg": "Kirish tokeni yaroqsiz"}), 401
             if int(d.get("ver", -1)) != int(user[1] or 0):
                 return jsonify({"msg": "Sessiya muddati tugagan. Qayta kiring."}), 401
-            if int(user[2] or 0) == 1 and (user[0] or "user") != "admin":
-                return jsonify({"msg": "Hisobingiz administrator tomonidan bloklangan."}), 403
             request.uid = uid
             request.user_role = user[0] or "user"
+            if request.user_role != "admin" and _active_block_row(request.uid, "full"):
+                full_allowed = (
+                    request.path == "/appeals"
+                    or request.path == "/notifications"
+                    or request.path == "/notifications/read"
+                    or (request.path == "/profile" and request.method == "GET")
+                    or request.path == "/logout"
+                )
+                if not full_allowed:
+                    block = _active_block_row(request.uid, "full")
+                    return jsonify({
+                        "msg": f"To‘liq blok mavjud. Sabab: {block[3]}.",
+                        "blocked": True,
+                        "block_type": "full",
+                        "block_id": block[0],
+                        "reason": block[3],
+                        "expires_at": block[6],
+                    }), 403
         except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, KeyError, TypeError, ValueError):
             return jsonify({"msg": "Kirish tokeni yaroqsiz yoki muddati tugagan"}), 401
         return f(*a, **k)
@@ -1574,94 +1590,35 @@ def admin_search():
 @admin_required
 def admin_user_status(user_id):
     value=(request.json or {}).get("is_blocked")
-    blocked=1 if value is True or str(value).lower() in ("1","true","yes") else 0
+    blocked=value is True or str(value).lower() in ("1","true","yes")
     if user_id==int(request.uid):
         return jsonify({"msg":"O‘zingizni bloklay olmaysiz."}),400
-    target=db.q("SELECT id,role,COALESCE(is_blocked,0),username FROM users WHERE id=?",(user_id,)).fetchone()
+    target=db.q("SELECT id,role,username FROM users WHERE id=?",(user_id,)).fetchone()
     if not target:
         return jsonify({"msg":"Foydalanuvchi topilmadi."}),404
     if target[1]=="admin" and blocked:
         return jsonify({"msg":"Administrator hisobini bloklash mumkin emas."}),400
-    db.q("UPDATE users SET is_blocked=?, token_version=COALESCE(token_version,0)+1 WHERE id=?",(blocked,user_id)).close()
-    admin_audit("user_block" if blocked else "user_unblock","user",user_id,f"@{target[3]}")
-    create_notification(user_id,"account_moderation","Hisob holati o‘zgardi",
-                        "Administrator hisobingizni blokladi." if blocked else "Administrator hisobingizni qayta faollashtirdi.","/profile")
-    return jsonify({"msg":"Foydalanuvchi "+("bloklandi." if blocked else "qayta faollashtirildi."),"is_blocked":blocked})
-
-
-# -------- ADMIN --------
-@app.route("/admin/overview")
-@admin_required
-def admin_overview():
-    users = db.q(
-        """SELECT id, username, first_name, last_name, email, birthday, bio, skills, role, created_at, average_rating, COALESCE(balance,0), COALESCE(is_blocked,0)
-           FROM users ORDER BY id DESC"""
-    ).fetchall()
-
-    jobs = db.q(
-        """SELECT j.id, j.title, j.price, j.currency, j.location, j.status, j.created_at,
-                  u.username AS creator_username,
-                  w.username AS worker_username
-           FROM jobs j
-           LEFT JOIN users u ON u.id = j.user_id
-           LEFT JOIN users w ON w.id = j.worker_id
-           ORDER BY j.id DESC"""
-    ).fetchall()
-
-    services = db.q(
-        """SELECT s.id, s.name, s.parent_id, p.name AS parent_name, s.created_by
-           FROM services s
-           LEFT JOIN services p ON p.id = s.parent_id
-           ORDER BY s.id DESC"""
-    ).fetchall()
-
-    ratings = db.q(
-        """SELECT r.id, r.job_id, r.score, r.comment, r.created_at,
-                  f.username AS from_username, t.username AS to_username
-           FROM ratings r
-           LEFT JOIN users f ON f.id = r.from_user
-           LEFT JOIN users t ON t.id = r.to_user
-           ORDER BY r.id DESC"""
-    ).fetchall()
-
-    reports = db.q(
-        """SELECT r.id, r.job_id, r.message_id, r.reason, r.details, r.status, r.created_at,
-                  f.username AS reporter_username, t.username AS reported_username,
-                  m.attachment_url, m.attachment_name, m.attachment_type
-           FROM reports r
-           LEFT JOIN users f ON f.id = r.reporter_id
-           LEFT JOIN users t ON t.id = r.reported_user_id
-           LEFT JOIN messages m ON m.id = r.message_id
-           ORDER BY r.id DESC"""
-    ).fetchall()
-
-    commission_row = db.q(
-        "SELECT value FROM platform_settings WHERE key='commission_percent'"
-    ).fetchone()
-    commission_percent = float(commission_row[0]) if commission_row else 10.0
-
-    return jsonify({
-        "settings": {
-            "commission_percent": commission_percent,
-        },
-        "stats": {
-            "users": len(users),
-            "jobs": len(jobs),
-            "active_jobs": sum(1 for j in jobs if str(j[5]).lower() == "active"),
-            "finished_jobs": sum(1 for j in jobs if str(j[5]).lower() == "finished"),
-            "services": len(services),
-            "ratings": len(ratings),
-            "reports": len(reports),
-            "pending_reports": sum(1 for r in reports if str(r[5]).lower() in ("open", "reviewing")),
-            "blocked_jobs": sum(1 for j in jobs if str(j[5]).lower() == "blocked"),
-            "admins": sum(1 for u in users if str(u[8]).lower() == "admin"),
-        },
-        "users": rows(users, ["id", "username", "first_name", "last_name", "email", "birthday", "bio", "skills", "role", "created_at", "average_rating", "balance", "is_blocked"]),
-        "jobs": rows(jobs, ["id", "title", "price", "currency", "location", "status", "created_at", "creator_username", "worker_username"]),
-        "services": rows(services, ["id", "name", "parent_id", "parent_name", "created_by"]),
-        "ratings": rows(ratings, ["id", "job_id", "score", "comment", "created_at", "from_username", "to_username"]),
-        "reports": rows(reports, ["id", "job_id", "message_id", "reason", "details", "status", "created_at", "reporter_username", "reported_username", "attachment_url", "attachment_name", "attachment_type"]),
-    })
+    existing=_active_block_row(user_id,"full")
+    if blocked:
+        if existing:
+            return jsonify({"msg":"To‘liq block allaqachon mavjud.","block_id":existing[0]}),409
+        now=datetime.datetime.now(datetime.timezone.utc)
+        result=db.q(
+            "INSERT INTO user_blocks(user_id,block_type,reason,duration_minutes,created_at,expires_at,active,created_by) VALUES(?,?,?,?,?,?,1,?)",
+            (user_id,"full","Administrator tomonidan berilgan to‘liq blok.",None,now.isoformat(),None,request.uid)
+        )
+        block_id=result.lastrowid; result.close()
+        admin_audit("user_block_created","user",user_id,f"full: legacy endpoint")
+        create_notification(user_id,"account_moderation","Hisobingiz to‘liq bloklandi","Administrator hisobingizni to‘liq blokladi. Sabab: Administrator tomonidan berilgan to‘liq blok. Appeal yuborish uchun Appeals bo‘limiga kiring.","/appeals")
+        return jsonify({"msg":"Foydalanuvchi bloklandi.","block_id":block_id})
+    if not existing:
+        db.q("UPDATE users SET is_blocked=0 WHERE id=?",(user_id,)).close()
+        return jsonify({"msg":"Faol to‘liq block topilmadi."})
+    now=datetime.datetime.now(datetime.timezone.utc).isoformat()
+    db.q("UPDATE user_blocks SET active=0,lifted_at=?,lifted_by=? WHERE id=?",(now,request.uid,existing[0])).close()
+    admin_audit("user_block_lifted","user",user_id,f"block={existing[0]}: legacy endpoint")
+    create_notification(user_id,"account_moderation","To‘liq block olib tashlandi","Administrator to‘liq blokni olib tashladi.","/appeals")
+    return jsonify({"msg":"Foydalanuvchi qayta faollashtirildi."})
 
 
 @app.route("/admin/settings/commission", methods=["PATCH"])
