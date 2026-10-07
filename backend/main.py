@@ -652,11 +652,29 @@ def create_report():
         return jsonify({"msg":"Izoh 2000 belgidan oshmasligi kerak"}),400
     if reported_user_id == request.uid:
         return jsonify({"msg":"O‘zingiz ustingizdan shikoyat qila olmaysiz"}),400
-    if job_id and not db.q("SELECT id FROM jobs WHERE id=?",(job_id,)).fetchone():
+    if not job_id or not reported_user_id:
+        return jsonify({"msg":"Ish va shikoyat qilinadigan foydalanuvchini ko‘rsating"}),400
+
+    job = db.q(
+        "SELECT user_id, worker_id, status FROM jobs WHERE id=?",
+        (job_id,),
+    ).fetchone()
+    if not job:
         return jsonify({"msg":"Ish topilmadi"}),404
+
+    owner_id, worker_id, job_status = job
+    if not worker_id or request.uid not in (owner_id, worker_id):
+        return jsonify({"msg":"Faqat ish egasi yoki ishchi bir-biridan shikoyat qila oladi"}),403
+
+    if job_status not in ("accepted", "pending_finish", "finished"):
+        return jsonify({"msg":"Bu ish bo‘yicha hozircha shikoyat qilish mumkin emas"}),400
+
+    target_user_id = worker_id if request.uid == owner_id else owner_id
+    if reported_user_id != target_user_id:
+        return jsonify({"msg":"Faqat shu ishdagi boshqa ishtirokchi haqida shikoyat qilish mumkin"}),403
+
     now_time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     db.q("INSERT INTO reports(reporter_id,reported_user_id,job_id,reason,details,created_at) VALUES(?,?,?,?,?,?)",(request.uid,reported_user_id,job_id,reason,details,now_time)).close()
-    for admin in db.q("SELECT id FROM users WHERE role='admin'").fetchall():
         create_notification(admin[0],"report","Yangi shikoyat",reason,"/admin")
     return jsonify({"msg":"Shikoyatingiz qabul qilindi."}),201
 
