@@ -2614,6 +2614,51 @@ def update_proposal(proposal_id):
         ).close()
         return jsonify({"msg": "Taklif bekor qilindi."})
 
+    if action == "edit":
+        block_response = enforce_block("proposal")
+        if block_response:
+            return block_response
+        if request.uid != proposal_worker_id:
+            return jsonify({"msg": "Faqat taklif egasi uni tahrirlashi mumkin"}), 403
+        if job_status != "active" or assigned_worker_id is not None:
+            return jsonify({"msg": "Bu taklifni hozir tahrirlab bo‘lmaydi"}), 409
+
+        proposal_data = request.json or {}
+        try:
+            edited_price = float(proposal_data.get("price"))
+        except (TypeError, ValueError):
+            return jsonify({"msg": "Taklif narxi noto‘g‘ri"}), 400
+        if not math.isfinite(edited_price) or edited_price <= 0 or edited_price > 100000000000:
+            return jsonify({"msg": "Taklif narxi 0 dan katta va 100 000 000 000 dan oshmasligi kerak"}), 400
+
+        edited_deadline = str(proposal_data.get("deadline", "")).strip()
+        edited_message = str(proposal_data.get("message", "")).strip()
+        if not edited_deadline or len(edited_deadline) > 64:
+            return jsonify({"msg": "Muddatni kiriting"}), 400
+        if len(edited_message) > 3000:
+            return jsonify({"msg": "Taklif izohi 3000 belgidan oshmasligi kerak"}), 400
+
+        now_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        result = db.q(
+            """UPDATE job_proposals
+               SET price=?,deadline=?,message=?,updated_at=?
+               WHERE id=? AND worker_id=? AND status='pending'""",
+            (edited_price, edited_deadline, edited_message, proposal_id, request.uid),
+        )
+        updated = result.rowcount
+        result.close()
+        if updated != 1:
+            return jsonify({"msg": "Bu taklif endi tahrirlash uchun faol emas"}), 409
+
+        create_notification(
+            owner_id,
+            "proposal_updated",
+            "Taklif yangilandi",
+            f"«{job_title}» ishiga yuborilgan taklif yangilandi: {edited_price:,.0f} UZS.",
+            "/jobs",
+        )
+        return jsonify({"msg": "Taklif yangilandi.", "proposal_id": proposal_id})
+
     if request.uid != owner_id:
         return jsonify({"msg": "Faqat ish egasi taklifni boshqarishi mumkin"}), 403
     if action not in ("accept", "reject"):
