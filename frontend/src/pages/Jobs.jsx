@@ -59,7 +59,7 @@ export default function Jobs() {
     const [reportDetails, setReportDetails] = useState("")
     const [pageSize, setPageSize] = useState(10)
     const [currentPage, setCurrentPage] = useState(1)
-    const [activeJobDetails, setSelectedJob] = useState(null)
+    const [selectedJob, setSelectedJob] = useState(null)
     const [jobDetails, setJobDetails] = useState(null)
     const [jobDetailsLoading, setJobDetailsLoading] = useState(false)
 
@@ -244,7 +244,7 @@ export default function Jobs() {
         }
     }, [selectedJob?.id, token])
 
-    const activeJobDetails = jobDetails || activeJobDetails
+    const activeJobDetails = jobDetails || selectedJob
 
     const addServiceFilter = (service) => {
         setSelectedServices([...selectedServices, service])
