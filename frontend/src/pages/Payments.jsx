@@ -149,7 +149,7 @@ export default function Payments() {
                     ) : (
                         <>
                             <div className="payment-summary">
-                                <div><span>Test balansingiz</span><strong>{Number(wallet.balance || 0).toLocaleString("uz-UZ")} UZS</strong></div>
+                                <div><span>{payment?.provider === "dummy" ? "Test balansingiz" : "Balans"}</span><strong>{Number(wallet.balance || 0).toLocaleString("uz-UZ")} UZS</strong></div>
                                 <div><span>Holat</span><strong>{statusLabel(payment?.status || "pending")}</strong></div>
                                 <div><span>Summa</span><strong>{payment?.amount ? Number(payment.amount).toLocaleString("uz-UZ") : "—"} {payment?.currency || "UZS"}</strong></div>
                                 <div><span>To‘lov turi</span><strong>{payment?.provider === "dummy" ? "Test" : "Click"}</strong></div>
@@ -163,6 +163,10 @@ export default function Payments() {
                                 <div className="notice ok" style={{ marginBottom: 16 }}>
                                     To‘lov qabul qilindi. {Number(payment.amount || 0).toLocaleString("uz-UZ")} UZS hozir waiting holatida turibdi. Ish ikki tomon tomonidan yakunlangach pul ishchiga o‘tadi.
                                 </div>
+                            ) : payment?.provider === "click" ? (
+                                <button className="btn btn-primary" disabled={creating || !payment?.payment_uuid} onClick={startPayment}>
+                                    {creating ? "To‘lov sahifasi ochilmoqda..." : "Click orqali to‘lash"}
+                                </button>
                             ) : (
                                 <button className="btn btn-primary" disabled={creating || !payment?.payment_uuid} onClick={dummyPay}>
                                     {creating ? "To‘lanmoqda..." : "Test balansidan to‘lash"}
