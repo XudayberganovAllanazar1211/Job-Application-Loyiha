@@ -341,7 +341,7 @@ export default function Dashboard() {
                                             </button>
                                         )}
 
-                                        {isParticipant && job.worker_id != null && ["accepted", "pending_finish", "finished"].includes(status) && (
+                                        {isParticipant && job.worker_id != null && ["accepted", "pending_finish"].includes(status) && (
                                             <button className="btn btn-secondary" onClick={(e) => { e.stopPropagation(); setReportJobId(reportJobId === job.id ? null : job.id) }}>⚑ Shikoyat</button>
                                         )}
                                         {isMyJob && status === "payment_pending" && (
