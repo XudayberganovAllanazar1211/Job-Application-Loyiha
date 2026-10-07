@@ -57,6 +57,8 @@ export default function Jobs() {
     const [reportJobId, setReportJobId] = useState(null)
     const [reportReason, setReportReason] = useState("")
     const [reportDetails, setReportDetails] = useState("")
+    const [pageSize, setPageSize] = useState(10)
+    const [currentPage, setCurrentPage] = useState(1)
 
     const serviceMap = useMemo(
         () => Object.fromEntries(services.map((service) => [String(service.id), service.name])),
@@ -176,6 +178,20 @@ export default function Jobs() {
             ranked: scored
         }
     }, [filtered, profileSkills, serviceMap])
+
+    const totalPages = Math.max(1, Math.ceil(recommendationData.ranked.length / pageSize))
+    const pagedRanked = useMemo(() => {
+        const start = (currentPage - 1) * pageSize
+        return recommendationData.ranked.slice(start, start + pageSize)
+    }, [recommendationData.ranked, currentPage, pageSize])
+
+    useEffect(() => {
+        setCurrentPage(1)
+    }, [search, selectedServices, minPrice, maxPrice, timeFilter, locationFilter, pageSize])
+
+    useEffect(() => {
+        if (currentPage > totalPages) setCurrentPage(totalPages)
+    }, [currentPage, totalPages])
 
     useEffect(() => {
         if (!showServiceMenu && !showFilters) return
@@ -530,7 +546,7 @@ export default function Jobs() {
             </div>
 
             <div className="job-grid">
-                {recommendationData.ranked.map(({ job }) => {
+                {pagedRanked.map(({ job }) => {
                     const workerName = `${job.worker_first || ""} ${job.worker_last || ""}`.trim() || job.worker_username;
                     const status = String(job.status || "").trim().toLowerCase()
                     const isMyJob = String(job.user_id) === String(user?.id)
@@ -679,6 +695,27 @@ export default function Jobs() {
                     )
                 })}
 
+
+                {!loading && filtered.length > 0 && (
+                    <div className="jobs-pagination">
+                        <div className="jobs-page-size">
+                            <span>Bir sahifada</span>
+                            <select className="input" value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
+                                <option value="5">5 ta</option>
+                                <option value="10">10 ta</option>
+                                <option value="20">20 ta</option>
+                                <option value="50">50 ta</option>
+                            </select>
+                            <span>job</span>
+                        </div>
+                        <div className="jobs-page-summary">{filtered.length} ta ish • {currentPage} / {totalPages} sahifa</div>
+                        <div className="jobs-page-controls">
+                            <button className="btn btn-secondary" disabled={currentPage === 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}>‹</button>
+                            <span className="jobs-page-indicator">{currentPage} / {totalPages}</span>
+                            <button className="btn btn-secondary" disabled={currentPage === totalPages} onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}>›</button>
+                        </div>
+                    </div>
+                )}
                 {!loading && !filtered.length && (
     <div className="empty-state jobs-empty-state">
         <strong>{hasSearchOrFilters ? "Sizning mezonlaringiz bo‘yicha ish topilmadi." : "Hozircha faol ishlar yo‘q."}</strong>
