@@ -22,6 +22,7 @@ export default function Chat() {
     const [otherName, setOtherName] = useState("Foydalanuvchi")
     const [otherUsername, setOtherUsername] = useState("")
     const [file, setFile] = useState(null)
+    const [reportingMessageId, setReportingMessageId] = useState(null)
     const fileInputRef = useRef(null)
     const bottomRef = useRef(null)
     const typingTimerRef = useRef(null)
@@ -160,6 +161,31 @@ export default function Chat() {
         }
     }
 
+    const reportMessage = async (message) => {
+        if (!message?.id || !message.sender_id || String(message.sender_id) === String(me?.id)) return
+
+        const reason = window.prompt("Xabarni nima sababdan report qilmoqchisiz?")
+        if (reason === null || !reason.trim()) return
+
+        const details = window.prompt("Qo‘shimcha izoh (ixtiyoriy):") || ""
+        setReportingMessageId(message.id)
+
+        const result = await api("/report", {
+            method: "POST",
+            body: {
+                job_id: Number(jobId),
+                message_id: Number(message.id),
+                reported_user_id: Number(message.sender_id),
+                reason: reason.trim(),
+                details: details.trim()
+            },
+            token
+        })
+
+        setReportingMessageId(null)
+        setNotice(result?.msg || "Shikoyat yuborildi.")
+    }
+
     const send = async (e) => {
         e.preventDefault()
         if (!text.trim() && !file) return
@@ -267,7 +293,20 @@ export default function Chat() {
                                             )}
                                         </div>
                                     )}
-                                    {mine && <small className="muted" style={{ display: "block", marginTop: 4 }}>{message.read_at ? "✓✓ Ko‘rildi" : "✓ Yuborildi"}</small>}
+                                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+                                        {mine && <small className="muted">{message.read_at ? "✓✓ Ko‘rildi" : "✓ Yuborildi"}</small>}
+                                        {!mine && (
+                                            <button
+                                                type="button"
+                                                className="btn btn-secondary"
+                                                style={{ padding: "3px 8px", fontSize: 12 }}
+                                                disabled={reportingMessageId === message.id}
+                                                onClick={() => reportMessage(message)}
+                                            >
+                                                {reportingMessageId === message.id ? "Yuborilmoqda..." : "Report"}
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             )
                         })}
