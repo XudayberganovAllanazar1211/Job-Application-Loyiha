@@ -234,6 +234,7 @@ export default function Admin() {
                                                 <option value="accepted">qabul qilingan</option>
                                                 <option value="pending_finish">tasdiqlash kutilmoqda</option>
                                                 <option value="finished">yakunlangan</option>
+                                                <option value="blocked">bloklangan</option>
                                             </select>
                                         </td>
                                         <td>{item.location || "—"}</td>
