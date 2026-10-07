@@ -16,13 +16,39 @@ export default function Chat() {
         String(location.state?.job?.worker_id || location.state?.job?.user_id || "")
     )
     const [notice, setNotice] = useState("")
+    const [otherOnline, setOtherOnline] = useState(false)
+    const [otherLastSeen, setOtherLastSeen] = useState("")
+    const [otherTyping, setOtherTyping] = useState(false)
     const bottomRef = useRef(null)
+    const typingTimerRef = useRef(null)
 
     const loadXabarlar = async () => {
         // Skip polling if the browser tab is hidden to save bandwidth and battery
         if (document.hidden) return
         const result = await api(`/messages/${jobId}`, { token })
         if (Array.isArray(result)) setXabarlar(result)
+    }
+
+    const loadPresence = async () => {
+        if (!receiverId) return
+        const result = await api(`/presence/${receiverId}`, { token })
+        if (result?.ok) {
+            setOtherOnline(Boolean(result.online))
+            setOtherLastSeen(result.last_seen_at || "")
+        }
+    }
+
+    const loadTyping = async () => {
+        const result = await api(`/typing/${jobId}`, { token })
+        if (result?.ok) setOtherTyping(Boolean(result.typing))
+    }
+
+    const sendTypingState = async (active) => {
+        await api(`/typing/${jobId}`, {
+            method: "POST",
+            body: { typing: active },
+            token
+        })
     }
 
     const loadJob = async () => {
@@ -44,15 +70,27 @@ export default function Chat() {
 
         // Smart polling: poll every 3 seconds, and immediately refresh when user returns to tab
         const interval = setInterval(loadXabarlar, 3000)
+        const presenceInterval = setInterval(loadPresence, 5000)
+        const typingInterval = setInterval(loadTyping, 1500)
+        const heartbeat = setInterval(() => api("/presence", { method: "POST", token }), 30000)
+        loadPresence()
+        api("/presence", { method: "POST", token })
         const handleVisibilityChange = () => {
             if (!document.hidden) {
                 loadXabarlar()
+                loadPresence()
+                loadTyping()
             }
         }
         document.addEventListener("visibilitychange", handleVisibilityChange)
 
         return () => {
             clearInterval(interval)
+            clearInterval(presenceInterval)
+            clearInterval(typingInterval)
+            clearInterval(heartbeat)
+            clearTimeout(typingTimerRef.current)
+            sendTypingState(false)
             document.removeEventListener("visibilitychange", handleVisibilityChange)
         }
     }, [jobId])
@@ -88,6 +126,8 @@ export default function Chat() {
 
         if (result?.msg === "ok" || result?.msg === "sent") {
             setText("")
+            clearTimeout(typingTimerRef.current)
+            await sendTypingState(false)
             const res = await api(`/messages/${jobId}`, { token })
             if (Array.isArray(res)) setXabarlar(res)
         } else {
@@ -110,6 +150,14 @@ export default function Chat() {
                             <p className="muted" style={{ margin: 0 }}>
                                 {job?.title || `Ish #${jobId}`}
                             </p>
+                            {receiverId && (
+                                <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}>
+                                    <span className="profile-online-dot" />
+                                    <span className="muted">
+                                        {otherTyping ? "Yozmoqda..." : otherOnline ? "Hozir online" : otherLastSeen ? `Oxirgi faollik: ${new Date(otherLastSeen).toLocaleString("uz-UZ", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}` : "Offline"}
+                                    </span>
+                                </div>
+                            )}
                         </div>
                         <div className="actions">
                             <button className="btn btn-secondary" onClick={() => navigate(-1)}>Orqaga</button>
@@ -127,6 +175,7 @@ export default function Chat() {
                                         {mine ? "Siz" : (message.sender_name || "Foydalanuvchi")} • {message.sent_at}
                                     </div>
                                     <div>{message.message}</div>
+                                    {mine && <small className="muted" style={{ display: "block", marginTop: 4 }}>{message.read_at ? "✓✓ Ko‘rildi" : "✓ Yuborildi"}</small>}
                                 </div>
                             )
                         })}
@@ -140,7 +189,15 @@ export default function Chat() {
                             style={{ flex: 1 }}
                             placeholder="Xabar yozing..."
                             value={text}
-                            onChange={(e) => setText(e.target.value)}
+                            onChange={(e) => {
+                                const value = e.target.value
+                                setText(value)
+                                clearTimeout(typingTimerRef.current)
+                                sendTypingState(Boolean(value.trim()))
+                                if (value.trim()) {
+                                    typingTimerRef.current = setTimeout(() => sendTypingState(false), 1200)
+                                }
+                            }}
                         />
                         <button className="btn btn-primary">Yuborish</button>
                     </form>
