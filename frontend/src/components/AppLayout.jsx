@@ -16,6 +16,7 @@ export default function AppLayout({ title, subtitle, children }) {
     const [theme, setTheme] = useState(() => localStorage.getItem("finjob-theme") || "light")
     const [notifications, setNotifications] = useState([])
     const [unreadNotifications, setUnreadNotifications] = useState(0)
+    const [unreadMessages, setUnreadMessages] = useState(0)
     const [showNotifications, setShowNotifications] = useState(false)
     const [showMobileMenu, setShowMobileMenu] = useState(false)
     const notificationRef = useRef(null)
@@ -65,6 +66,20 @@ export default function AppLayout({ title, subtitle, children }) {
         if (days < 7) return `${days} kun oldin`
         return value.toLocaleDateString("uz-UZ", { day: "2-digit", month: "short" })
     }
+
+    useEffect(() => {
+        let alive = true
+        const loadUnreadMessages = async () => {
+            const result = await api("/messages/unread-count", { token })
+            if (alive && result?.ok) setUnreadMessages(Number(result.unread || 0))
+        }
+        if (token) {
+            loadUnreadMessages()
+            const timer = setInterval(loadUnreadMessages, 15000)
+            return () => { alive = false; clearInterval(timer) }
+        }
+        return () => { alive = false }
+    }, [token])
 
     useEffect(() => {
         setShowMobileMenu(false)
@@ -135,6 +150,11 @@ export default function AppLayout({ title, subtitle, children }) {
                         </NavLink>
                     ))}
                 </nav>
+                <NavLink to="/conversations" className={({isActive}) => `nav-link ${isActive ? "active" : ""}`}>
+                    <span className="nav-link-icon">✉</span>
+                    <span className="nav-link-label">Suhbatlar</span>
+                    {unreadMessages > 0 && <span className="notification-sidebar-badge">{unreadMessages > 99 ? "99+" : unreadMessages}</span>}
+                </NavLink>
                 {isAdmin && (
                     <NavLink to="/admin" className={({isActive}) => `nav-link admin-nav-link ${isActive ? "active" : ""}`}>
                         <span className="nav-link-icon">⚙</span><span className="nav-link-label">Administrator</span>
@@ -182,6 +202,7 @@ export default function AppLayout({ title, subtitle, children }) {
                             <button type="button" className="mobile-menu-close" onClick={() => setShowMobileMenu(false)} aria-label="Menyuni yopish">×</button>
                         </div>
                         <div className="mobile-menu-grid">
+                            <NavLink to="/conversations" className="mobile-menu-link">✉ <span>Suhbatlar{unreadMessages > 0 ? ` (${unreadMessages})` : ""}</span></NavLink>
                             <NavLink to="/leaderboard" className="mobile-menu-link">★ <span>Reyting jadvali</span></NavLink>
                             <NavLink to="/profile" className="mobile-menu-link">◎ <span>Profil</span></NavLink>
                             {isAdmin && <NavLink to="/admin" className="mobile-menu-link">⚙ <span>Administrator</span></NavLink>}
