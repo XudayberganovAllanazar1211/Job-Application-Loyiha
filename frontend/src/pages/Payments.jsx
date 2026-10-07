@@ -22,8 +22,14 @@ export default function Payments() {
     const [creating, setCreating] = useState(false)
     const [notice, setNotice] = useState("")
     const [error, setError] = useState("")
+    const [wallet, setWallet] = useState({ balance: 0, transactions: [] })
     const token = localStorage.getItem("token") || ""
     const navigate = useNavigate()
+
+    const loadWallet = async () => {
+        const result = await api("/wallet", { token })
+        if (result?.balance !== undefined) setWallet(result)
+    }
 
     const loadHistory = async () => {
         const result = await api("/payments", { token })
@@ -48,6 +54,7 @@ export default function Payments() {
                 }
             }
             await loadHistory()
+            await loadWallet()
             setLoading(false)
         }
         load()
@@ -89,6 +96,23 @@ export default function Payments() {
         setError(result?.msg || "To‘lovni yaratib bo‘lmadi.")
     }
 
+    const dummyPay = async () => {
+        if (!jobId || creating) return
+        setCreating(true)
+        setError("")
+        setNotice("")
+        const result = await api("/payments/dummy/" + jobId, { method: "POST", token })
+        setCreating(false)
+        if (result?.status === "paid") {
+            setPayment(result)
+            setNotice("Test to‘lovi muvaffaqiyatli amalga oshdi.")
+            await loadHistory()
+            await loadWallet()
+            return
+        }
+        setError(result?.msg || "Test to‘lovini amalga oshirib bo‘lmadi.")
+    }
+
     if (loading) {
         return (
             <AppLayout title="To‘lovlar" subtitle="To‘lov ma’lumotlari yuklanmoqda.">
@@ -99,7 +123,7 @@ export default function Payments() {
 
     if (jobId) {
         return (
-            <AppLayout title="Ish uchun to‘lov" subtitle="Xavfsiz Click checkout orqali to‘lovni amalga oshiring.">
+            <AppLayout title="Ish uchun to‘lov" subtitle="Hozircha test balansidan foydalanib to‘lovni sinab ko‘ring.">
                 <div className="card" style={{ maxWidth: 760, margin: "0 auto" }}>
                     <div className="page-head">
                         <h2>To‘lovni tasdiqlash</h2>
@@ -118,17 +142,18 @@ export default function Payments() {
                     ) : (
                         <>
                             <div className="payment-summary">
+                                <div><span>Test balansingiz</span><strong>{Number(wallet.balance || 0).toLocaleString("uz-UZ")} UZS</strong></div>
                                 <div><span>Holat</span><strong>{statusLabel(payment?.status || "pending")}</strong></div>
                                 <div><span>Summa</span><strong>{payment?.amount ? Number(payment.amount).toLocaleString("uz-UZ") : "—"} {payment?.currency || "UZS"}</strong></div>
                                 <div><span>Provayder</span><strong>Click</strong></div>
                             </div>
 
                             <div className="notice" style={{ marginBottom: 16 }}>
-                                To‘lov Click’ning rasmiy checkout sahifasida amalga oshiriladi. To‘lov tasdiqlangandan keyingina ish bajaruvchi uchun faol holatga o‘tadi.
+                                Bu vaqtinchalik dummy/test to‘lov. Admin sizning hisobingizga test UZS qo‘shishi mumkin. To‘lovda komissiya avtomatik hisoblanadi.
                             </div>
 
-                            <button className="btn btn-primary" disabled={creating || !payment?.payment_uuid} onClick={startPayment}>
-                                {creating ? "Tayyorlanmoqda..." : "Click orqali to‘lash"}
+                            <button className="btn btn-primary" disabled={creating || !payment?.payment_uuid} onClick={dummyPay}>
+                                {creating ? "To‘lanmoqda..." : "Test balansidan to‘lash"}
                             </button>
                             <button className="btn btn-secondary" style={{ marginLeft: 8 }} onClick={() => navigate("/jobs")}>
                                 Keyinroq
