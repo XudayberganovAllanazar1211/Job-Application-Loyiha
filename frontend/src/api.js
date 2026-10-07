@@ -2,13 +2,14 @@ const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000"
 
 export async function api(path, { method = "GET", body = null, token = "", signal } = {}) {
     try {
-        const response = await fetch(API_BASE + path, {
+        const isFormData = typeof FormData !== "undefined" && body instanceof FormData
+        const response = await fetch(API_BASE.replace(/\\/$/, "") + path, {
             method,
             headers: {
-                ...(body ? { "Content-Type": "application/json" } : {}),
+                ...(!isFormData && body ? { "Content-Type": "application/json" } : {}),
                 ...(token ? { Authorization: `Bearer ${token}` } : {})
             },
-            body: body ? JSON.stringify(body) : null,
+            body: body ? (isFormData ? body : JSON.stringify(body)) : null,
             signal
         })
 
