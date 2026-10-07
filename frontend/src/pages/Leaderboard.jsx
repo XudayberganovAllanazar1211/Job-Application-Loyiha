@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react"
 import AppLayout from "../components/AppLayout"
+import { useNavigate } from "react-router-dom"
 import { api } from "../api"
 
 export default function Leaderboard() {
     const [activeTab, setActiveTab] = useState("creators") // 'creators' yoki 'workers'
     const [data, setData] = useState({ creators: [], workers: [] })
     const [loading, setLoading] = useState(true)
+    const navigate = useNavigate()
     const token = localStorage.getItem("token") || ""
 
     const load = async () => {
@@ -73,8 +75,14 @@ export default function Leaderboard() {
                                 <div style={{ display: "flex", alignItems: "center", gap: "18px" }}>
                                     <div className="leaderboard-rank">{getRankIcon(idx)}</div>
                                     <div>
-                                        <div style={{ fontWeight: 800, fontSize: "16px" }}>{user.name}</div>
-                                        <div className="helper">Foydalanuvchi #{user.id}</div>
+                                        <button
+                                            type="button"
+                                            className="leaderboard-profile-link"
+                                            onClick={() => navigate(`/profiles/${user.username}`)}
+                                        >
+                                            {user.name}
+                                        </button>
+                                        <div className="helper">@{user.username}</div>
                                     </div>
                                 </div>
                                 <div className="leaderboard-count">⭐ {user.count} ta ish</div>
