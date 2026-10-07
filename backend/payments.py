@@ -186,6 +186,260 @@ def register_payment_routes(app, db, auth, create_notification):
             for x in items
         ])
 
+
+    @app.route("/payments/dummy/<int:job_id>", methods=["POST"])
+    @auth
+    def dummy_payment(job_id):
+        commission_percent = float(os.environ.get("FINJOB_COMMISSION_PERCENT", "10"))
+        if commission_percent < 0 or commission_percent > 100:
+            commission_percent = 10
+
+        job = db.q(
+            "SELECT user_id,worker_id,status,price,currency,title FROM jobs WHERE id=?",
+            (job_id,),
+        ).fetchone()
+        if not job:
+            return jsonify({"msg": "Ish topilmadi"}), 404
+
+        owner_id, worker_id, job_status, price, currency, title = job
+        if owner_id != request.uid:
+            return jsonify({"msg": "To‘lovni faqat ish egasi amalga oshirishi mumkin"}), 403
+        if job_status != "payment_pending" or not worker_id:
+            return jsonify({"msg": "Bu ish hozir to‘lov uchun tayyor emas"}), 400
+        if float(price) <= 0:
+            return jsonify({"msg": "Ish narxi noto‘g‘ri"}), 400
+
+        existing = db.q(
+            "SELECT payment_uuid,status FROM payments WHERE job_id=? AND provider='dummy'",
+            (job_id,),
+        ).fetchone()
+        if existing and existing[1] == "paid":
+            return jsonify({"msg": "already_paid", "status": "paid"})
+
+        payer_balance = db.q("SELECT COALESCE(balance,0) FROM users WHERE id=?", (owner_id,)).fetchone()
+        if not payer_balance or float(payer_balance[0]) < float(price):
+            return jsonify({
+                "msg": "Hisobingizda mablag‘ yetarli emas",
+                "required": float(price),
+                "balance": float(payer_balance[0]) if payer_balance else 0,
+            }), 400
+
+        payment_uuid = existing[0] if existing else str(uuid.uuid4())
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        amount = float(price)
+        commission = round(amount * commission_percent / 100, 2)
+        worker_amount = round(amount - commission, 2)
+
+        conn = db.get_connection()
+        try:
+            cur = conn.cursor()
+            if existing:
+                cur.execute(
+                    """UPDATE payments SET payer_id=?,payee_id=?,amount=?,currency='UZS',
+                       status='paid',paid_at=?,provider_payload=?
+                       WHERE payment_uuid=? AND provider='dummy'""",
+                    (
+                        owner_id, worker_id, amount, now,
+                        json.dumps({"test": True, "commission": commission}, ensure_ascii=False),
+                        payment_uuid,
+                    ),
+                )
+            else:
+                cur.execute(
+                    """INSERT INTO payments(
+                        payment_uuid,job_id,payer_id,payee_id,amount,currency,provider,status,
+                        provider_payload,created_at,paid_at
+                    ) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+                    (
+                        payment_uuid,job_id,owner_id,worker_id,amount,"UZS","dummy","paid",
+                        json.dumps({"test": True, "commission": commission}, ensure_ascii=False),
+                        now,now,
+                    ),
+                )
+
+            cur.execute(
+                "UPDATE users SET balance=ROUND(COALESCE(balance,0)-?,2) WHERE id=? AND COALESCE(balance,0)>=?",
+                (amount, owner_id, amount),
+            )
+            if cur.rowcount != 1:
+                raise ValueError("insufficient_balance")
+
+            cur.execute(
+                "UPDATE users SET balance=ROUND(COALESCE(balance,0)+?,2) WHERE id=?",
+                (worker_amount, worker_id),
+            )
+
+            cur.execute(
+                """CREATE TABLE IF NOT EXISTS platform_wallet(
+                    id INTEGER PRIMARY KEY CHECK(id=1),
+                    balance REAL NOT NULL DEFAULT 0
+                )"""
+            )
+            cur.execute("INSERT OR IGNORE INTO platform_wallet(id,balance) VALUES(1,0)")
+            cur.execute(
+                "UPDATE platform_wallet SET balance=ROUND(balance+?,2) WHERE id=1",
+                (commission,),
+            )
+
+            cur.execute(
+                """CREATE TABLE IF NOT EXISTS wallet_transactions(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    type TEXT NOT NULL,
+                    amount REAL NOT NULL,
+                    balance_after REAL NOT NULL,
+                    job_id INTEGER,
+                    description TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )"""
+            )
+            payer_after = cur.execute("SELECT balance FROM users WHERE id=?", (owner_id,)).fetchone()[0]
+            worker_after = cur.execute("SELECT balance FROM users WHERE id=?", (worker_id,)).fetchone()[0]
+            cur.execute(
+                """INSERT INTO wallet_transactions
+                   (user_id,type,amount,balance_after,job_id,description,created_at)
+                   VALUES(?,?,?,?,?,?,?)""",
+                (owner_id,"payment_debit",-amount,payer_after,job_id,f"«{title}» uchun test to‘lovi",now),
+            )
+            cur.execute(
+                """INSERT INTO wallet_transactions
+                   (user_id,type,amount,balance_after,job_id,description,created_at)
+                   VALUES(?,?,?,?,?,?,?)""",
+                (worker_id,"payment_credit",worker_amount,worker_after,job_id,f"«{title}» ishidan daromad",now),
+            )
+            cur.execute(
+                "UPDATE jobs SET status='accepted' WHERE id=? AND status='payment_pending'",
+                (job_id,),
+            )
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            if str(e) == "insufficient_balance":
+                return jsonify({"msg": "Hisobingizda mablag‘ yetarli emas"}), 400
+            raise
+        finally:
+            conn.close()
+
+        create_notification(
+            owner_id,"payment_success","Test to‘lovi amalga oshdi",
+            f"«{title}» uchun {amount:,.0f} UZS test to‘lovi yechildi. FinJob komissiyasi: {commission:,.0f} UZS.",
+            "/payments"
+        )
+        create_notification(
+            worker_id,"payment_received","Test to‘lovi qabul qilindi",
+            f"«{title}» uchun {worker_amount:,.0f} UZS balansingizga qo‘shildi.",
+            "/payments"
+        )
+        return jsonify({
+            "msg": "ok",
+            "status": "paid",
+            "payment_uuid": payment_uuid,
+            "amount": amount,
+            "commission": commission,
+            "worker_amount": worker_amount,
+            "currency": "UZS",
+            "provider": "dummy",
+        })
+
+
+    @app.route("/wallet")
+    @auth
+    def get_wallet():
+        user = db.q("SELECT COALESCE(balance,0) FROM users WHERE id=?", (request.uid,)).fetchone()
+        transactions = db.q(
+            """SELECT type,amount,balance_after,job_id,description,created_at
+               FROM wallet_transactions WHERE user_id=? ORDER BY id DESC LIMIT 100""",
+            (request.uid,),
+        ).fetchall() if db.q(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='wallet_transactions'"
+        ).fetchone() else []
+        return jsonify({
+            "balance": float(user[0]) if user else 0,
+            "transactions": [
+                {"type": x[0], "amount": x[1], "balance_after": x[2], "job_id": x[3],
+                 "description": x[4], "created_at": x[5]}
+                for x in transactions
+            ],
+        })
+
+
+    @app.route("/admin/wallet/<int:user_id>", methods=["POST"])
+    @admin_required
+    def admin_add_wallet(user_id):
+        data = request.json or {}
+        try:
+            amount = float(data.get("amount", 0))
+        except (TypeError, ValueError):
+            return jsonify({"msg": "Summa noto‘g‘ri"}), 400
+        if amount <= 0 or amount > 1000000000:
+            return jsonify({"msg": "Summa 0 dan katta va 1 000 000 000 UZS dan oshmasligi kerak"}), 400
+
+        target = db.q("SELECT id,username FROM users WHERE id=?", (user_id,)).fetchone()
+        if not target:
+            return jsonify({"msg": "Foydalanuvchi topilmadi"}), 404
+
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        conn = db.get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE users SET balance=ROUND(COALESCE(balance,0)+?,2) WHERE id=?",
+                (amount,user_id),
+            )
+            balance = cur.execute("SELECT COALESCE(balance,0) FROM users WHERE id=?", (user_id,)).fetchone()[0]
+            cur.execute(
+                """CREATE TABLE IF NOT EXISTS wallet_transactions(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    type TEXT NOT NULL,
+                    amount REAL NOT NULL,
+                    balance_after REAL NOT NULL,
+                    job_id INTEGER,
+                    description TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )"""
+            )
+            cur.execute(
+                """INSERT INTO wallet_transactions
+                   (user_id,type,amount,balance_after,job_id,description,created_at)
+                   VALUES(?,?,?,?,?,?,?)""",
+                (user_id,"admin_topup",amount,balance,None,"Admin tomonidan test balansi qo‘shildi",now),
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+        create_notification(
+            user_id,"wallet_topup","Test balansi to‘ldirildi",
+            f"Admin hisobingizga {amount:,.0f} UZS test mablag‘i qo‘shdi.",
+            "/payments"
+        )
+        return jsonify({"msg": "Test balansi qo‘shildi", "balance": float(balance)})
+
+
+    @app.route("/admin/wallet/summary")
+    @admin_required
+    def admin_wallet_summary():
+        rows = db.q(
+            """SELECT id,username,first_name,last_name,COALESCE(balance,0)
+               FROM users ORDER BY balance DESC, id DESC"""
+        ).fetchall()
+        platform = db.q(
+            "SELECT balance FROM platform_wallet WHERE id=1"
+        ).fetchone() if db.q(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='platform_wallet'"
+        ).fetchone() else None
+        return jsonify({
+            "platform_balance": float(platform[0]) if platform else 0,
+            "users": [
+                {"id":x[0],"username":x[1],"first_name":x[2],"last_name":x[3],"balance":float(x[4] or 0)}
+                for x in rows
+            ],
+        })
+
     @app.route("/payments/click", methods=["POST","GET"])
     def click_callback():
         data = request.form.to_dict() if request.method == "POST" else request.args.to_dict()
