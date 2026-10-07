@@ -675,6 +675,7 @@ def create_report():
 
     now_time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     db.q("INSERT INTO reports(reporter_id,reported_user_id,job_id,reason,details,created_at) VALUES(?,?,?,?,?,?)",(request.uid,reported_user_id,job_id,reason,details,now_time)).close()
+    for admin in db.q("SELECT id FROM users WHERE role='admin'").fetchall():
         create_notification(admin[0],"report","Yangi shikoyat",reason,"/admin")
     return jsonify({"msg":"Shikoyatingiz qabul qilindi."}),201
 
