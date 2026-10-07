@@ -1861,3 +1861,20 @@ button,input,select,textarea{touch-action:manipulation}
 @media(hover:none){
     .btn:hover,.job-card:hover,.leaderboard-item:hover,.theme-toggle:hover,.service-select-button:hover{transform:none}
 }
+
+
+.notification-sidebar-badge{
+    margin-left:auto;
+    min-width:20px;
+    height:20px;
+    padding:0 6px;
+    border-radius:999px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    font-size:11px;
+    font-weight:800;
+    line-height:1;
+    background:var(--accent,#2563eb);
+    color:#fff;
+}
