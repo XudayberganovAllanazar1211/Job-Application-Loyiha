@@ -576,15 +576,75 @@ export default function Profile() {
                                 <div className="stat-value profile-stat-small">{getMembershipDuration(form.created_at)}</div>
                             </div>
                         </div>
-                        <div className="profile-stat card">
-                            <span className="profile-stat-icon">05</span>
-                            <div>
-                                <div className="stat-label">Balans</div>
-                                <div className="stat-value profile-stat-small">{Number(form.balance).toLocaleString("uz-UZ")} UZS</div>
-                            </div>
-                        </div>
                     </section>
 
+                    <section className="profile-wallet-card">
+                        <div className="profile-wallet-top">
+                            <div>
+                                <span className="profile-wallet-eyebrow">HAMYON</span>
+                                <h3>FinJob balansingiz</h3>
+                                <p>To‘lovlardan tushgan mablag‘ va wallet faoliyatingiz.</p>
+                            </div>
+                            <div className="profile-wallet-balance">
+                                <span>Joriy balans</span>
+                                <strong>{Number(form.balance).toLocaleString("uz-UZ")}</strong>
+                                <small>UZS</small>
+                            </div>
+                        </div>
+                        <div className="profile-wallet-controls">
+                            <button type="button" className="profile-wallet-withdraw-btn" onClick={() => setWithdrawOpen((current) => !current)} disabled={walletLoading || Number(form.balance) <= 0}>
+                                {withdrawOpen ? "Yopish" : "Yechib olish"}
+                            </button>
+                            <span>Hozircha test wallet ishlatilmoqda.</span>
+                        </div>
+                        {withdrawOpen && (
+                            <form className="profile-withdraw-box" onSubmit={submitWithdrawal}>
+                                <div className="profile-withdraw-field">
+                                    <label>Yechib olinadigan summa</label>
+                                    <div className="profile-withdraw-row">
+                                        <input className="input" type="number" min="1" max={Number(form.balance || 0)} step="0.01" placeholder="Masalan: 100000" value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} />
+                                        <button type="button" className="btn btn-secondary" onClick={() => setWithdrawAmount(String(Number(form.balance || 0)))}>Hammasini olish</button>
+                                    </div>
+                                </div>
+                                <button type="submit" className="btn btn-success" disabled={withdrawLoading || !withdrawAmount}>
+                                    {withdrawLoading ? "Yechilmoqda..." : "Tasdiqlash"}
+                                </button>
+                            </form>
+                        )}
+                        <div className="profile-wallet-history">
+                            <div className="profile-wallet-history-head">
+                                <div>
+                                    <span className="profile-wallet-eyebrow">TARIX</span>
+                                    <h4>So‘nggi tranzaksiyalar</h4>
+                                </div>
+                                <span>{walletTransactions.length} ta</span>
+                            </div>
+                            {walletLoading ? (
+                                <div className="profile-wallet-empty">Tranzaksiyalar yuklanmoqda...</div>
+                            ) : walletTransactions.length ? (
+                                <div className="profile-wallet-transactions">
+                                    {walletTransactions.slice(0, 8).map((transaction, index) => {
+                                        const amount = Number(transaction.amount || 0)
+                                        const income = amount > 0
+                                        return (
+                                            <div className="profile-wallet-transaction" key={transaction.created_at + "-" + index}>
+                                                <div className={income ? "profile-wallet-transaction-icon income" : "profile-wallet-transaction-icon outcome"}>{income ? "+" : "−"}</div>
+                                                <div className="profile-wallet-transaction-text">
+                                                    <strong>{transaction.description}</strong>
+                                                    <span>{formatWalletDate(transaction.created_at)}</span>
+                                                </div>
+                                                <div className={income ? "profile-wallet-transaction-amount income" : "profile-wallet-transaction-amount outcome"}>
+                                                    {income ? "+" : "−"}{Math.abs(amount).toLocaleString("uz-UZ")} UZS
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            ) : (
+                                <div className="profile-wallet-empty">Hali tranzaksiyalar mavjud emas.</div>
+                            )}
+                        </div>
+                    </section>
                     <div className="profile-content-grid">
                         <section className="card">
                             <div className="profile-section-head">
