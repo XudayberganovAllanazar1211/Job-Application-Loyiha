@@ -188,7 +188,7 @@ export default function AppLayout({ title, subtitle, children }) {
                         <button type="button" className="btn btn-danger mobile-menu-logout" onClick={logout}>Chiqish</button>
                     </div>
                 </div>
-            )
+            )}
             <main className="main">
                 <div className="app-topbar">
                     <div className="page-head">
