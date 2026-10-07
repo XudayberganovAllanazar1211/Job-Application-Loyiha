@@ -1325,3 +1325,32 @@ html[data-theme="dark"] .notification-head>div>span{
         margin-left:auto;
     }
 }
+
+
+.payment-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin: 20px 0;
+}
+.payment-summary > div {
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface-soft);
+}
+.payment-summary span {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--muted);
+    font-size: 12px;
+}
+.payment-summary strong {
+    display: block;
+    font-size: 17px;
+}
+@media (max-width: 700px) {
+    .payment-summary {
+        grid-template-columns: 1fr;
+    }
+}
