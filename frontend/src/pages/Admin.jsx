@@ -19,6 +19,16 @@ const statusLabel = {
     resolved: "Hal qilindi",
     rejected: "Rad etildi"
 }
+const blockLabels = {
+    full: "To‘liq blok",
+    chat: "Chat blok",
+    job_creation: "Ish yaratish blok",
+    job_accept: "Ish qabul qilish blok",
+    proposal: "Taklif yuborish blok",
+    rating: "Baholash blok",
+    withdrawal: "Mablag‘ yechish blok"
+}
+
 const actionLabel = {
     commission_update: "Komissiya o‘zgarishi",
     user_role_update: "Rol o‘zgarishi",
@@ -32,7 +42,11 @@ const actionLabel = {
     service_delete: "Xizmat o‘chirildi",
     rating_delete: "Baho o‘chirildi",
     report_status_update: "Shikoyat holati o‘zgardi",
-    wallet_topup: "Test balansi qo‘shildi"
+    wallet_topup: "Test balansi qo‘shildi",
+    user_block_created: "Block qo‘yildi",
+    user_block_lifted: "Block olib tashlandi",
+    appeal_created: "Yangi appeal",
+    appeal_reviewed: "Appeal ko‘rib chiqildi"
 }
 
 function Pager({ page, pages, total, onChange }) {
@@ -57,7 +71,14 @@ export default function Admin() {
     const [walletSummary, setWalletSummary] = useState(null)
     const [analytics, setAnalytics] = useState(null)
     const [finance, setFinance] = useState(null)
+    const [adminBlocks, setAdminBlocks] = useState([])
+    const [adminAppeals, setAdminAppeals] = useState([])
     const [audit, setAudit] = useState(null)
+    const [moderatingUser, setModeratingUser] = useState(null)
+    const [userBlocks, setUserBlocks] = useState([])
+    const [blockForm, setBlockForm] = useState({ block_type: "chat", duration_minutes: "1440", reason: "" })
+    const [reviewingAppeal, setReviewingAppeal] = useState(null)
+    const [appealReviewForm, setAppealReviewForm] = useState({ status: "reviewing", admin_response: "" })
     const [auditPage, setAuditPage] = useState(1)
 
     const [notice, setNotice] = useState("")
@@ -65,6 +86,12 @@ export default function Admin() {
     const [tab, setTab] = useState("dashboard")
     const [globalSearch, setGlobalSearch] = useState("")
     const [searchResults, setSearchResults] = useState(null)
+    const [appealQuery, setAppealQuery] = useState("")
+    const [appealStatus, setAppealStatus] = useState("all")
+    const [appealPage, setAppealPage] = useState(1)
+    const [blockQuery, setBlockQuery] = useState("")
+    const [blockStatus, setBlockStatus] = useState("active")
+    const [blockPage, setBlockPage] = useState(1)
 
     const [userQuery, setUserQuery] = useState("")
     const [userRole, setUserRole] = useState("all")
@@ -96,11 +123,13 @@ export default function Admin() {
 
     const load = async () => {
         setNotice("")
-        const [result, wallet, stats, financeData] = await Promise.all([
+        const [result, wallet, stats, financeData, blocks, appeals] = await Promise.all([
             api("/admin/overview", { token }),
             api("/admin/wallet/summary", { token }),
             api("/admin/analytics", { token }),
-            api("/admin/finance", { token })
+            api("/admin/finance", { token }),
+            api("/admin/blocks?status=active", { token }),
+            api("/admin/appeals", { token })
         ])
         if (result?.ok) {
             setData(result)
@@ -108,6 +137,8 @@ export default function Admin() {
             if (wallet?.ok) setWalletSummary(wallet)
             if (stats?.ok) setAnalytics(stats)
             if (financeData?.ok) setFinance(financeData)
+            if (blocks?.ok) setAdminBlocks(blocks.items || [])
+            if (appeals?.ok) setAdminAppeals(appeals.items || [])
         } else {
             setNoticeType("warn")
             setNotice(result?.msg || "Admin ma'lumotlarini yuklab bo'lmadi.")
@@ -175,13 +206,54 @@ export default function Admin() {
         }, "Foydalanuvchi roli o‘zgartirildi.")
     }
 
-    const changeUserStatus = async (item) => {
-        const blocked = Number(item.is_blocked || 0) === 0
-        if (!window.confirm("@" + item.username + " hisobini " + (blocked ? "bloklash" : "blokdan chiqarish") + "ni tasdiqlaysizmi?")) return
-        await action("/admin/user/" + item.id + "/status", {
+    const openModeration = async (item) => {
+        setModeratingUser(item)
+        setBlockForm({ block_type: "chat", duration_minutes: "1440", reason: "" })
+        const result = await api("/admin/user/" + item.id + "/blocks", { token })
+        if (result?.ok) setUserBlocks(result.blocks || [])
+        else setUserBlocks([])
+    }
+
+    const createUserBlock = async (event) => {
+        event.preventDefault()
+        if (!moderatingUser) return
+        const result = await action("/admin/user/" + moderatingUser.id + "/block", {
+            method: "POST",
+            body: {
+                block_type: blockForm.block_type,
+                duration_minutes: blockForm.duration_minutes || null,
+                reason: blockForm.reason.trim()
+            }
+        }, "Block qo‘yildi.")
+        if (result) {
+            setBlockForm({ block_type: "chat", duration_minutes: "1440", reason: "" })
+            const refreshed = await api("/admin/user/" + moderatingUser.id + "/blocks", { token })
+            if (refreshed?.ok) setUserBlocks(refreshed.blocks || [])
+        }
+    }
+
+    const liftBlock = async (block) => {
+        if (!window.confirm("#" + block.id + " blockni olib tashlashni tasdiqlaysizmi?")) return
+        const ok = await action("/admin/block/" + block.id, { method: "PATCH", body: { action: "lift" } }, "Block olib tashlandi.")
+        if (ok && moderatingUser) {
+            const refreshed = await api("/admin/user/" + moderatingUser.id + "/blocks", { token })
+            if (refreshed?.ok) setUserBlocks(refreshed.blocks || [])
+        }
+    }
+
+    const openAppealReview = (item) => {
+        setReviewingAppeal(item)
+        setAppealReviewForm({ status: item.status === "open" ? "reviewing" : item.status, admin_response: item.admin_response || "" })
+    }
+
+    const submitAppealReview = async (event) => {
+        event.preventDefault()
+        if (!reviewingAppeal) return
+        const ok = await action("/admin/appeal/" + reviewingAppeal.id, {
             method: "PATCH",
-            body: { is_blocked: blocked }
-        }, blocked ? "Foydalanuvchi bloklandi." : "Foydalanuvchi qayta faollashtirildi.")
+            body: appealReviewForm
+        }, "Appeal yangilandi.")
+        if (ok) setReviewingAppeal(null)
     }
 
     const editUser = (item) => {
@@ -324,6 +396,26 @@ export default function Admin() {
         return { all: items, page: items.slice((servicePage - 1) * PAGE_SIZE, servicePage * PAGE_SIZE), pages: Math.max(1, Math.ceil(items.length / PAGE_SIZE)) }
     }, [data, serviceQuery, servicePage])
 
+    const filteredAppeals = useMemo(() => {
+        const q = appealQuery.trim().toLowerCase()
+        const items = adminAppeals.filter((item) => {
+            const text = [item.username, item.appeal_text, item.block_reason, item.block_type].join(" ").toLowerCase()
+            return (!q || text.includes(q) || String(item.id).includes(q) || String(item.block_id).includes(q)) &&
+                (appealStatus === "all" || item.status === appealStatus)
+        })
+        return { all: items, page: items.slice((appealPage - 1) * PAGE_SIZE, appealPage * PAGE_SIZE), pages: Math.max(1, Math.ceil(items.length / PAGE_SIZE)) }
+    }, [adminAppeals, appealQuery, appealStatus, appealPage])
+
+    const filteredBlocks = useMemo(() => {
+        const q = blockQuery.trim().toLowerCase()
+        const items = adminBlocks.filter((item) => {
+            const text = [item.username, item.reason, item.block_type, item.block_label].join(" ").toLowerCase()
+            return (!q || text.includes(q) || String(item.id).includes(q) || String(item.user_id).includes(q)) &&
+                (blockStatus === "all" || (blockStatus === "active" ? item.active : !item.active))
+        })
+        return { all: items, page: items.slice((blockPage - 1) * PAGE_SIZE, blockPage * PAGE_SIZE), pages: Math.max(1, Math.ceil(items.length / PAGE_SIZE)) }
+    }, [adminBlocks, blockQuery, blockStatus, blockPage])
+
     const ratings = useMemo(() => {
         const q = ratingQuery.trim().toLowerCase()
         const items = (data?.ratings || []).filter((item) => !q || [item.from_username, item.to_username, item.comment].join(" ").toLowerCase().includes(q) || String(item.job_id).includes(q))
@@ -345,6 +437,12 @@ export default function Admin() {
     useEffect(() => {
         if (ratingPage > ratings.pages) setRatingPage(ratings.pages)
     }, [ratings.pages, ratingPage])
+    useEffect(() => {
+        if (appealPage > filteredAppeals.pages) setAppealPage(filteredAppeals.pages)
+    }, [filteredAppeals.pages, appealPage])
+    useEffect(() => {
+        if (blockPage > filteredBlocks.pages) setBlockPage(filteredBlocks.pages)
+    }, [filteredBlocks.pages, blockPage])
 
     const serviceTree = useMemo(() => {
         const map = {}
@@ -373,6 +471,8 @@ export default function Admin() {
         ["jobs", "Ishlar"],
         ["services", "Xizmatlar"],
         ["reports", "Shikoyatlar"],
+        ["blocks", "Blocks"],
+        ["appeals", "Appeals"],
         ["finance", "Moliya"],
         ["ratings", "Baholar"],
         ["audit", "Audit log"],
@@ -501,8 +601,8 @@ export default function Admin() {
                                             <td><strong>{money(item.balance)} UZS</strong></td>
                                             <td><div className="admin-row-actions">
                                                 <button className="btn btn-secondary admin-small-btn" onClick={() => editUser(item)}>Tahrirlash</button>
+                                                <button className="btn btn-secondary admin-small-btn" onClick={() => openModeration(item)}>Moderatsiya</button>
                                                 <button className="btn btn-secondary admin-small-btn" onClick={() => addTestBalance(item)}>+ Pul</button>
-                                                <button className="btn btn-secondary admin-small-btn" disabled={item.id === user.id || item.role === "admin"} onClick={() => changeUserStatus(item)}>{Number(item.is_blocked) ? "Ochish" : "Bloklash"}</button>
                                                 <button className="btn btn-danger admin-small-btn" disabled={item.id === user.id || item.role === "admin"} onClick={() => deleteUser(item)}>O‘chirish</button>
                                             </div></td>
                                         </tr>
@@ -603,6 +703,54 @@ export default function Admin() {
                     </div>
                 )}
 
+                {data && tab === "blocks" && (
+                    <div className="admin-section">
+                        <div className="admin-filters">
+                            <input className="input" placeholder="Username, block turi, sabab yoki ID..." value={blockQuery} onChange={(e) => { setBlockPage(1); setBlockQuery(e.target.value) }} />
+                            <select className="select" value={blockStatus} onChange={(e) => { setBlockPage(1); setBlockStatus(e.target.value) }}><option value="active">Faol blocklar</option><option value="all">Barcha blocklar</option><option value="lifted">Olib tashlanganlar</option></select>
+                        </div>
+                        <div className="admin-table-wrap">
+                            <table className="admin-table">
+                                <thead><tr><th>ID</th><th>User</th><th>Block turi</th><th>Nega</th><th>Berilgan</th><th>Tugash</th><th>Admin</th><th>Amal</th></tr></thead>
+                                <tbody>{filteredBlocks.page.map((item) => <tr key={item.id}>
+                                    <td>#{item.id}</td><td><strong>@{item.username}</strong><small>User ID: #{item.user_id}</small></td>
+                                    <td><span className={"admin-badge " + (item.active ? "danger" : "neutral")}>{item.block_label || blockLabels[item.block_type] || item.block_type}</span></td>
+                                    <td>{item.reason}</td><td>{item.created_at || "—"}</td><td>{item.expires_at || "Muddatsiz"}</td><td>@{item.admin_username || "—"}</td>
+                                    <td>{item.active ? <button className="btn btn-secondary admin-small-btn" onClick={() => liftBlock(item)}>Lift</button> : "—"}</td>
+                                </tr>)}</tbody>
+                            </table>
+                        </div>
+                        {!filteredBlocks.page.length && <div className="empty-state">Block topilmadi.</div>}
+                        <Pager page={blockPage} pages={filteredBlocks.pages} total={filteredBlocks.all.length} onChange={setBlockPage} />
+                    </div>
+                )}
+
+                {data && tab === "appeals" && (
+                    <div className="admin-section">
+                        <div className="admin-filters">
+                            <input className="input" placeholder="User, appeal matni, sabab, block ID..." value={appealQuery} onChange={(e) => { setAppealPage(1); setAppealQuery(e.target.value) }} />
+                            <select className="select" value={appealStatus} onChange={(e) => { setAppealPage(1); setAppealStatus(e.target.value) }}><option value="all">Barcha statuslar</option><option value="open">Ochiq</option><option value="reviewing">Ko‘rib chiqilmoqda</option><option value="approved">Tasdiqlangan</option><option value="rejected">Rad etilgan</option></select>
+                        </div>
+                        <div className="admin-table-wrap">
+                            <table className="admin-table admin-appeal-table">
+                                <thead><tr><th>Appeal</th><th>User</th><th>Block</th><th>Block sababi</th><th>Appeal matni</th><th>Vaqt</th><th>Status</th><th>Amal</th></tr></thead>
+                                <tbody>{filteredAppeals.page.map((item) => <tr key={item.id}>
+                                    <td><strong>#{item.id}</strong><small>Block #{item.block_id}</small></td>
+                                    <td><strong>@{item.username}</strong><small>User ID: #{item.user_id}</small></td>
+                                    <td><span className="admin-badge danger">{item.block_label || blockLabels[item.block_type] || item.block_type}</span><small>{item.expires_at ? "Tugaydi: " + item.expires_at : "Muddatsiz"}</small></td>
+                                    <td>{item.block_reason}</td>
+                                    <td className="admin-long-cell">{item.appeal_text}</td>
+                                    <td>{item.created_at || "—"}</td>
+                                    <td><span className={"admin-badge " + (item.status === "approved" ? "success" : item.status === "rejected" ? "danger" : "neutral")}>{statusLabel[item.status] || item.status}</span></td>
+                                    <td><button className="btn btn-primary admin-small-btn" onClick={() => openAppealReview(item)}>Ko‘rib chiqish</button></td>
+                                </tr>)}</tbody>
+                            </table>
+                        </div>
+                        {!filteredAppeals.page.length && <div className="empty-state">Appeal topilmadi.</div>}
+                        <Pager page={appealPage} pages={filteredAppeals.pages} total={filteredAppeals.all.length} onChange={setAppealPage} />
+                    </div>
+                )}
+
                 {data && tab === "finance" && (
                     <div className="admin-section">
                         <div className="admin-finance-grid">
@@ -672,6 +820,56 @@ export default function Admin() {
                     </div>
                 )}
             </div>
+
+            {moderatingUser && (
+                <div className="admin-modal-backdrop" onClick={() => setModeratingUser(null)}>
+                    <div className="card admin-modal admin-moderation-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="admin-modal-head">
+                            <div><span className="admin-search-eyebrow">MODERATION CENTER</span><h3>@{moderatingUser.username}</h3><p>User #{moderatingUser.id} · cheklovlarni boshqarish</p></div>
+                            <button className="admin-modal-close" onClick={() => setModeratingUser(null)}>×</button>
+                        </div>
+                        <div className="admin-moderation-body">
+                            <div>
+                                <div className="admin-subtitle-row"><strong>Faol va tarixiy blocklar</strong><span>{userBlocks.filter((x) => x.active).length} faol</span></div>
+                                <div className="admin-user-block-list">
+                                    {userBlocks.map((block) => <div className="admin-user-block" key={block.id}>
+                                        <div><span className={"admin-badge " + (block.active ? "danger" : "neutral")}>{blockLabels[block.block_type] || block.block_type}</span><strong>#{block.id}</strong></div>
+                                        <p>{block.reason}</p>
+                                        <small>{block.created_at || "—"} · {block.expires_at ? "Tugashi: " + block.expires_at : "Muddatsiz"} · @{block.created_by_username || "admin"}</small>
+                                        {block.active && <button className="btn btn-secondary admin-small-btn" onClick={() => liftBlock(block)}>Blockni olib tashlash</button>}
+                                    </div>)}
+                                    {!userBlocks.length && <div className="empty-state">Bu userda block tarixi yo‘q.</div>}
+                                </div>
+                            </div>
+                            <form className="admin-user-form admin-create-block-form" onSubmit={createUserBlock}>
+                                <div className="admin-subtitle-row"><strong>Yangi cheklov</strong><span>Sabab majburiy</span></div>
+                                <label>Block turi<select className="select" value={blockForm.block_type} onChange={(e) => setBlockForm({ ...blockForm, block_type: e.target.value })}>{Object.entries(blockLabels).map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+                                <label>Muddati<select className="select" value={blockForm.duration_minutes} onChange={(e) => setBlockForm({ ...blockForm, duration_minutes: e.target.value })}><option value="60">1 soat</option><option value="360">6 soat</option><option value="1440">1 kun</option><option value="10080">7 kun</option><option value="43200">30 kun</option><option value="">Muddatsiz</option></select></label>
+                                <label>Nega block qilinyapti<textarea className="input admin-textarea" maxLength="2000" value={blockForm.reason} onChange={(e) => setBlockForm({ ...blockForm, reason: e.target.value })} placeholder="Aniq va tushunarli sabab yozing..." /></label>
+                                <button className="btn btn-danger" type="submit" disabled={!blockForm.reason.trim()}>Block qo‘yish</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {reviewingAppeal && (
+                <div className="admin-modal-backdrop" onClick={() => setReviewingAppeal(null)}>
+                    <div className="card admin-modal appeal-review-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="admin-modal-head"><div><span className="admin-search-eyebrow">APPEAL #{reviewingAppeal.id}</span><h3>@{reviewingAppeal.username}</h3><p>{blockLabels[reviewingAppeal.block_type] || reviewingAppeal.block_type} · Block #{reviewingAppeal.block_id}</p></div><button className="admin-modal-close" onClick={() => setReviewingAppeal(null)}>×</button></div>
+                        <div className="admin-appeal-detail">
+                            <div><span>BLOCK SABABI</span><p>{reviewingAppeal.block_reason}</p></div>
+                            <div><span>APPEAL MATNI</span><p>{reviewingAppeal.appeal_text}</p></div>
+                            <div className="admin-appeal-meta"><span>Berilgan: {reviewingAppeal.created_at || "—"}</span><span>Block tugashi: {reviewingAppeal.expires_at || "Muddatsiz"}</span></div>
+                        </div>
+                        <form className="admin-user-form" onSubmit={submitAppealReview}>
+                            <label>Qaror<select className="select" value={appealReviewForm.status} disabled={reviewingAppeal.status === "approved" || reviewingAppeal.status === "rejected"} onChange={(e) => setAppealReviewForm({ ...appealReviewForm, status: e.target.value })}><option value="reviewing">Ko‘rib chiqilmoqda</option><option value="approved">Tasdiqlash — block olib tashlanadi</option><option value="rejected">Rad etish</option></select></label>
+                            <label>Admin izohi<textarea className="input admin-textarea" maxLength="3000" value={appealReviewForm.admin_response} onChange={(e) => setAppealReviewForm({ ...appealReviewForm, admin_response: e.target.value })} placeholder="Qaroringiz sababini foydalanuvchiga tushuntiring..." /></label>
+                            <div className="admin-modal-actions"><button type="button" className="btn btn-secondary" onClick={() => setReviewingAppeal(null)}>Yopish</button><button type="submit" className="btn btn-primary" disabled={reviewingAppeal.status === "approved" || reviewingAppeal.status === "rejected"}>Qarorni saqlash</button></div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             {editingUser && (
                 <div className="admin-modal-backdrop" onClick={() => setEditingUser(null)}>
