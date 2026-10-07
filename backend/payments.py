@@ -231,7 +231,7 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
                JOIN jobs j ON j.id=p.job_id
                LEFT JOIN users pu ON pu.id=p.payer_id
                LEFT JOIN users ru ON ru.id=p.payee_id
-               WHERE p.payer_id=? OR p.payee_id=?
+               WHERE p.payer_id=? OR j.worker_id=?
                ORDER BY p.id DESC LIMIT 100""",
             (request.uid,request.uid),
         ).fetchall()
@@ -659,7 +659,7 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
         if action != 1:
             return click_error(-3, "Action not found")
 
-        if payment_status == "paid":
+        if payment_status in ("held", "released"):
             return jsonify({
                 "click_trans_id": click_trans_id,
                 "merchant_trans_id": payment_uuid,
