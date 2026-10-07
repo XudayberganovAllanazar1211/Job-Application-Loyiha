@@ -510,7 +510,6 @@ export default function Dashboard() {
 
                     {selectedJob ? (
                         <>
-                            </div>
 
                             <div className="message-list">
                                 {messages.map((message, index) => {
