@@ -34,7 +34,7 @@ function formatTimeAgo(dateString) {
 export default function Jobs() {
     const [jobs, setJobs] = useState([])
     const [services, setServices] = useState([])
-    const [search, setSearch] = useState("")
+    const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get("q") || "")
     const [serviceSearch, setServiceSearch] = useState("")
     const [selectedServices, setSelectedServices] = useState([])
     const [favoriteJobIds, setFavoriteJobIds] = useState([])
@@ -268,94 +268,6 @@ export default function Jobs() {
 
     const totalPages = Math.max(1, Number(searchMeta.pages) || 1)
     const pagedRanked = recommendationData.ranked
-    const availableServices = useMemo(() => {
-        const leafServices = services
-            .filter((service) => !services.some((item) => String(item.parent_id) === String(service.id)))
-            .map((service) => String(service.name).trim())
-            .filter(Boolean)
-
-        const jobServices = jobs
-            .flatMap((job) => String(job.service_name || serviceMap[String(job.service_id)] || "").split(","))
-            .map((name) => name.trim())
-            .filter(Boolean)
-
-        return [...new Set([...leafServices, ...jobServices])]
-            .sort((a, b) => a.localeCompare(b, "uz"))
-    }, [services, jobs, serviceMap])
-
-    const matchingServices = useMemo(() => {
-        const query = serviceSearch.trim().toLowerCase()
-        return availableServices.filter((service) => {
-            return !selectedServices.includes(service) && (!query || service.toLowerCase().includes(query))
-        }).slice(0, 30)
-    }, [availableServices, serviceSearch, selectedServices])
-
-    const filtered = useMemo(() => {
-        const query = search.trim().toLowerCase()
-        const locationQuery = locationFilter.trim().toLowerCase()
-        const min = minPrice === "" ? null : Number(minPrice)
-        const max = maxPrice === "" ? null : Number(maxPrice)
-        const now = Date.now()
-        const timeLimits = { today: 1, three_days: 3, week: 7, month: 30 }
-
-        return jobs.filter((job) => {
-            const text = `${job.title || ""} ${job.description || ""} ${job.location || ""}`.toLowerCase()
-            const jobServices = String(job.service_name || serviceMap[String(job.service_id)] || "")
-                .split(",")
-                .map((name) => name.trim())
-                .filter(Boolean)
-
-            const price = Number(job.price)
-            const priceMatches = (min === null || (!Number.isNaN(price) && price >= min)) && (max === null || (!Number.isNaN(price) && price <= max))
-            const locationMatches = !locationQuery || String(job.location || "").toLowerCase().includes(locationQuery)
-            const days = timeLimits[timeFilter]
-            const created = new Date(String(job.created_at || "").replace(" ", "T")).getTime()
-            const timeMatches = !days || (!Number.isNaN(created) && created <= now && now - created <= days * 24 * 60 * 60 * 1000)
-            const textMatches = !query || text.includes(query)
-            const serviceMatches = !selectedServices.length || selectedServices.some((service) => jobServices.includes(service))
-            const savedMatches = !savedOnly || favoriteJobIds.includes(Number(job.id))
-
-            return textMatches && serviceMatches && priceMatches && timeMatches && locationMatches && savedMatches
-        })
-    }, [jobs, search, selectedServices, serviceMap, minPrice, maxPrice, timeFilter, locationFilter, savedOnly, favoriteJobIds])
-
-    const recommendationData = useMemo(() => {
-        const normalizedSkills = profileSkills.map((skill) => skill.toLowerCase().trim()).filter(Boolean)
-        const scored = filtered.map((job) => {
-            const jobServices = String(job.service_name || serviceMap[String(job.service_id)] || "")
-                .split(",")
-                .map((name) => name.trim().toLowerCase())
-                .filter(Boolean)
-            const jobText = (job.title || "") + " " + (job.description || "") + " " + jobServices.join(" ")
-            let score = 0
-            const matchedSkills = []
-            normalizedSkills.forEach((skill) => {
-                if (jobServices.some((service) => service === skill)) {
-                    score += 100
-                    matchedSkills.push(skill)
-                } else if (jobServices.some((service) => service.includes(skill) || skill.includes(service))) {
-                    score += 60
-                    matchedSkills.push(skill)
-                } else if (jobText.toLowerCase().includes(skill)) {
-                    score += 25
-                    matchedSkills.push(skill)
-                }
-            })
-            return { job, score, matchedSkills }
-        })
-        scored.sort((a, b) => b.score - a.score || new Date(String(b.job.created_at || "").replace(" ", "T")).getTime() - new Date(String(a.job.created_at || "").replace(" ", "T")).getTime())
-        return {
-            recommended: scored.filter((item) => item.score > 0).slice(0, 6),
-            ranked: scored
-        }
-    }, [filtered, profileSkills, serviceMap])
-
-    const totalPages = Math.max(1, Math.ceil(recommendationData.ranked.length / pageSize))
-    const pagedRanked = useMemo(() => {
-        const start = (currentPage - 1) * pageSize
-        return recommendationData.ranked.slice(start, start + pageSize)
-    }, [recommendationData.ranked, currentPage, pageSize])
-
     useEffect(() => {
         setCurrentPage(1)
     }, [search, selectedServices, minPrice, maxPrice, timeFilter, locationFilter, savedOnly, pageSize, sort])
