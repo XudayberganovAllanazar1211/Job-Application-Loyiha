@@ -44,6 +44,13 @@ export default function Dashboard() {
     const [reportJobId, setReportJobId] = useState(null)
     const [reportReason, setReportReason] = useState("")
     const [reportDetails, setReportDetails] = useState("")
+    const [proposalModalJob, setProposalModalJob] = useState(null)
+    const [proposalModalExisting, setProposalModalExisting] = useState(null)
+    const [proposalPrice, setProposalPrice] = useState("")
+    const [proposalDeadline, setProposalDeadline] = useState("")
+    const [proposalMessage, setProposalMessage] = useState("")
+    const [proposalSubmitting, setProposalSubmitting] = useState(false)
+    const [proposalModalLoading, setProposalModalLoading] = useState(false)
     const token = localStorage.getItem("token") || ""
     const user = JSON.parse(localStorage.getItem("user") || localStorage.getItem("foydalanuvchi") || "null")
     const navigate = useNavigate()
@@ -105,6 +112,73 @@ export default function Dashboard() {
     const selectJob = async (job) => {
         setSelectedJob(job)
         await loadMessages(job)
+    }
+
+    const openProposalModal = async (job) => {
+        if (!job?.id || String(job.user_id) === String(user?.id) || job.worker_id != null || String(job.status).toLowerCase() !== "active") return
+        setProposalModalJob(job)
+        setProposalModalExisting(null)
+        setProposalPrice(String(job.price ?? ""))
+        setProposalDeadline("")
+        setProposalMessage("")
+        setProposalModalLoading(true)
+
+        const result = await api(`/jobs/${job.id}/proposals`, { token })
+        const ownProposal = Array.isArray(result)
+            ? result.find((item) => String(item.worker_id) === String(user?.id) && item.status === "pending")
+            : null
+        if (ownProposal) {
+            setProposalModalExisting(ownProposal)
+            setProposalPrice(String(ownProposal.price ?? job.price ?? ""))
+            setProposalDeadline(ownProposal.deadline || "")
+            setProposalMessage(ownProposal.message || "")
+        }
+        setProposalModalLoading(false)
+    }
+
+    const submitProposal = async (event) => {
+        event.preventDefault()
+        if (!proposalModalJob || proposalSubmitting) return
+
+        const price = Number(proposalPrice)
+        if (!Number.isFinite(price) || price <= 0) {
+            setNoticeType("warn")
+            setNotice("Taklif narxini to‘g‘ri kiriting.")
+            return
+        }
+        if (!proposalDeadline.trim()) {
+            setNoticeType("warn")
+            setNotice("Taklif muddatini kiriting.")
+            return
+        }
+
+        setProposalSubmitting(true)
+        try {
+            const result = proposalModalExisting
+                ? await api(`/proposals/${proposalModalExisting.id}`, {
+                    method: "PATCH",
+                    token,
+                    body: { action: "edit", price, deadline: proposalDeadline.trim(), message: proposalMessage.trim() }
+                })
+                : await api(`/jobs/${proposalModalJob.id}/proposals`, {
+                    method: "POST",
+                    token,
+                    body: { price, deadline: proposalDeadline.trim(), message: proposalMessage.trim() }
+                })
+
+            if (result?.ok) {
+                setNoticeType("ok")
+                setNotice(proposalModalExisting ? "Taklif yangilandi." : "Taklif muvaffaqiyatli yuborildi.")
+                setProposalModalJob(null)
+                setProposalModalExisting(null)
+                await load()
+            } else {
+                setNoticeType("warn")
+                setNotice(result?.msg || "Taklif yuborilmadi.")
+            }
+        } finally {
+            setProposalSubmitting(false)
+        }
     }
 
     const acceptJob = async (job) => {
@@ -272,6 +346,7 @@ export default function Dashboard() {
                             const isIAccepted = String(job.worker_id) === String(user?.id)
                             const isParticipant = isMyJob || isIAccepted
                             const canAccept = status === "active" && !isMyJob && job.worker_id == null
+                            const canBid = canAccept
                             const canFinish = status === "accepted" && ((isMyJob && !job.owner_finished) || (isIAccepted && !job.worker_finished))
                             const statusLabel = {
                                 active: "Faol",
@@ -329,16 +404,28 @@ export default function Dashboard() {
                                         )}
 
                                         {/* --- ACCEPT TUGMASI (Mening ishim bo'lmaganda hamma uchun) --- */}
-                                        {canAccept && (
-                                            <button
-                                                className="btn btn-primary"
-                                                onClick={(e) => {
-                                                    e.stopPropagation()
-                                                    acceptJob(job)
-                                                }}
-                                            >
-                                                Qabul qilish
-                                            </button>
+                                        {canBid && (
+                                            <>
+                                                <button
+                                                    className="btn btn-primary"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        openProposalModal(job)
+                                                    }}
+                                                >
+                                                    Taklif yuborish
+                                                </button>
+                                                {Number(job.proposal_count || 0) > 0 && <span className="muted" style={{ alignSelf: "center" }}>{job.proposal_count} ta taklif mavjud</span>}
+                                                <button
+                                                    className="btn btn-secondary"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        acceptJob(job)
+                                                    }}
+                                                >
+                                                    Tezkor qabul qilish
+                                                </button>
+                                            </>
                                         )}
 
                                         {isParticipant && job.worker_id != null && ["accepted", "pending_finish"].includes(status) && (
@@ -568,6 +655,57 @@ export default function Dashboard() {
                     )}
                 </aside>
             </div>
+        {proposalModalJob && (
+            <div
+                style={{
+                    position: "fixed",
+                    inset: 0,
+                    zIndex: 1200,
+                    background: "rgba(15, 23, 42, 0.58)",
+                    display: "grid",
+                    placeItems: "center",
+                    padding: 18
+                }}
+                onMouseDown={(event) => {
+                    if (event.target === event.currentTarget) setProposalModalJob(null)
+                }}
+            >
+                <div className="card" style={{ width: "min(560px, 100%)", margin: 0, maxHeight: "90vh", overflow: "auto" }}>
+                    <div className="section-toolbar">
+                        <div className="page-head">
+                            <span className="profile-eyebrow">{proposalModalExisting ? "TAKLIFNI TAHRIRLASH" : "TAKLIF YUBORISH"}</span>
+                            <h2>{proposalModalJob.title}</h2>
+                            <p className="muted">{proposalModalExisting ? "Taklifingizdagi ma’lumotlarni yangilang." : "Narx, muddat va qisqa izohni kiriting."}</p>
+                        </div>
+                        <button className="btn btn-secondary" type="button" onClick={() => setProposalModalJob(null)}>×</button>
+                    </div>
+                    {proposalModalLoading ? (
+                        <div className="empty-state" style={{ padding: 24 }}>Taklif ma’lumotlari yuklanmoqda...</div>
+                    ) : (
+                        <form onSubmit={submitProposal} className="form">
+                            <label className="field">
+                                <span>Taklif narxi (UZS)</span>
+                                <input className="input" type="number" min="1" step="1" value={proposalPrice} onChange={(e) => setProposalPrice(e.target.value)} required />
+                            </label>
+                            <label className="field">
+                                <span>Bajarish muddati</span>
+                                <input className="input" type="date" value={proposalDeadline} onChange={(e) => setProposalDeadline(e.target.value)} required />
+                            </label>
+                            <label className="field">
+                                <span>Taklif izohi</span>
+                                <textarea className="textarea" maxLength={3000} rows={5} placeholder="Nima qilishingizni va qachon topshirishingizni yozing..." value={proposalMessage} onChange={(e) => setProposalMessage(e.target.value)} />
+                            </label>
+                            <div className="actions">
+                                <button className="btn btn-secondary" type="button" onClick={() => setProposalModalJob(null)}>Bekor qilish</button>
+                                <button className="btn btn-primary" type="submit" disabled={proposalSubmitting}>
+                                    {proposalSubmitting ? "Saqlanmoqda..." : proposalModalExisting ? "Taklifni yangilash" : "Taklifni yuborish"}
+                                </button>
+                            </div>
+                        </form>
+                    )}
+                </div>
+            </div>
+        )}
         </AppLayout>
     )
 }
