@@ -68,6 +68,14 @@ export default function AppLayout({ title, subtitle, children }) {
     }
 
     useEffect(() => {
+        const sendPresence = () => api("/presence", { method: "POST", token })
+        if (!token) return undefined
+        sendPresence()
+        const timer = setInterval(sendPresence, 30000)
+        return () => clearInterval(timer)
+    }, [token])
+
+    useEffect(() => {
         let alive = true
         const loadUnreadMessages = async () => {
             const result = await api("/messages/unread-count", { token })
