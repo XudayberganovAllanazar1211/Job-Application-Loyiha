@@ -16,7 +16,7 @@ CLICK_RETURN_URL = os.environ.get("CLICK_RETURN_URL", "http://localhost:5173/job
 CLICK_CHECKOUT_URL = "https://my.click.uz/services/pay"
 
 
-def register_payment_routes(app, db, auth, admin_required, create_notification):
+def register_payment_routes(app, db, auth, admin_required, create_notification, admin_audit=None):
     def click_signature(click_trans_id, service_id, secret_key, merchant_trans_id, amount, action, sign_time):
         raw = f"{click_trans_id}{service_id}{secret_key}{merchant_trans_id}{amount}{action}{sign_time}"
         return hashlib.md5(raw.encode("utf-8")).hexdigest()
@@ -682,6 +682,8 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
         finally:
             conn.close()
 
+        if admin_audit:
+            admin_audit("wallet_topup","user",user_id,f"amount={amount:g}")
         create_notification(
             user_id,"wallet_topup","Test balansi to‘ldirildi",
             f"Admin hisobingizga {amount:,.0f} UZS test mablag‘i qo‘shdi.",
