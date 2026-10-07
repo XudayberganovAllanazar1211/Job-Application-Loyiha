@@ -290,6 +290,59 @@ class DB:
             )
         """)
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS payments(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                payment_uuid TEXT UNIQUE NOT NULL,
+                job_id INTEGER NOT NULL UNIQUE,
+                payer_id INTEGER NOT NULL,
+                payee_id INTEGER NOT NULL,
+                amount REAL NOT NULL,
+                currency TEXT NOT NULL DEFAULT 'UZS',
+                provider TEXT NOT NULL DEFAULT 'click',
+                status TEXT NOT NULL DEFAULT 'pending',
+                provider_transaction_id TEXT DEFAULT '',
+                provider_prepare_id TEXT DEFAULT '',
+                provider_payload TEXT DEFAULT '',
+                created_at TEXT NOT NULL,
+                paid_at TEXT,
+                released_at TEXT,
+                refunded_at TEXT
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS wallet_transactions(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                type TEXT NOT NULL,
+                amount REAL NOT NULL,
+                balance_after REAL NOT NULL,
+                job_id INTEGER,
+                description TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS platform_wallet(
+                id INTEGER PRIMARY KEY CHECK(id=1),
+                balance REAL NOT NULL DEFAULT 0,
+                escrow_balance REAL NOT NULL DEFAULT 0
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS platform_settings(
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        """)
+        cursor.execute(
+            "INSERT OR IGNORE INTO platform_settings(key,value) VALUES('commission_percent','10')"
+        )
+        cursor.execute("INSERT OR IGNORE INTO platform_wallet(id,balance,escrow_balance) VALUES(1,0,0)")
+
         # Database Indexes
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);")
@@ -297,6 +350,10 @@ class DB:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_worker_status ON jobs(worker_id, status);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_service ON jobs(service_id);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_job ON messages(job_id, sent_at);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_payments_payer_status ON payments(payer_id,status,created_at);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_payments_payee_status ON payments(payee_id,status,created_at);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_payments_job_status ON payments(job_id,status);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_wallet_transactions_user ON wallet_transactions(user_id,created_at);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_ratings_to_user ON ratings(to_user);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_ratings_job ON ratings(job_id);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read, created_at);")
@@ -313,6 +370,7 @@ class DB:
             ("role", "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'"),
             ("avatar_url", "ALTER TABLE users ADD COLUMN avatar_url TEXT DEFAULT ''"),
             ("token_version", "ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0"),
+            ("balance", "ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0"),
         ]
         for col_name, sql in migrations:
             if col_name not in existing_user_cols:
