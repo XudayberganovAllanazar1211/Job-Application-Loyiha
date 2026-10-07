@@ -746,7 +746,7 @@ def update_report(report_id):
                         db.q("UPDATE reports SET status=? WHERE id=?", (old_status, report_id)).close()
                         return jsonify({"msg": refund_message}), 400
                 db.q(
-                    "UPDATE jobs SET status='blocked', finished_at=NULL WHERE id=?",
+                    "UPDATE jobs SET status='blocked', finished_at=NULL, owner_finished=0, worker_finished=0 WHERE id=?",
                     (job_id,)
                 ).close()
 
@@ -996,7 +996,10 @@ def admin_update_job(job_id):
     elif status == "pending_finish":
         db.q("UPDATE jobs SET status='pending_finish', finished_at=NULL WHERE id=?", (job_id,)).close()
     elif status == "blocked":
-        db.q("UPDATE jobs SET status='blocked', finished_at=NULL WHERE id=?", (job_id,)).close()
+        db.q(
+            "UPDATE jobs SET status='blocked', finished_at=NULL, owner_finished=0, worker_finished=0 WHERE id=?",
+            (job_id,),
+        ).close()
     else:
         finished_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
         db.q("UPDATE jobs SET status='finished', finished_at=? WHERE id=?", (finished_at, job_id)).close()
