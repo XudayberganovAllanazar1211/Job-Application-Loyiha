@@ -985,8 +985,8 @@ def create_report():
         if reported_user_id != target_user_id:
             return jsonify({"msg":"Faqat shu xabarni yuborgan foydalanuvchi haqida shikoyat qilish mumkin"}),403
         job_status = db.q("SELECT status FROM jobs WHERE id=?", (message_job_id,)).fetchone()
-        if not job_status or job_status[0] not in ("accepted", "pending_finish"):
-            return jsonify({"msg":"Bu chat xabarini hozircha shikoyat qilib bo‘lmaydi"}),400
+        if not job_status:
+            return jsonify({"msg":"Ish topilmadi"}),404
         now_time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         db.q(
             "INSERT INTO reports(reporter_id,reported_user_id,job_id,message_id,reason,details,created_at) VALUES(?,?,?,?,?,?,?)",
@@ -1125,10 +1125,12 @@ def admin_overview():
 
     reports = db.q(
         """SELECT r.id, r.job_id, r.message_id, r.reason, r.details, r.status, r.created_at,
-                  f.username AS reporter_username, t.username AS reported_username
+                  f.username AS reporter_username, t.username AS reported_username,
+                  m.attachment_url, m.attachment_name, m.attachment_type
            FROM reports r
            LEFT JOIN users f ON f.id = r.reporter_id
            LEFT JOIN users t ON t.id = r.reported_user_id
+           LEFT JOIN messages m ON m.id = r.message_id
            ORDER BY r.id DESC"""
     ).fetchall()
 
@@ -1154,7 +1156,7 @@ def admin_overview():
         "jobs": rows(jobs, ["id", "title", "price", "currency", "location", "status", "created_at", "creator_username", "worker_username"]),
         "services": rows(services, ["id", "name", "parent_id", "parent_name", "created_by"]),
         "ratings": rows(ratings, ["id", "job_id", "score", "comment", "created_at", "from_username", "to_username"]),
-        "reports": rows(reports, ["id", "reason", "details", "status", "created_at", "reporter_username", "reported_username"]),
+        "reports": rows(reports, ["id", "job_id", "message_id", "reason", "details", "status", "created_at", "reporter_username", "reported_username", "attachment_url", "attachment_name", "attachment_type"]),
     })
 
 
@@ -2483,6 +2485,31 @@ def get_messages(job_id):
         for x in items
     ])
 
+
+@app.route("/admin/report/<int:report_id>/attachment")
+@admin_required
+def admin_report_attachment(report_id):
+    row = db.q(
+        """SELECT m.attachment_url
+           FROM reports r
+           JOIN messages m ON m.id=r.message_id
+           WHERE r.id=?
+           LIMIT 1""",
+        (report_id,),
+    ).fetchone()
+    if not row or not row[0]:
+        return jsonify({"msg": "Bu shikoyatga biriktirilgan fayl topilmadi"}),404
+    attachment_url = row[0]
+    prefix = "/uploads/chat/"
+    if not attachment_url.startswith(prefix):
+        return jsonify({"msg": "Biriktirilgan fayl manzili noto'g'ri"}),400
+    filename = attachment_url[len(prefix):]
+    if not filename or "/" in filename or "\\" in filename:
+        return jsonify({"msg": "Biriktirilgan fayl nomi noto'g'ri"}),400
+    filepath = os.path.join(CHAT_UPLOAD_DIR, filename)
+    if not os.path.isfile(filepath):
+        return jsonify({"msg": "Biriktirilgan fayl serverda topilmadi"}),404
+    return send_from_directory(CHAT_UPLOAD_DIR, filename, as_attachment=False)
 
 @app.route("/uploads/chat/<path:filename>")
 @auth
