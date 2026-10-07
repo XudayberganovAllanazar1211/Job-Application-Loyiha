@@ -255,11 +255,25 @@ export default function PublicProfile() {
                                     <article key={item.id} className="card" style={{ margin: 0 }}>
                                         <strong>{item.title}</strong>
                                         {item.description && <p style={{ margin: "6px 0 0" }}>{item.description}</p>}
-                                        {item.url && (
-                                            <a href={item.url} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 8 }}>
-                                                Loyihani ko‘rish →
-                                            </a>
+                                        {item.image_url && (
+                                            <img
+                                                src={(import.meta.env.VITE_API_URL || "http://localhost:5000") + item.image_url}
+                                                alt={item.title}
+                                                style={{ display: "block", width: "100%", maxWidth: 420, maxHeight: 240, objectFit: "cover", borderRadius: 14, marginTop: 10 }}
+                                            />
                                         )}
+                                        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8 }}>
+                                            {item.url && (
+                                                <a href={item.url} target="_blank" rel="noreferrer">
+                                                    Loyihani ko‘rish →
+                                                </a>
+                                            )}
+                                            {item.file_url && (
+                                                <a href={(import.meta.env.VITE_API_URL || "http://localhost:5000") + item.file_url} target="_blank" rel="noreferrer">
+                                                    {item.file_name || "Portfolio faylini ochish"} →
+                                                </a>
+                                            )}
+                                        </div>
                                     </article>
                                 ))}
                             </div>
