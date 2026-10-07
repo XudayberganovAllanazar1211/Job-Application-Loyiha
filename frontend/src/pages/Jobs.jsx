@@ -540,6 +540,8 @@ export default function Jobs() {
                 </section>
             )}
 
+            <div className="jobs-workspace">
+                <div className="jobs-list-panel">
             <div className="jobs-results-heading">
                 <div>
                     <h2>Barcha ishlar</h2>
@@ -550,7 +552,7 @@ export default function Jobs() {
                 )}
             </div>
 
-            <div className="job-grid">
+            <div className="job-grid jobs-single-column">
                 {pagedRanked.map(({ job }) => {
                     const workerName = `${job.worker_first || ""} ${job.worker_last || ""}`.trim() || job.worker_username;
                     const status = String(job.status || "").trim().toLowerCase()
@@ -569,7 +571,7 @@ export default function Jobs() {
                     }[status] || status
 
                     return (
-                        <article className="card job-card" key={job.id}>
+                        <article className={`card job-card ${selectedJob?.id === job.id ? "selected" : ""}`} key={job.id} onClick={() => selectJob(job)} style={{ cursor: "pointer" }}>
                             <h3 className="job-title">{job.title}</h3>
                             <p className="job-desc">{job.description || "Tavsif kiritilmagan"}</p>
                             <div className="meta" style={{ marginBottom: 12 }}>
@@ -587,6 +589,18 @@ export default function Jobs() {
                                         </button>
                                     </span>
                                 )}
+                                <span className="chip job-worker-chip">
+                                    👤 Yaratuvchi: <button type="button" className="profile-link-button" onClick={(e) => { e.stopPropagation(); navigate(`/profiles/${job.creator_username}`) }}>
+                                        {`${job.creator_first || ""} ${job.creator_last || ""}`.trim() || job.creator_username}
+                                    </button>
+                                </span>
+                                <span className="chip job-worker-chip">
+                                    👤 Bajaruvchi: {job.worker_id ? (
+                                        <button type="button" className="profile-link-button" onClick={(e) => { e.stopPropagation(); navigate(`/profiles/${job.worker_username}`) }}>
+                                            {workerName}
+                                        </button>
+                                    ) : "Hali qabul qilinmagan"}
+                                </span>
                                 {isMyJob && (
                                     <span className="chip job-worker-chip">
                                         👤 Bajaruvchi: {job.worker_id ? (
@@ -748,6 +762,45 @@ export default function Jobs() {
         {hasSearchOrFilters && <button className="btn btn-secondary" type="button" onClick={clearAllFilters}>Filtrlarni tozalash</button>}
     </div>
 )}
+                </div>
+                <aside className="card jobs-job-details">
+                    <div className="dashboard-panel-head">
+                        <div>
+                            <span className="profile-eyebrow">ISH MA'LUMOTI</span>
+                            <h2>To‘liq ma’lumot</h2>
+                            <p>Tanlangan jobning barcha tafsilotlari.</p>
+                        </div>
+                    </div>
+                    {selectedJob ? (
+                        <div className="dashboard-job-detail-body">
+                            <div>
+                                <span className="helper">NOMI</span>
+                                <h2 className="dashboard-job-detail-title">{selectedJob.title}</h2>
+                            </div>
+                            <div className="dashboard-job-detail-section">
+                                <span className="helper">TAVSIF</span>
+                                <p>{selectedJob.description || "Tavsif kiritilmagan."}</p>
+                            </div>
+                            <div className="dashboard-job-detail-facts">
+                                <div><span>Narx</span><strong>{selectedJob.price ?? "-"} {selectedJob.currency || "UZS"}</strong></div>
+                                <div><span>Joylashuv</span><strong>{selectedJob.location || "—"}</strong></div>
+                                <div><span>Soha</span><strong>{selectedJob.service_name || serviceMap[String(selectedJob.service_id)] || "Noma’lum"}</strong></div>
+                                <div><span>Yaratilgan</span><strong>{selectedJob.created_at || "—"}</strong></div>
+                                <div><span>Holat</span><strong>{({ active: "Faol", payment_pending: "To‘lov kutilmoqda", accepted: "Qabul qilingan", pending_finish: "Tasdiqlash kutilmoqda", finished: "Yakunlangan" }[String(selectedJob.status || "").toLowerCase()] || selectedJob.status || "—")}</strong></div>
+                                <div><span>Yaratuvchi</span><strong><button type="button" className="profile-link-button" onClick={() => navigate(`/profiles/${selectedJob.creator_username}`)}>{`${selectedJob.creator_first || ""} ${selectedJob.creator_last || ""}`.trim() || selectedJob.creator_username}</button></strong></div>
+                                <div><span>Bajaruvchi</span><strong>{selectedJob.worker_id ? <button type="button" className="profile-link-button" onClick={() => navigate(`/profiles/${selectedJob.worker_username}`)}>{`${selectedJob.worker_first || ""} ${selectedJob.worker_last || ""}`.trim() || selectedJob.worker_username}</button> : "Hali qabul qilinmagan"}</strong></div>
+                            </div>
+                            <div className="actions">
+                                {(String(selectedJob.user_id) === String(user?.id) || String(selectedJob.worker_id) === String(user?.id)) && (
+                                    <button className="btn btn-secondary" onClick={() => navigate(`/chat/${selectedJob.id}`, { state: { job: selectedJob } })}>Suhbatni ochish</button>
+                                )}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="empty-state">To‘liq ma’lumotni ko‘rish uchun job tanlang.</div>
+                    )}
+                </aside>
+            </div>
             </div>
         </AppLayout>
     )
