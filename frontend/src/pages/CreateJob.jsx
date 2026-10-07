@@ -408,8 +408,6 @@ export default function CreateJob() {
                                         onChange={(e) => setForm({ ...form, currency: e.target.value })}
                                     >
                                         <option value="UZS">UZS — So‘m</option>
-                                        <option value="USD">USD — AQSh dollari</option>
-                                        <option value="EUR">EUR — Yevro</option>
                                     </select>
                                 </div>
                                 {priceError && <div className="field-error">{priceError}</div>}
