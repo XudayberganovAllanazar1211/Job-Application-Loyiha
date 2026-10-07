@@ -702,22 +702,17 @@ def update_report(report_id):
     result.close()
 
     if status == "resolved" and old_status != "resolved":
-        now_time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
         if job_id:
             db.q(
-                """UPDATE jobs
-                   SET status='finished',
-                       finished_at=?
-                   WHERE id=? AND status!='finished'""",
-                (now_time, job_id)
+                "UPDATE jobs SET status='blocked', finished_at=NULL WHERE id=?",
+                (job_id,)
             ).close()
 
         create_notification(
             reporter_id,
             "report_resolved",
             "Shikoyat hal qilindi",
-            "Siz yuborgan shikoyat admin tomonidan ko‘rib chiqildi va hal qilindi.",
+            "Siz yuborgan shikoyat admin tomonidan ko‘rib chiqildi va ish bloklandi.",
             "/jobs"
         )
 
@@ -902,7 +897,7 @@ def admin_delete_user(user_id):
 def admin_update_job(job_id):
     d = request.json or {}
     status = str(d.get("status", "")).strip().lower()
-    allowed = {"active", "accepted", "pending_finish", "finished"}
+    allowed = {"active", "accepted", "pending_finish", "finished", "blocked"}
 
     if status not in allowed:
         return jsonify({"msg": "Ish holati noto‘g‘ri."}), 400
@@ -923,6 +918,8 @@ def admin_update_job(job_id):
         db.q("UPDATE jobs SET status='accepted', finished_at=NULL WHERE id=?", (job_id,)).close()
     elif status == "pending_finish":
         db.q("UPDATE jobs SET status='pending_finish', finished_at=NULL WHERE id=?", (job_id,)).close()
+    elif status == "blocked":
+        db.q("UPDATE jobs SET status='blocked', finished_at=NULL WHERE id=?", (job_id,)).close()
     else:
         finished_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
         db.q("UPDATE jobs SET status='finished', finished_at=? WHERE id=?", (finished_at, job_id)).close()
@@ -1418,7 +1415,7 @@ def get_job_detail(job_id):
         LEFT JOIN users c ON j.user_id = c.id
         LEFT JOIN services s ON j.service_id = s.id
         WHERE j.id = ?
-          AND (j.status = 'active' OR j.user_id = ? OR j.worker_id = ?)
+          AND j.status != 'blocked' AND (j.status = 'active' OR j.user_id = ? OR j.worker_id = ?)
     """,
         (job_id, request.uid, request.uid),
     ).fetchone()
