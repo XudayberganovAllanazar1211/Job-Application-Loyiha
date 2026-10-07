@@ -622,11 +622,6 @@ export default function Jobs() {
                                         {actionJobId === job.id ? "Qabul qilinmoqda..." : "Ishni qabul qilish"}
                                     </button>
                                 )}
-                                {isMyJob && status === "active" && (
-                                    <button className="btn btn-secondary" onClick={() => loadOffers(job.id)}>
-                                        📩 Takliflarni ko‘rish
-                                    </button>
-                                )}
                                 {canReportParticipant && (
                                     <button className="btn btn-secondary" onClick={() => setReportJobId(reportJobId === job.id ? null : job.id)}>
                                         ⚑ Shikoyat
