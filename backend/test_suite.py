@@ -1385,16 +1385,20 @@ class JobPlatformTestCase(unittest.TestCase):
         )
         self.assertEqual(admin_login.status_code, 200)
         admin_token = admin_login.get_json()["token"]
+        admin_id = main.db.q(
+            "SELECT id FROM users WHERE username=?",
+            ("tester_creator",),
+        ).fetchone()[0]
 
         parent_cursor = main.db.q(
             "INSERT INTO services(name,parent_id,created_by) VALUES(?,?,?)",
-            ("P2DISC Programming", None, 1),
+            ("P2DISC Programming", None, admin_id),
         )
         parent_id = parent_cursor.lastrowid
         parent_cursor.close()
         child_cursor = main.db.q(
             "INSERT INTO services(name,parent_id,created_by) VALUES(?,?,?)",
-            ("P2DISC Backend", parent_id, 1),
+            ("P2DISC Backend", parent_id, admin_id),
         )
         child_id = child_cursor.lastrowid
         child_cursor.close()
@@ -1475,7 +1479,7 @@ class JobPlatformTestCase(unittest.TestCase):
         self.assertEqual(location_search.get_json()["items"][0]["title"], "P2DISC Child Job")
 
         relevance_search = self.client.get(
-            "/jobs/search?q=Backend&sort=relevance&limit=5",
+            "/jobs/search?q=P2DISC%20Backend&sort=relevance&limit=5",
             headers={"Authorization": f"Bearer {admin_token}"},
         )
         self.assertEqual(relevance_search.status_code, 200)
@@ -1538,6 +1542,36 @@ class JobPlatformTestCase(unittest.TestCase):
             headers={"Authorization": f"Bearer {admin_token}"},
         )
         self.assertEqual(invalid_range.status_code, 400)
+
+        blocked_user = main.db.q(
+            "SELECT id FROM users WHERE username=?",
+            ("tester_worker",),
+        ).fetchone()[0]
+        full_block = self.client.post(
+            f"/admin/user/{blocked_user}/block",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"block_type": "full", "reason": "Search access test", "duration_minutes": 60},
+        )
+        self.assertEqual(full_block.status_code, 201)
+
+        blocked_search = self.client.get(
+            "/jobs/search?q=P2DISC",
+            headers={"Authorization": f"Bearer " + self.client.post(
+                "/login",
+                json={"username": "tester_worker", "password": "Password123!"},
+            ).get_json()["token"]},
+        )
+        self.assertEqual(blocked_search.status_code, 403)
+        self.assertEqual(blocked_search.get_json()["block_type"], "full")
+
+        self.assertEqual(
+            self.client.patch(
+                f"/admin/block/{full_block.get_json()['block_id']}",
+                headers={"Authorization": f"Bearer {admin_token}"},
+                json={"action": "lift"},
+            ).status_code,
+            200,
+        )
 
         unauthenticated = self.client.get("/jobs/search?q=P2DISC")
         self.assertEqual(unauthenticated.status_code, 401)
