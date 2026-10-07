@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { NavLink, useNavigate } from "react-router-dom"
+import { NavLink, useLocation, useNavigate } from "react-router-dom"
 import { api } from "../api"
 
 const navItems = [
@@ -12,10 +12,12 @@ const navItems = [
 
 export default function AppLayout({ title, subtitle, children }) {
     const navigate = useNavigate()
+    const location = useLocation()
     const [theme, setTheme] = useState(() => localStorage.getItem("finjob-theme") || "light")
     const [notifications, setNotifications] = useState([])
     const [unreadNotifications, setUnreadNotifications] = useState(0)
     const [showNotifications, setShowNotifications] = useState(false)
+    const [showMobileMenu, setShowMobileMenu] = useState(false)
     const notificationRef = useRef(null)
     const token = localStorage.getItem("token") || ""
     const user = JSON.parse(localStorage.getItem("user") || "null")
@@ -62,6 +64,10 @@ export default function AppLayout({ title, subtitle, children }) {
         if (days < 7) return `${days} kun oldin`
         return value.toLocaleDateString("uz-UZ", { day: "2-digit", month: "short" })
     }
+
+    useEffect(() => {
+        setShowMobileMenu(false)
+    }, [location.pathname])
 
     useEffect(() => {
         if (!showNotifications) return
@@ -142,6 +148,46 @@ export default function AppLayout({ title, subtitle, children }) {
                     <button className="btn btn-danger" onClick={logout} style={{width:"100%"}}>Chiqish</button>
                 </div>
             </aside>
+            <nav className="mobile-nav" aria-label="Mobil navigatsiya">
+                {navItems.filter(([to]) => to !== "/leaderboard").map(([to, label, icon]) => (
+                    <NavLink key={to} to={to} end={to === "/"} className={({ isActive }) => `mobile-nav-item ${isActive ? "active" : ""}`}>
+                        <span className="mobile-nav-icon">{icon}</span>
+                        <span className="mobile-nav-label">{label}</span>
+                    </NavLink>
+                ))}
+                <button
+                    type="button"
+                    className={`mobile-nav-item mobile-nav-menu-button ${showMobileMenu ? "active" : ""}`}
+                    aria-expanded={showMobileMenu}
+                    aria-controls="finjob-mobile-menu"
+                    onClick={() => setShowMobileMenu((value) => !value)}
+                >
+                    <span className="mobile-nav-icon">☰</span>
+                    <span className="mobile-nav-label">Menyu</span>
+                </button>
+            </nav>
+            {showMobileMenu && (
+                <div className="mobile-menu-backdrop" onClick={() => setShowMobileMenu(false)}>
+                    <div id="finjob-mobile-menu" className="mobile-menu-sheet" role="dialog" aria-modal="true" aria-label="Qo‘shimcha menyu" onClick={(event) => event.stopPropagation()}>
+                        <div className="mobile-menu-head">
+                            <div>
+                                <span className="profile-eyebrow">FINJOB</span>
+                                <h2>Qo‘shimcha bo‘limlar</h2>
+                            </div>
+                            <button type="button" className="mobile-menu-close" onClick={() => setShowMobileMenu(false)} aria-label="Menyuni yopish">×</button>
+                        </div>
+                        <div className="mobile-menu-grid">
+                            <NavLink to="/leaderboard" className="mobile-menu-link">★ <span>Reyting jadvali</span></NavLink>
+                            <NavLink to="/profile" className="mobile-menu-link">◎ <span>Profil</span></NavLink>
+                            {isAdmin && <NavLink to="/admin" className="mobile-menu-link">⚙ <span>Administrator</span></NavLink>}
+                            <NavLink to="/privacy" className="mobile-menu-link">⌁ <span>Maxfiylik</span></NavLink>
+                            <NavLink to="/terms" className="mobile-menu-link">§ <span>Shartlar</span></NavLink>
+                            <NavLink to="/community-rules" className="mobile-menu-link">✓ <span>Qoidalar</span></NavLink>
+                        </div>
+                        <button type="button" className="btn btn-danger mobile-menu-logout" onClick={logout}>Chiqish</button>
+                    </div>
+                </div>
+            )
             <main className="main">
                 <div className="app-topbar">
                     <div className="page-head">
