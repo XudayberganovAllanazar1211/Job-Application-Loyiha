@@ -1,4 +1,8 @@
 import os
+import re
+import math
+import time
+import threading
 import sqlite3
 import datetime
 import secrets
@@ -14,6 +18,7 @@ from functools import wraps
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
+from PIL import Image, ImageOps, UnidentifiedImageError
 from payments import register_payment_routes
 import jwt
 
@@ -24,10 +29,18 @@ except ImportError:
     pass
 
 app = Flask(__name__)
-allowed_origins = os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://localhost:5174").split(",")
-CORS(app, resources={r"/*": {"origins": [origin.strip() for origin in allowed_origins if origin.strip()]}})
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
+allowed_origins = [origin.strip().rstrip("/") for origin in os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://localhost:5174").split(",") if origin.strip()]
+CORS(app, resources={r"/*": {"origins": allowed_origins, "supports_credentials": False}})
+secret_key = os.environ.get("SECRET_KEY", "").strip()
+if not secret_key:
+    secret_key = secrets.token_hex(32)
+    app.logger.warning("SECRET_KEY o‘rnatilmagan; vaqtinchalik kalit ishlatilmoqda. Ishlab chiqarishda SECRET_KEY ni environment orqali belgilang.")
+app.config["SECRET_KEY"] = secret_key
 app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
+try:
+    app.config["JWT_TTL_HOURS"] = max(1, min(24, int(os.environ.get("JWT_TTL_HOURS", "12"))))
+except (TypeError, ValueError):
+    app.config["JWT_TTL_HOURS"] = 12
 
 
 @app.after_request
@@ -35,8 +48,78 @@ def add_security_headers(response):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Permissions-Policy"] = "camera=(), microphone=()"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(self)"
+    response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
+    if response.content_type and response.content_type.startswith("application/json"):
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Pragma"] = "no-cache"
+    if request.is_secure or os.environ.get("FORCE_HTTPS") == "1":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
+
+
+# -------- RATE LIMITING --------
+_rate_buckets = {}
+_rate_lock = threading.Lock()
+_RATE_LIMIT_RULES = {
+    "/login": (10, 60),
+    "/register/send-code": (3, 900),
+    "/register/verify": (10, 900),
+    "/message": (60, 60),
+    "/report": (10, 600),
+    "/wallet/withdraw": (10, 600),
+    "/payments/dummy/": (10, 60),
+}
+
+
+def _rate_limit_key(path):
+    ip = request.remote_addr or "unknown"
+    extra = ""
+    payload = request.get_json(silent=True) or {}
+    if path == "/login":
+        extra = ":" + str(payload.get("username", "")).strip().lower()[:254]
+    elif path in ("/register/send-code", "/register/verify"):
+        extra = ":" + str(payload.get("email", "")).strip().lower()[:254]
+    return f"{path}:{ip}{extra}"
+
+
+def _rate_limited(path):
+    rule = _RATE_LIMIT_RULES.get(path)
+    if rule is None:
+        rule = next((value for prefix, value in _RATE_LIMIT_RULES.items() if prefix.endswith("/") and path.startswith(prefix)), None)
+    if rule is None:
+        return False, 0
+    limit, window = rule
+    now = time.monotonic()
+    key = _rate_limit_key(path)
+    with _rate_lock:
+        bucket = _rate_buckets.setdefault(key, [])
+        cutoff = now - window
+        while bucket and bucket[0] <= cutoff:
+            bucket.pop(0)
+        if len(bucket) >= limit:
+            retry_after = max(1, int(window - (now - bucket[0])))
+            return True, retry_after
+        bucket.append(now)
+        if len(_rate_buckets) > 5000:
+            stale_cutoff = now - 3600
+            stale_keys = [k for k, values in _rate_buckets.items() if not values or values[-1] < stale_cutoff]
+            for stale_key in stale_keys[:1000]:
+                _rate_buckets.pop(stale_key, None)
+    return False, 0
+
+
+@app.before_request
+def apply_rate_limits():
+    if request.method == "OPTIONS":
+        return None
+    blocked, retry_after = _rate_limited(request.path) if request.method in {"POST", "PATCH"} else (False, 0)
+    if blocked:
+        response = jsonify({"msg": "Juda ko‘p so‘rov yuborildi. Birozdan keyin qayta urinib ko‘ring."})
+        response.status_code = 429
+        response.headers["Retry-After"] = str(retry_after)
+        return response
+    return None
 
 # -------- E-MAIL (SMTP) SOZLAMALARI --------
 SMTP_SERVER = os.environ.get("SMTP_SERVER", "smtp.gmail.com")
@@ -104,7 +187,8 @@ class DB:
                 created_at TEXT,
                 average_rating REAL DEFAULT 0.0,
                 role TEXT DEFAULT 'user',
-                avatar_url TEXT DEFAULT ''
+                avatar_url TEXT DEFAULT '',
+                token_version INTEGER NOT NULL DEFAULT 0
             )
         """)
 
@@ -221,6 +305,7 @@ class DB:
             ("average_rating", "ALTER TABLE users ADD COLUMN average_rating REAL DEFAULT 0.0"),
             ("role", "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'"),
             ("avatar_url", "ALTER TABLE users ADD COLUMN avatar_url TEXT DEFAULT ''"),
+            ("token_version", "ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0"),
         ]
         for col_name, sql in migrations:
             if col_name not in existing_user_cols:
@@ -566,12 +651,17 @@ db = DB()
 
 
 # -------- JWT & AUTHORIZATION --------
-def token(uid, role="user"):
+def token(uid, role="user", token_version=0):
+    now = datetime.datetime.now(datetime.timezone.utc)
     return jwt.encode(
         {
-            "id": uid,
+            "id": int(uid),
             "role": role,
-            "exp": datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=7),
+            "ver": int(token_version),
+            "iat": now,
+            "exp": now + datetime.timedelta(hours=app.config["JWT_TTL_HOURS"]),
+            "iss": "finjob",
+            "aud": "finjob-client",
         },
         app.config["SECRET_KEY"],
         algorithm="HS256",
@@ -586,10 +676,22 @@ def auth(f):
         if len(parts) != 2 or parts[0].lower() != "bearer":
             return jsonify({"msg": "Kirish tokeni talab qilinadi"}), 401
         try:
-            d = jwt.decode(parts[1], app.config["SECRET_KEY"], algorithms=["HS256"])
-            request.uid = d["id"]
-            request.user_role = d.get("role", "user")
-        except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, KeyError):
+            d = jwt.decode(
+                parts[1],
+                app.config["SECRET_KEY"],
+                algorithms=["HS256"],
+                issuer="finjob",
+                audience="finjob-client",
+            )
+            uid = int(d["id"])
+            user = db.q("SELECT role, COALESCE(token_version,0) FROM users WHERE id=?", (uid,)).fetchone()
+            if not user:
+                return jsonify({"msg": "Kirish tokeni yaroqsiz"}), 401
+            if int(d.get("ver", -1)) != int(user[1] or 0):
+                return jsonify({"msg": "Sessiya muddati tugagan. Qayta kiring."}), 401
+            request.uid = uid
+            request.user_role = user[0] or "user"
+        except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, KeyError, TypeError, ValueError):
             return jsonify({"msg": "Kirish tokeni yaroqsiz yoki muddati tugagan"}), 401
         return f(*a, **k)
 
@@ -851,18 +953,22 @@ def admin_user_role():
     d = request.json or {}
     user_id = d.get("user_id")
     role = str(d.get("role", "")).strip().lower()
+    try:
+        user_id = int(user_id)
+    except (TypeError, ValueError):
+        return jsonify({"msg": "Foydalanuvchi ID raqami noto‘g‘ri."}), 400
 
-    if not user_id or role not in ("user", "admin"):
+    if role not in ("user", "admin"):
         return jsonify({"msg": "Foydalanuvchi ID raqami va roli to‘g‘ri ko‘rsatilishi kerak."}), 400
 
-    if int(user_id) == int(request.uid):
+    if user_id == int(request.uid):
         return jsonify({"msg": "Bu yerdan o‘zingizning administrator rolingizni o‘zgartira olmaysiz."}), 400
 
     target = db.q("SELECT id, role FROM users WHERE id=?", (user_id,)).fetchone()
     if not target:
         return jsonify({"msg": "Foydalanuvchi topilmadi."}), 404
 
-    db.q("UPDATE users SET role=? WHERE id=?", (role, user_id)).close()
+    db.q("UPDATE users SET role=?, token_version=COALESCE(token_version,0)+1 WHERE id=?", (role, user_id)).close()
     return jsonify({"msg": "Foydalanuvchi roli yangilandi."})
 
 
@@ -1142,7 +1248,9 @@ def login():
     ).fetchone()
     if u and check_password_hash(u[1], password):
         user_role = u[2] if len(u) > 2 and u[2] else "user"
-        return jsonify({"token": token(u[0], role=user_role), "role": user_role})
+        version_row = db.q("SELECT COALESCE(token_version,0) FROM users WHERE id=?", (u[0],)).fetchone()
+        token_version = int(version_row[0] if version_row else 0)
+        return jsonify({"token": token(u[0], role=user_role, token_version=token_version), "role": user_role})
     return jsonify({"msg": "Foydalanuvchi nomi/elektron pochta yoki parol xato!"}), 401
 
 
@@ -1161,14 +1269,20 @@ def send_code():
     username = str(d["username"]).strip()
     email = str(d["email"]).strip().lower()
     password = str(d["password"])
+    first_name = str(d["first_name"]).strip()
+    last_name = str(d["last_name"]).strip()
+    birthday = str(d["birthday"]).strip()
 
-    if len(username) < 3 or len(username) > 32:
-        return jsonify({"msg": "Foydalanuvchi nomi 3–32 belgidan iborat bo‘lishi kerak"}), 400
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{3,32}", username):
+        return jsonify({"msg": "Foydalanuvchi nomi 3–32 belgidan iborat bo‘lishi va faqat harf, raqam, _ . - belgilaridan foydalanishi kerak"}), 400
 
-    if len(password) < 8:
-        return jsonify({"msg": "Parol kamida 8 ta belgidan iborat bo‘lishi kerak"}), 400
+    if len(password) < 8 or len(password) > 256:
+        return jsonify({"msg": "Parol 8–256 belgidan iborat bo‘lishi kerak"}), 400
 
-    if len(email) > 254 or "@" not in email or email.startswith("@") or email.endswith("@"):
+    if len(first_name) > 100 or len(last_name) > 100 or len(birthday) > 32:
+        return jsonify({"msg": "Ism, familiya yoki tug‘ilgan sana juda uzun"}), 400
+
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email) or len(email) > 254:
         return jsonify({"msg": "Elektron pochta manzili noto‘g‘ri"}), 400
 
     exists_u = db.q("SELECT id FROM users WHERE username=?", (username,)).fetchone()
@@ -1183,6 +1297,7 @@ def send_code():
     email_key = email
     pending_verifications[email_key] = {
         "code": code,
+        "attempts": 0,
         "data": {**d, "email": email_key, "username": username, "password": generate_password_hash(password)},
         "expiry": datetime.datetime.now() + datetime.timedelta(minutes=10),
     }
@@ -1212,7 +1327,18 @@ def verify_code():
         del pending_verifications[email]
         return jsonify({"msg": "Tasdiqlash kodining amal qilish muddati tugagan. Qaytadan so'rang."}), 400
 
-    if not code.isdigit() or len(code) != 6 or record["code"] != code:
+    if not code.isdigit() or len(code) != 6:
+        record["attempts"] += 1
+        if record["attempts"] >= 5:
+            del pending_verifications[email]
+            return jsonify({"msg": "Tasdiqlash kodi uchun urinishlar limiti tugadi. Yangi kod so‘rang."}), 429
+        return jsonify({"msg": "Tasdiqlash kodi noto'g'ri!"}), 400
+
+    record["attempts"] += 1
+    if not secrets.compare_digest(record["code"], code):
+        if record["attempts"] >= 5:
+            del pending_verifications[email]
+            return jsonify({"msg": "Tasdiqlash kodi uchun urinishlar limiti tugadi. Yangi kod so‘rang."}), 429
         return jsonify({"msg": "Tasdiqlash kodi noto'g'ri!"}), 400
 
     ud = record["data"]
@@ -1245,7 +1371,9 @@ def verify_code():
 
 
 @app.route("/logout", methods=["POST"])
+@auth
 def logout():
+    db.q("UPDATE users SET token_version=COALESCE(token_version,0)+1 WHERE id=?", (request.uid,)).close()
     return jsonify({"msg": "ok"})
 
 
@@ -1322,6 +1450,9 @@ def add_job():
     if not raw_service_ids and d.get("service_id"):
         raw_service_ids = [d.get("service_id")]
 
+    if len(raw_service_ids) > 20:
+        return jsonify({"msg": "Bir ishda ko‘pi bilan 20 ta xizmat tanlash mumkin"}), 400
+
     valid_service_ids = []
     seen_service_ids = set()
 
@@ -1345,11 +1476,16 @@ def add_job():
     else:
         custom_service_values = str(d.get("custom_service", "")).split(",")
 
+    if len(custom_service_values) > 20:
+        return jsonify({"msg": "Bir ishda ko‘pi bilan 20 ta yangi xizmat nomi bo‘lishi mumkin"}), 400
+
     custom_services = []
     seen_custom_services = set()
 
     for item in custom_service_values:
         custom_service = str(item).strip()
+        if len(custom_service) > 120:
+            return jsonify({"msg": "Xizmat nomi 120 belgidan oshmasligi kerak"}), 400
         key = custom_service.casefold()
         if custom_service and key not in seen_custom_services:
             seen_custom_services.add(key)
@@ -1378,7 +1514,7 @@ def add_job():
     except (TypeError, ValueError):
         return jsonify({"msg": "Narx noto'g'ri kiritilgan"}), 400
 
-    if price <= 0 or price > 100000000000:
+    if not math.isfinite(price) or price <= 0 or price > 100000000000:
         return jsonify({"msg": "Narx 0 dan katta va 100 000 000 000 dan oshmasligi kerak"}), 400
 
     if currency != "UZS":
@@ -1796,7 +1932,7 @@ def get_msg(job_id):
             "sent_at": i[3].split(".")[0] if i[3] else "",
             "sender_id": i[5],
         }
-        for i in r
+        for i in reversed(r)
     ])
 
 
@@ -1918,9 +2054,24 @@ def upload_profile_avatar():
     if size > MAX_PROFILE_IMAGE_SIZE:
         return jsonify({"msg": "Rasm hajmi 5 MB dan oshmasligi kerak"}), 400
 
-    filename = f"{request.uid}_{uuid.uuid4().hex}.{extension}"
-    filepath = os.path.join(PROFILE_UPLOAD_DIR, filename)
-    image.save(filepath)
+    try:
+        Image.MAX_IMAGE_PIXELS = 20_000_000
+        source = Image.open(image.stream)
+        source.verify()
+        image.stream.seek(0)
+        avatar = Image.open(image.stream)
+        avatar = ImageOps.exif_transpose(avatar)
+        if avatar.width * avatar.height > 20_000_000:
+            return jsonify({"msg": "Rasm o‘lchami juda katta"}), 400
+        if avatar.mode not in ("RGB", "RGBA"):
+            avatar = avatar.convert("RGBA" if "A" in avatar.getbands() else "RGB")
+        filename = f"{request.uid}_{uuid.uuid4().hex}.webp"
+        filepath = os.path.join(PROFILE_UPLOAD_DIR, filename)
+        avatar.save(filepath, "WEBP", quality=85, method=6)
+        avatar.close()
+        source.close()
+    except (UnidentifiedImageError, OSError, ValueError):
+        return jsonify({"msg": "Yuklangan fayl haqiqiy rasm emas"}), 400
 
     avatar_url = f"/uploads/profile_pictures/{filename}"
     old_avatar = db.q("SELECT avatar_url FROM users WHERE id=?", (request.uid,)).fetchone()
@@ -2035,6 +2186,18 @@ def profile():
 
         if not username or not email:
             return jsonify({"msg": "Foydalanuvchi nomi va elektron pochta kiritilishi shart"}), 400
+        if not re.fullmatch(r"[A-Za-z0-9_.-]{3,32}", username):
+            return jsonify({"msg": "Foydalanuvchi nomi 3–32 belgidan iborat bo‘lishi kerak"}), 400
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email) or len(email) > 254:
+            return jsonify({"msg": "Elektron pochta manzili noto‘g‘ri"}), 400
+
+        first_name = str(d.get("first_name", "")).strip()
+        last_name = str(d.get("last_name", "")).strip()
+        birthday = str(d.get("birthday", "")).strip()
+        bio = str(d.get("bio", "")).strip()
+        skills = str(d.get("skills", "")).strip()
+        if len(first_name) > 100 or len(last_name) > 100 or len(birthday) > 32 or len(bio) > 2000 or len(skills) > 2000:
+            return jsonify({"msg": "Profil maydonlaridan biri juda uzun"}), 400
 
         exists_u = db.q("SELECT id FROM users WHERE username=? AND id!=?", (username, request.uid)).fetchone()
         if exists_u:
