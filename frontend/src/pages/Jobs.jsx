@@ -463,6 +463,7 @@ export default function Jobs() {
                     const isIAccepted = String(job.worker_id) === String(user?.id)
                     const isParticipant = isMyJob || isIAccepted
                     const canAccept = status === "active" && !isMyJob && job.worker_id == null
+                    const canReportParticipant = (isMyJob && job.worker_id != null && ["accepted", "pending_finish", "finished"].includes(status)) || isIAccepted
                     const statusLabel = {
                         active: "Faol",
                         accepted: "Qabul qilingan",
@@ -518,9 +519,9 @@ export default function Jobs() {
                                 </div>
                             )}
 
-                            {reportJobId === job.id && !isMyJob && (
+                            {reportJobId === job.id && canReportParticipant && (
                                 <div className="report-panel">
-                                    <strong>Shikoyat yuborish</strong>
+                                    <strong>{isMyJob ? "Ishchi haqida shikoyat" : "Ish egasi haqida shikoyat"}</strong>
                                     <select
                                         className="select"
                                         value={reportReason}
@@ -578,7 +579,7 @@ export default function Jobs() {
                                         📩 Takliflarni ko‘rish
                                     </button>
                                 )}
-                                {!isMyJob && (
+                                {canReportParticipant && (
                                     <button className="btn btn-secondary" onClick={() => setReportJobId(reportJobId === job.id ? null : job.id)}>
                                         ⚑ Shikoyat
                                     </button>
