@@ -935,13 +935,13 @@ def _chat_file_type(stream):
     stream.seek(0)
     if header.startswith(b"%PDF-"):
         return "pdf"
-    if header.startswith(b"PK\\x03\\x04"):
+    if header.startswith(bytes.fromhex("504B0304")):
         return "zip"
-    if header.startswith(b"\\xD0\\xCF\\x11\\xE0\\xA1\\xB1\\x1A\\xE1"):
+    if header.startswith(bytes.fromhex("D0CF11E0A1B11AE1")):
         return "ole"
-    if header.startswith(b"\\x89PNG\\r\\n\\x1a\\n"):
+    if header.startswith(bytes.fromhex("89504E470D0A1A0A")):
         return "png"
-    if header.startswith(b"\\xff\\xd8\\xff"):
+    if header.startswith(bytes.fromhex("FFD8FF")):
         return "jpeg"
     if header.startswith(b"GIF87a") or header.startswith(b"GIF89a"):
         return "gif"
