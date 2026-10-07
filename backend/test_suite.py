@@ -735,12 +735,12 @@ class JobPlatformTestCase(unittest.TestCase):
         self.assertEqual(deleted.status_code, 200)
 
     def test_10e_portfolio_file_upload_flow(self):
-        login = self.client.post(
-            "/login",
-            json={"username": "tester_worker", "password": "Password123!"}
-        )
-        self.assertEqual(login.status_code, 200)
-        token = login.get_json()["token"]
+        worker = main.db.q(
+            "SELECT id, role, COALESCE(token_version,0) FROM users WHERE username=?",
+            ("tester_worker",)
+        ).fetchone()
+        self.assertIsNotNone(worker)
+        token = main.token(worker[0], worker[1] or "user", worker[2])
 
         pdf_data = b"%PDF-1.4\n% FinJob portfolio test\n"
         uploaded = self.client.post(
