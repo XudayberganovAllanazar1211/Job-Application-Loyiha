@@ -287,7 +287,6 @@ export default function Jobs() {
         }
     }, [selectedJob?.id, token])
 
-    const activeJobDetails = jobDetails || selectedJob
 
     useEffect(() => {
         if (!selectedJob?.id && pagedRanked.length > 0) {
