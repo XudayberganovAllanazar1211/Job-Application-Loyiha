@@ -62,6 +62,18 @@ export default function PublicProfile() {
                     </section>
 
                     <section className="profile-public-content card">
+                        <span className="profile-public-label">SHAXSIY MA'LUMOTLAR</span>
+                        <div className="profile-public-details">
+                            <div><span>Ism</span><strong>{profile.first_name || "—"}</strong></div>
+                            <div><span>Familiya</span><strong>{profile.last_name || "—"}</strong></div>
+                            <div><span>Email</span><strong>{profile.email || "—"}</strong></div>
+                            <div><span>Tug‘ilgan sana</span><strong>{profile.birthday || "—"}</strong></div>
+                            <div><span>Ro‘yxatdan o‘tgan</span><strong>{profile.created_at || "—"}</strong></div>
+                            <div><span>Rol</span><strong>{profile.role || "user"}</strong></div>
+                        </div>
+                    </section>
+
+                    <section className="profile-public-content card">
                         <span className="profile-public-label">SOHALAR</span>
                         {skills.length ? (
                             <div className="profile-public-skills">
