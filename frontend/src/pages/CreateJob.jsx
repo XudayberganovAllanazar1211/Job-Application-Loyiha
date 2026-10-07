@@ -32,8 +32,13 @@ function ServiceNode({ node, level, selected, onSelect }) {
                 <button
                     type="button"
                     className={selected.includes(String(node.id)) ? "service-tree-item selected" : "service-tree-item"}
-                    disabled={hasChildren}
-                    onClick={() => onSelect(node)}
+                    onClick={() => {
+                        if (hasChildren) {
+                            setOpen((current) => !current)
+                        } else {
+                            onSelect(node)
+                        }
+                    }}
                 >
                     {node.name}
                 </button>
