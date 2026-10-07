@@ -64,6 +64,7 @@ export default function Profile() {
         created_jobs_count: 0,
         completed_jobs_count: 0,
         avg_rating: 0,
+        balance: 0,
         role: "user"
     })
 
@@ -110,6 +111,7 @@ export default function Profile() {
                     created_jobs_count: result.created_jobs_count || 0,
                     completed_jobs_count: result.completed_jobs_count || 0,
                     avg_rating: result.avg_rating || 0,
+                    balance: Number(result.balance) || 0,
                     role: result.role || "user"
                 }
 
@@ -528,6 +530,13 @@ export default function Profile() {
                             <div>
                                 <div className="stat-label">FinJob'da</div>
                                 <div className="stat-value profile-stat-small">{getMembershipDuration(form.created_at)}</div>
+                            </div>
+                        </div>
+                        <div className="profile-stat card">
+                            <span className="profile-stat-icon">05</span>
+                            <div>
+                                <div className="stat-label">Balans</div>
+                                <div className="stat-value profile-stat-small">{Number(form.balance).toLocaleString("uz-UZ")} UZS</div>
                             </div>
                         </div>
                     </section>
