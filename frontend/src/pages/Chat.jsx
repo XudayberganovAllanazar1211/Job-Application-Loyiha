@@ -19,6 +19,7 @@ export default function Chat() {
     const [otherOnline, setOtherOnline] = useState(false)
     const [otherLastSeen, setOtherLastSeen] = useState("")
     const [otherTyping, setOtherTyping] = useState(false)
+    const [otherName, setOtherName] = useState("Foydalanuvchi")
     const bottomRef = useRef(null)
     const typingTimerRef = useRef(null)
 
@@ -56,6 +57,10 @@ export default function Chat() {
         if (jobData?.id) {
             setJob(jobData)
             const targetId = String(jobData.user_id === me?.id ? jobData.worker_id : jobData.user_id)
+            const targetName = jobData.user_id === me?.id
+                ? (jobData.worker_name || jobData.worker_username)
+                : (jobData.user_name || jobData.user_username)
+            if (targetName) setOtherName(targetName)
             if (targetId && targetId !== "null" && targetId !== "undefined") {
                 setReceiverId(targetId)
             }
@@ -100,6 +105,10 @@ export default function Chat() {
             const currentJob = location.state.job
             setJob(currentJob)
             const targetId = String(currentJob.user_id === me?.id ? currentJob.worker_id : currentJob.user_id)
+            const targetName = currentJob.user_id === me?.id
+                ? (currentJob.worker_name || currentJob.worker_username)
+                : (currentJob.user_name || currentJob.user_username)
+            if (targetName) setOtherName(targetName)
             if (targetId && targetId !== "null" && targetId !== "undefined") {
                 setReceiverId(targetId)
             }
@@ -146,18 +155,18 @@ export default function Chat() {
                 <section className="card chat-wrap" style={{ width: "100%", maxWidth: "100%" }}>
                     <div className="section-toolbar" style={{ marginBottom: 0 }}>
                         <div className="page-head">
-                            <h2 style={{ margin: 0 }}>Xabarlar</h2>
-                            <p className="muted" style={{ margin: 0 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                <span className="profile-online-dot" style={{ opacity: otherOnline || otherTyping ? 1 : 0.35 }} />
+                                <div>
+                                    <h2 style={{ margin: 0 }}>{otherName}</h2>
+                                    <p className="muted" style={{ margin: 0 }}>
+                                        {otherTyping ? "Yozmoqda..." : otherOnline ? "Online" : otherLastSeen ? `Offline · Oxirgi faollik: ${new Date(otherLastSeen).toLocaleString("uz-UZ", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}` : "Offline"}
+                                    </p>
+                                </div>
+                            </div>
+                            <p className="muted" style={{ margin: "4px 0 0 30px" }}>
                                 {job?.title || `Ish #${jobId}`}
                             </p>
-                            {receiverId && (
-                                <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}>
-                                    <span className="profile-online-dot" />
-                                    <span className="muted">
-                                        {otherTyping ? "Yozmoqda..." : otherOnline ? "Hozir online" : otherLastSeen ? `Oxirgi faollik: ${new Date(otherLastSeen).toLocaleString("uz-UZ", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}` : "Offline"}
-                                    </span>
-                                </div>
-                            )}
                         </div>
                         <div className="actions">
                             <button className="btn btn-secondary" onClick={() => navigate(-1)}>Orqaga</button>
