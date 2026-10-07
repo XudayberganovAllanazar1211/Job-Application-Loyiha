@@ -1148,6 +1148,35 @@ class JobPlatformTestCase(unittest.TestCase):
         )
         self.assertEqual(lifted.status_code, 200)
 
+        full_block = self.client.post(
+            f"/admin/user/{worker_id}/block",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"block_type": "full", "reason": "To‘liq moderation test blocki."}
+        )
+        self.assertEqual(full_block.status_code, 201)
+        full_block_id = full_block.get_json()["block_id"]
+
+        full_denied = self.client.get(
+            "/jobs",
+            headers={"Authorization": f"Bearer {worker_token}"}
+        )
+        self.assertEqual(full_denied.status_code, 403)
+        self.assertEqual(full_denied.get_json().get("block_type"), "full")
+
+        appeal_access = self.client.get(
+            "/appeals",
+            headers={"Authorization": f"Bearer {worker_token}"}
+        )
+        self.assertEqual(appeal_access.status_code, 200)
+        self.assertTrue(any(item["id"] == full_block_id for item in appeal_access.get_json()["active_blocks"]))
+
+        full_lift = self.client.patch(
+            f"/admin/block/{full_block_id}",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"action": "lift"}
+        )
+        self.assertEqual(full_lift.status_code, 200)
+
     def test_10_logout_invalidates_token(self):
         res = self.client.post(
             "/login",
