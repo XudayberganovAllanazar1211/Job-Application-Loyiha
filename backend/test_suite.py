@@ -1018,6 +1018,136 @@ class JobPlatformTestCase(unittest.TestCase):
         )
         self.assertEqual(typing_off.status_code, 200)
 
+
+    def test_11_moderation_blocks_appeals_flow(self):
+        admin_login = self.client.post(
+            "/login",
+            json={"username": "tester_creator", "password": "Password123!"}
+        )
+        worker_login = self.client.post(
+            "/login",
+            json={"username": "tester_worker", "password": "Password123!"}
+        )
+        self.assertEqual(admin_login.status_code, 200)
+        self.assertEqual(worker_login.status_code, 200)
+        admin_token = admin_login.get_json()["token"]
+        worker_token = worker_login.get_json()["token"]
+
+        worker = main.db.q("SELECT id FROM users WHERE username=?", ("tester_worker",)).fetchone()
+        self.assertIsNotNone(worker)
+        worker_id = worker[0]
+        job_id = main.db.q(
+            "SELECT id FROM jobs WHERE title='Build Web App' ORDER BY id DESC LIMIT 1"
+        ).fetchone()[0]
+
+        blocked = self.client.post(
+            f"/admin/user/{worker_id}/block",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={
+                "block_type": "chat",
+                "duration_minutes": 60,
+                "reason": "Chat qoidalarini takroran buzish."
+            }
+        )
+        self.assertEqual(blocked.status_code, 201)
+        block_id = blocked.get_json()["block_id"]
+
+        messages_blocked = self.client.get(
+            f"/messages/{job_id}",
+            headers={"Authorization": f"Bearer {worker_token}"}
+        )
+        self.assertEqual(messages_blocked.status_code, 403)
+        self.assertTrue(messages_blocked.get_json().get("blocked"))
+        self.assertEqual(messages_blocked.get_json().get("block_type"), "chat")
+
+        notifications = self.client.get(
+            "/notifications",
+            headers={"Authorization": f"Bearer {worker_token}"}
+        )
+        self.assertEqual(notifications.status_code, 200)
+        self.assertTrue(any("Chat blok" in item["message"] and "Chat qoidalarini" in item["message"] for item in notifications.get_json()["items"]))
+
+        appeals = self.client.get(
+            "/appeals",
+            headers={"Authorization": f"Bearer {worker_token}"}
+        )
+        self.assertEqual(appeals.status_code, 200)
+        self.assertTrue(any(item["id"] == block_id for item in appeals.get_json()["active_blocks"]))
+
+        created_appeal = self.client.post(
+            "/appeals",
+            headers={"Authorization": f"Bearer {worker_token}"},
+            json={
+                "block_id": block_id,
+                "appeal_text": "Men vaziyatni tushundim va bu cheklov juda qattiq qo‘yilgan deb hisoblayman."
+            }
+        )
+        self.assertEqual(created_appeal.status_code, 201)
+        appeal_id = created_appeal.get_json()["appeal_id"]
+
+        admin_appeals = self.client.get(
+            "/admin/appeals?q=tester_worker",
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
+        self.assertEqual(admin_appeals.status_code, 200)
+        appeal_row = next(item for item in admin_appeals.get_json()["items"] if item["id"] == appeal_id)
+        self.assertEqual(appeal_row["block_id"], block_id)
+        self.assertEqual(appeal_row["block_type"], "chat")
+        self.assertEqual(appeal_row["username"], "tester_worker")
+        self.assertIn("Chat qoidalarini", appeal_row["block_reason"])
+        self.assertIn("Men vaziyatni", appeal_row["appeal_text"])
+
+        reviewed = self.client.patch(
+            f"/admin/appeal/{appeal_id}",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"status": "approved", "admin_response": "Appeal qabul qilindi; chat cheklovi olib tashlandi."}
+        )
+        self.assertEqual(reviewed.status_code, 200)
+
+        unblocked_messages = self.client.get(
+            f"/messages/{job_id}",
+            headers={"Authorization": f"Bearer {worker_token}"}
+        )
+        self.assertEqual(unblocked_messages.status_code, 200)
+
+        job_block = self.client.post(
+            f"/admin/user/{worker_id}/block",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={
+                "block_type": "job_creation",
+                "duration_minutes": 60,
+                "reason": "Ish e’lonlarida qoidabuzarlik."
+            }
+        )
+        self.assertEqual(job_block.status_code, 201)
+        blocked_job = self.client.post(
+            "/job",
+            headers={"Authorization": f"Bearer {worker_token}"},
+            json={
+                "service_id": 1,
+                "title": "Should Be Blocked",
+                "description": "Moderation restriction test",
+                "price": 100000,
+                "location": "Remote"
+            }
+        )
+        self.assertEqual(blocked_job.status_code, 403)
+
+        worker_blocks = self.client.get(
+            f"/admin/user/{worker_id}/blocks",
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
+        self.assertEqual(worker_blocks.status_code, 200)
+        self.assertTrue(any(item["active"] and item["block_type"] == "job_creation" for item in worker_blocks.get_json()["blocks"]))
+
+        lift_target = next(item for item in worker_blocks.get_json()["blocks"] if item["active"] and item["block_type"] == "job_creation")
+        lifted = self.client.patch(
+            f"/admin/block/{lift_target['id']}",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"action": "lift"}
+        )
+        self.assertEqual(lifted.status_code, 200)
+
     def test_10_logout_invalidates_token(self):
         res = self.client.post(
             "/login",
