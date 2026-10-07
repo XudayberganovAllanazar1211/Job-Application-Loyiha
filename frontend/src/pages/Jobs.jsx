@@ -246,6 +246,12 @@ export default function Jobs() {
 
     const activeJobDetails = jobDetails || selectedJob
 
+    useEffect(() => {
+        if (!selectedJob?.id && pagedRanked.length > 0) {
+            setSelectedJob(pagedRanked[0].job)
+        }
+    }, [pagedRanked, selectedJob?.id])
+
     const addServiceFilter = (service) => {
         setSelectedServices([...selectedServices, service])
         setServiceSearch("")
