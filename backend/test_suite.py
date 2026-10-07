@@ -1215,3 +1215,167 @@ class JobPlatformTestCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_12_deep_regression(self):
+        def register_user(username, email):
+            sent = self.client.post(
+                "/register/send-code",
+                json={
+                    "username": username,
+                    "password": "Password123!",
+                    "first_name": "Deep",
+                    "last_name": "Tester",
+                    "birthday": "1994-04-04",
+                    "email": email,
+                },
+            )
+            self.assertEqual(sent.status_code, 200)
+            code = pending_verifications[email]["code"]
+            verified = self.client.post("/register/verify", json={"email": email, "code": code})
+            self.assertEqual(verified.status_code, 200)
+            login = self.client.post("/login", json={"username": username, "password": "Password123!"})
+            self.assertEqual(login.status_code, 200)
+            return login.get_json()["token"]
+
+        admin_token = self.client.post("/login", json={"username": "tester_creator", "password": "Password123!"}).get_json()["token"]
+        bidder_token = register_user("tester_bidder2", "tester_bidder2@example.com")
+        outsider_token = register_user("tester_outsider", "tester_outsider@example.com")
+        cleanup_token = register_user("tester_cleanup", "tester_cleanup@example.com")
+
+        owner_job = self.client.post("/job", headers={"Authorization": f"Bearer {admin_token}"}, json={
+            "service_id": 1,
+            "title": "Deep Bidding Direct Accept",
+            "description": "Deep regression job",
+            "price": 1000000,
+            "location": "Remote",
+        })
+        self.assertEqual(owner_job.status_code, 200)
+        jobs = self.client.get("/jobs", headers={"Authorization": f"Bearer {admin_token}"}).get_json()
+        deep_job_id = [j for j in jobs if j["title"] == "Deep Bidding Direct Accept"][0]["id"]
+
+        proposal = self.client.post(
+            f"/jobs/{deep_job_id}/proposals",
+            headers={"Authorization": f"Bearer {bidder_token}"},
+            json={"price": 850000, "deadline": "2026-10-30", "message": "Deep regression proposal"},
+        )
+        self.assertEqual(proposal.status_code, 201)
+
+        bidder_id = self.client.get("/profile", headers={"Authorization": f"Bearer {bidder_token}"}).get_json()["id"]
+        proposal_block = self.client.post(
+            f"/admin/user/{bidder_id}/block",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"block_type": "proposal", "reason": "Deep test proposal restriction", "duration_minutes": 60},
+        )
+        self.assertEqual(proposal_block.status_code, 201)
+
+        read_while_blocked = self.client.get(f"/jobs/{deep_job_id}/proposals", headers={"Authorization": f"Bearer {bidder_token}"})
+        self.assertEqual(read_while_blocked.status_code, 200)
+        self.assertEqual(len(read_while_blocked.get_json()), 1)
+
+        blocked_post = self.client.post(
+            f"/jobs/{deep_job_id}/proposals",
+            headers={"Authorization": f"Bearer {bidder_token}"},
+            json={"price": 840000, "deadline": "2026-10-30", "message": "Should be blocked"},
+        )
+        self.assertEqual(blocked_post.status_code, 403)
+        self.assertEqual(blocked_post.get_json()["block_type"], "proposal")
+
+        lifted = self.client.patch(
+            f"/admin/block/{proposal_block.get_json()["block_id"]}",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"action": "lift"},
+        )
+        self.assertEqual(lifted.status_code, 200)
+
+        direct_accept = self.client.post("/accept_job", headers={"Authorization": f"Bearer {outsider_token}"}, json={"job_id": deep_job_id})
+        self.assertEqual(direct_accept.status_code, 200)
+
+        owner_proposals = self.client.get(f"/jobs/{deep_job_id}/proposals", headers={"Authorization": f"Bearer {admin_token}"}).get_json()
+        self.assertEqual(owner_proposals[0]["status"], "rejected")
+
+        bidder_notifications = self.client.get("/notifications", headers={"Authorization": f"Bearer {bidder_token}"}).get_json()
+        self.assertTrue(any(item["type"] == "proposal_rejected" and "Deep Bidding Direct Accept" in item["message"] for item in bidder_notifications["items"]))
+
+        full_block = self.client.post(
+            f"/admin/user/{bidder_id}/block",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"block_type": "full", "reason": "Deep full-block statistics test", "duration_minutes": 60},
+        )
+        self.assertEqual(full_block.status_code, 201)
+
+        overview = self.client.get("/admin/overview", headers={"Authorization": f"Bearer {admin_token}"}).get_json()
+        blocked_user = [item for item in overview["users"] if item["id"] == bidder_id][0]
+        self.assertEqual(blocked_user["is_blocked"], 1)
+        search = self.client.get("/admin/search?q=tester_bidder2", headers={"Authorization": f"Bearer {admin_token}"}).get_json()
+        self.assertEqual([item for item in search["users"] if item["id"] == bidder_id][0]["is_blocked"], 1)
+
+        full_lift = self.client.patch(
+            f"/admin/block/{full_block.get_json()["block_id"]}",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"action": "lift"},
+        )
+        self.assertEqual(full_lift.status_code, 200)
+        overview_after = self.client.get("/admin/overview", headers={"Authorization": f"Bearer {admin_token}"}).get_json()
+        self.assertEqual([item for item in overview_after["users"] if item["id"] == bidder_id][0]["is_blocked"], 0)
+
+        chat_job = self.client.post("/job", headers={"Authorization": f"Bearer {admin_token}"}, json={
+            "service_id": 1, "title": "Deep Attachment Access", "description": "Chat attachment security", "price": 500000, "location": "Remote"
+        })
+        self.assertEqual(chat_job.status_code, 200)
+        jobs = self.client.get("/jobs", headers={"Authorization": f"Bearer {admin_token}"}).get_json()
+        chat_job_id = [j for j in jobs if j["title"] == "Deep Attachment Access"][0]["id"]
+        self.assertEqual(self.client.post("/accept_job", headers={"Authorization": f"Bearer {bidder_token}"}, json={"job_id": chat_job_id}).status_code, 200)
+
+        owner_id = self.client.get("/profile", headers={"Authorization": f"Bearer {admin_token}"}).get_json()["id"]
+        upload = self.client.post(
+            "/message",
+            headers={"Authorization": f"Bearer " + bidder_token},
+            data={
+                "job_id": str(chat_job_id),
+                "receiver_id": str(owner_id),
+                "message": "attachment",
+                "file": (BytesIO(b"\x89PNG\r\n\x1a\n"), "test.png"),
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(upload.status_code, 200)
+        messages = self.client.get(f"/messages/{chat_job_id}", headers={"Authorization": f"Bearer {bidder_token}"}).get_json()
+        attachment_url = messages[-1]["attachment_url"]
+        self.assertTrue(attachment_url)
+        self.assertEqual(self.client.get(attachment_url).status_code, 401)
+        self.assertEqual(self.client.get(attachment_url, headers={"Authorization": f"Bearer {outsider_token}"}).status_code, 404)
+        self.assertEqual(self.client.get(attachment_url, headers={"Authorization": f"Bearer {bidder_token}"}).status_code, 200)
+
+        cleanup_id = self.client.get("/profile", headers={"Authorization": f"Bearer {cleanup_token}"}).get_json()["id"]
+        cleanup_block = self.client.post(
+            f"/admin/user/{cleanup_id}/block", headers={"Authorization": f"Bearer {admin_token}",},
+            json={"block_type": "chat", "reason": "Cleanup block", "duration_minutes": 60},
+        )
+        self.assertEqual(cleanup_block.status_code, 201)
+        self.assertEqual(self.client.post("/favorites", headers={"Authorization": f"Bearer {cleanup_token}"}, json={"target_type": "job", "target_id": deep_job_id}).status_code, 200)
+        self.assertEqual(self.client.post("/portfolio", headers={"Authorization": f"Bearer {cleanup_token}"}, json={"title": "Cleanup portfolio", "description": "cleanup"}).status_code, 201)
+
+        cleanup_job = self.client.post("/job", headers={"Authorization": f"Bearer {admin_token}"}, json={
+            "service_id": 1, "title": "Cleanup Proposal Job", "description": "Cleanup proposal row", "price": 400000, "location": "Remote"
+        })
+        self.assertEqual(cleanup_job.status_code, 200)
+        jobs = self.client.get("/jobs", headers={"Authorization": f"Bearer {admin_token}"}).get_json()
+        cleanup_job_id = [j for j in jobs if j["title"] == "Cleanup Proposal Job"][0]["id"]
+        self.assertEqual(self.client.post(
+            f"/jobs/{cleanup_job_id}/proposals",
+            headers={"Authorization": f"Bearer {cleanup_token}"},
+            json={"price": 350000, "deadline": "2026-11-01", "message": "Cleanup proposal"},
+        ).status_code, 201)
+
+        deleted = self.client.delete(f"/admin/user/{cleanup_id}", headers={"Authorization": f"Bearer {admin_token}"})
+        self.assertEqual(deleted.status_code, 200)
+        self.assertIsNone(main.db.q("SELECT id FROM users WHERE id=?", (cleanup_id,)).fetchone())
+        self.assertIsNone(main.db.q("SELECT id FROM job_proposals WHERE worker_id=?", (cleanup_id,)).fetchone())
+        self.assertIsNone(main.db.q("SELECT id FROM favorites WHERE user_id=?", (cleanup_id,)).fetchone())
+        self.assertIsNone(main.db.q("SELECT id FROM portfolio_items WHERE user_id=?", (cleanup_id,)).fetchone())
+        self.assertIsNone(main.db.q("SELECT id FROM notifications WHERE user_id=?", (cleanup_id,)).fetchone())
+        self.assertIsNone(main.db.q("SELECT id FROM user_blocks WHERE user_id=?", (cleanup_id,)).fetchone())
+
+        self.assertEqual(self.client.delete(f"/admin/job/{deep_job_id}", headers={"Authorization": f"Bearer {admin_token}"}).status_code, 200)
+        self.assertEqual(self.client.delete(f"/admin/job/{chat_job_id}", headers={"Authorization": f"Bearer {admin_token}"}).status_code, 200)
+        self.assertEqual(self.client.delete(f"/admin/job/{cleanup_job_id}", headers={"Authorization": f"Bearer {admin_token}"}).status_code, 200)
