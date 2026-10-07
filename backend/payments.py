@@ -2,6 +2,7 @@ import datetime
 import hashlib
 import json
 import os
+import math
 import secrets
 import uuid
 from urllib.parse import urlencode
@@ -708,8 +709,19 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
             return click_error(-5, "Transaction does not exist")
 
         payment_id,payment_uuid,job_id,payer_id,payee_id,expected_amount,currency,payment_status = payment
-        if str(currency).upper() != "UZS" or abs(amount-float(expected_amount)) > 0.01:
+        if str(currency).upper() != "UZS" or not math.isfinite(float(expected_amount)) or abs(amount-float(expected_amount)) > 0.001:
             return click_error(-2, "Incorrect amount")
+
+        current_job = db.q(
+            "SELECT user_id,worker_id,status FROM jobs WHERE id=?",
+            (job_id,),
+        ).fetchone()
+        if not current_job:
+            return click_error(-5, "Transaction does not exist")
+        if current_job[0] != payer_id or current_job[1] != payee_id:
+            return click_error(-2, "Transaction is no longer assigned to this worker")
+        if action == 0 and current_job[2] != "payment_pending":
+            return click_error(-2, "Transaction is not ready for payment")
 
         if action == 0:
             db.q(
@@ -728,6 +740,13 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
 
         if action != 1:
             return click_error(-3, "Action not found")
+
+        duplicate_transaction = db.q(
+            "SELECT id FROM payments WHERE provider='click' AND provider_transaction_id=? AND id!=?",
+            (click_trans_id, payment_id),
+        ).fetchone()
+        if duplicate_transaction:
+            return click_error(-4, "Transaction already processed")
 
         if payment_status in ("held", "released"):
             return jsonify({
