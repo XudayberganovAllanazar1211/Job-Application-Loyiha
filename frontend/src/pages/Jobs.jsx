@@ -54,10 +54,6 @@ export default function Jobs() {
     const serviceSearchRef = useRef(null)
     const filterRef = useRef(null)
 
-    // Bajaruvchi uchun tasdiqlash so'rovi oynasini ochish/yopish holati
-    const [activeConfirmJobId, setActiveConfirmJobId] = useState(null)
-    // Bajaruvchi "Yo'q" tugmasini bossa, ekranda chiqadigan admin xabari
-    const [adminContactJobId, setAdminContactJobId] = useState(null)
     const [reportJobId, setReportJobId] = useState(null)
     const [reportReason, setReportReason] = useState("")
     const [reportDetails, setReportDetails] = useState("")
@@ -264,7 +260,25 @@ export default function Jobs() {
             })
             const requested = result?.msg === "ok"
             setNoticeType(requested ? "ok" : "warn")
-            setNotice(requested ? "Yakunlash so'rovi yuborildi. Bajaruvchi tasdiqlashi kutilmoqda." : (result?.msg || "Xato"))
+            setNotice(requested ? "Ishni yakunlash tasdiqlashga yuborildi." : (result?.msg || "Xato"))
+            await load()
+        } finally {
+            setActionJobId(null)
+        }
+    }
+
+    const finishJobWorker = async (jobId) => {
+        if (actionJobId) return
+        setActionJobId(jobId)
+        try {
+            const result = await api("/confirm_finish", {
+                method: "POST",
+                body: { job_id: jobId, choice: "yes" },
+                token
+            })
+            const finished = result?.msg === "ok"
+            setNoticeType(finished ? "ok" : "warn")
+            setNotice(finished ? "Ish yakunlandi. To‘lov bajaruvchiga o‘tkazildi." : (result?.msg || "Xato"))
             await load()
         } finally {
             setActionJobId(null)
@@ -290,51 +304,6 @@ export default function Jobs() {
                 ? "Bajaruvchi bekor qilindi. Ish yana barcha uchun ochiq."
                 : (result?.msg || "Xatolik yuz berdi")
         )
-        load()
-    }
-
-    // Ish bajaruvchi "Yakunlash" tugmasini bosganda tasdiqlash panelini ochish
-    const openConfirmPanel = (jobId) => {
-        setActiveConfirmJobId(jobId)
-    }
-
-    // Tasdiqlash natijasini yuborish (Ha yoki Yo'q)
-    const submitReport = async (job) => {
-        const reportedUserId = String(job.user_id) === String(user?.id) ? job.worker_id : job.user_id
-        const result = await api("/report", { method: "POST", body: { job_id: job.id, reported_user_id: reportedUserId, reason: reportReason, details: reportDetails }, token })
-        if (result?.status === 201) {
-            setNoticeType("ok")
-            setNotice("Shikoyatingiz qabul qilindi. Administratorlar ko‘rib chiqadi.")
-            setReportJobId(null)
-            setReportReason("")
-            setReportDetails("")
-        } else {
-            setNoticeType("warn")
-            setNotice(result?.msg || "Shikoyat yuborilmadi.")
-        }
-    }
-
-    const handleConfirmFinish = async (jobId, choice) => {
-        const result = await api("/confirm_finish", {
-            method: "POST",
-            body: { job_id: jobId, choice },
-            token
-        })
-
-        if (result?.msg === "ok") {
-            setNoticeType("ok")
-            setNotice("Ish muvaffaqiyatli yakunlandi va yopildi")
-            setAdminContactJobId(null)
-            setActiveConfirmJobId(null)
-        } else if (result?.msg === "rejected") {
-            setNoticeType("warn")
-            setNotice("Siz rad etdingiz. Ish o'z joyida faol holatda qoldi.")
-            setAdminContactJobId(jobId)
-            setActiveConfirmJobId(null)
-        } else {
-            setNoticeType("warn")
-            setNotice(result?.msg || "Xatolik yuz berdi")
-        }
         load()
     }
 
@@ -538,36 +507,6 @@ export default function Jobs() {
                                 )}
                             </div>
 
-                            {/* --- IJROCHI TASDIQLASH SINOVI OYNASI --- */}
-                            {isIAccepted && activeConfirmJobId === job.id && (
-                                <div style={{
-                                    background: "rgba(245, 158, 11, 0.1)",
-                                    border: "1px solid rgba(245, 158, 11, 0.3)",
-                                    padding: "14px",
-                                    borderRadius: "8px",
-                                    marginBottom: "14px"
-                                }}>
-                                    <strong style={{ color: "#f59e0b", display: "block", marginBottom: 6 }}>
-                                        Siz ishni bajarib bo'ldingizmi va to'lovni qabul qildingizmi?
-                                    </strong>
-                                    <div style={{ display: "flex", gap: "8px" }}>
-                                        <button className="btn btn-success" style={{ padding: "4px 14px" }} onClick={() => handleConfirmFinish(job.id, "yes")}>
-                                            Ha
-                                        </button>
-                                        <button className="btn btn-warn" style={{ padding: "4px 14px", background: "#ef4444" }} onClick={() => handleConfirmFinish(job.id, "no")}>
-                                            Yo'q
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* --- ADMIN BILAN BOG'LANISH OGOHLANTIRISHI --- */}
-                            {adminContactJobId === job.id && (
-                                <div className="notice warn" style={{ marginBottom: 14, fontSize: 13 }}>
-                                    ⚠️ To‘lov yoki ish bo‘yicha muammo mavjud. Iltimos, administrator bilan bog‘laning.
-                                </div>
-                            )}
-
                             {reportJobId === job.id && canReportParticipant && (
                                 <div className="report-panel">
                                     <strong>{isMyJob ? "Ishchi haqida shikoyat" : "Ish egasi haqida shikoyat"}</strong>
@@ -663,11 +602,12 @@ export default function Jobs() {
                                 )}
 
                                 {/* --- FINISH TUGMASI (Bajaruvchi uchun) --- */}
-                                {isIAccepted && status === "pending_finish" && activeConfirmJobId !== job.id && (
-                                    <button className="btn btn-success" style={{ background: "#f59e0b" }} disabled={actionJobId === job.id} onClick={() => openConfirmPanel(job.id)}>
-                                        Yakunlash
+                                {isIAccepted && status === "pending_finish" && (
+                                    <button className="btn btn-success" disabled={actionJobId === job.id} onClick={() => finishJobWorker(job.id)}>
+                                        {actionJobId === job.id ? "Yakunlanmoqda..." : "Yakunlash"}
                                     </button>
                                 )}
+
                             </div>
                         </article>
                     )
