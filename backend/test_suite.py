@@ -689,6 +689,50 @@ class JobPlatformTestCase(unittest.TestCase):
         self.assertEqual(saved_service.status_code, 200)
         self.assertTrue(saved_service.get_json()["favorited"])
 
+    def test_10c_portfolio_and_public_profile_flow(self):
+        login = self.client.post(
+            "/login",
+            json={"username": "tester_worker", "password": "Password123!"}
+        )
+        self.assertEqual(login.status_code, 200)
+        token = login.get_json()["token"]
+
+        created = self.client.post(
+            "/portfolio",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "title": "FinJob Demo Project",
+                "description": "A marketplace prototype built with Flask and React.",
+                "url": "https://example.com/finjob-demo"
+            }
+        )
+        self.assertEqual(created.status_code, 201)
+        item_id = created.get_json()["id"]
+
+        portfolio = self.client.get(
+            "/portfolio",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        self.assertEqual(portfolio.status_code, 200)
+        self.assertTrue(any(item["id"] == item_id for item in portfolio.get_json()))
+
+        public = self.client.get(
+            "/profiles/tester_worker",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        self.assertEqual(public.status_code, 200)
+        public_data = public.get_json()
+        self.assertIn("portfolio", public_data)
+        self.assertTrue(any(item["id"] == item_id for item in public_data["portfolio"]))
+        self.assertIn("success_rate", public_data)
+        self.assertIn("reviews_count", public_data)
+
+        deleted = self.client.delete(
+            f"/portfolio/{item_id}",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        self.assertEqual(deleted.status_code, 200)
+
     def test_10_logout_invalidates_token(self):
         res = self.client.post(
             "/login",
