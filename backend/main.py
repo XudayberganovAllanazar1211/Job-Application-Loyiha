@@ -1317,6 +1317,13 @@ def send_code():
 
     code = str(secrets.randbelow(900000) + 100000)
     email_key = email
+    now_dt = datetime.datetime.now()
+    expired_keys = [key for key, value in pending_verifications.items() if now_dt > value.get("expiry", now_dt)]
+    for key in expired_keys:
+        pending_verifications.pop(key, None)
+    if email_key not in pending_verifications and len(pending_verifications) >= 5000:
+        return jsonify({"msg": "Tasdiqlash xizmatida vaqtinchalik yuklama yuqori. Keyinroq qayta urinib ko‘ring."}), 503
+
     pending_verifications[email_key] = {
         "code": code,
         "attempts": 0,
