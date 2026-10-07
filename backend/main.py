@@ -616,6 +616,32 @@ def create_notification(user_id, notification_type, title, message, link=""):
     ).close()
 
 
+def notify_matching_users(job_id, job_title, creator_id):
+    service_rows = db.q(
+        """SELECT DISTINCT s.name
+           FROM job_services js
+           JOIN services s ON s.id = js.service_id
+           WHERE js.job_id=? AND s.name IS NOT NULL AND TRIM(s.name)!=''""",
+        (job_id,),
+    ).fetchall()
+    service_names = [str(row[0]).strip() for row in service_rows if row[0]]
+    job = db.q("SELECT custom_service FROM jobs WHERE id=?", (job_id,)).fetchone()
+    if job and job[0]:
+        service_names.extend([item.strip() for item in str(job[0]).split(",") if item.strip()])
+    if not service_names:
+        return
+    normalized_services = [item.casefold() for item in service_names]
+    users = db.q("SELECT id, skills FROM users WHERE id!=? AND skills IS NOT NULL AND TRIM(skills)!=''", (creator_id,)).fetchall()
+    for user_id, skills in users:
+        user_skills = [item.strip().casefold() for item in str(skills).replace(";", ",").replace("\\n", ",").split(",") if item.strip()]
+        matched = any(
+            skill == service or (len(skill) >= 3 and len(service) >= 3 and (skill in service or service in skill))
+            for skill in user_skills for service in normalized_services
+        )
+        if matched:
+            create_notification(user_id, "matching_job", "Sizga mos yangi ish", f"Sizning sohalaringizga mos yangi ish yaratildi: {job_title}", "/jobs")
+
+
 @app.route("/notifications")
 @auth
 def get_notifications():
@@ -1333,6 +1359,7 @@ def add_job():
         )
         result.close()
 
+    notify_matching_users(job_id, title, request.uid)
     return jsonify({"msg": "ok"})
 
 
@@ -1458,7 +1485,7 @@ def accept():
     except (TypeError, ValueError):
         return jsonify({"msg": "Ish identifikatori noto‘g‘ri"}), 400
 
-    job = db.q("SELECT user_id, status, worker_id FROM jobs WHERE id=?", (job_id,)).fetchone()
+    job = db.q("SELECT user_id, status, worker_id, title FROM jobs WHERE id=?", (job_id,)).fetchone()
     if not job:
         return jsonify({"msg": "Ish topilmadi"}), 404
     if job[0] == request.uid:
@@ -1478,6 +1505,13 @@ def accept():
     if updated != 1:
         return jsonify({"msg": "Ushbu ish allaqachon boshqa foydalanuvchi tomonidan qabul qilingan!"}), 409
 
+    create_notification(
+        job[0],
+        "job_accepted",
+        "Ishingiz qabul qilindi",
+        f"Siz yaratgan «{job[3]}» nomli ishni bajaruvchi qabul qildi.",
+        "/jobs",
+    )
     return jsonify({"msg": "ok"})
 
 
@@ -1573,12 +1607,12 @@ def confirm_finish():
     except (TypeError, ValueError):
         return jsonify({"msg": "Ish identifikatori noto‘g‘ri"}), 400
 
-    job = db.q("SELECT worker_id, status FROM jobs WHERE id=?", (job_id,)).fetchone()
+    job = db.q("SELECT user_id, worker_id, status, title FROM jobs WHERE id=?", (job_id,)).fetchone()
     if not job:
         return jsonify({"msg": "Ish topilmadi"}), 404
-    if job[0] != request.uid:
+    if job[1] != request.uid:
         return jsonify({"msg": "Ruxsat berilmadi"}), 403
-    if job[1] != "pending_finish":
+    if job[2] != "pending_finish":
         return jsonify({"msg": "Bu ish hozir tasdiqlashni kutmayapti"}), 400
     if choice not in ("yes", "no"):
         return jsonify({"msg": "Tanlov faqat ha yoki yo‘q bo‘lishi mumkin"}), 400
@@ -1587,6 +1621,13 @@ def confirm_finish():
         now_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         result = db.q("UPDATE jobs SET status='finished', finished_at=? WHERE id=?", (now_time, job_id))
         result.close()
+        create_notification(
+            job[0],
+            "job_finished",
+            "Ishingiz yakunlandi",
+            f"Sizning «{job[3]}» nomli ishingiz ishchi tomonidan yakunlandi.",
+            "/jobs",
+        )
         return jsonify({"msg": "ok", "status": "finished"})
 
     result = db.q(
