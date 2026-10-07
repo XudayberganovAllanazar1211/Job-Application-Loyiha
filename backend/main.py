@@ -1441,7 +1441,7 @@ def get_jobs():
                     WHERE js.job_id = j.id),
                    COALESCE(NULLIF(s.name, ''), j.custom_service)
                ) as service_name,
-               j.created_at
+               j.created_at, j.owner_finished, j.worker_finished
         FROM jobs j
         LEFT JOIN users u ON j.worker_id = u.id
         LEFT JOIN services s ON j.service_id = s.id
@@ -1474,6 +1474,8 @@ def get_jobs():
                 "service_id",
                 "service_name",
                 "created_at",
+                "owner_finished",
+                "worker_finished",
             ],
         )
     )
@@ -1497,6 +1499,7 @@ def get_job_detail(job_id):
                    COALESCE(NULLIF(s.name, ''), j.custom_service)
                ) as service_name,
                j.created_at,
+               j.owner_finished, j.worker_finished,
                c.first_name as creator_first, c.last_name as creator_last, c.username as creator_username
         FROM jobs j
         LEFT JOIN users u ON j.worker_id = u.id
@@ -1527,9 +1530,11 @@ def get_job_detail(job_id):
         "service_id": r[12],
         "service_name": r[13],
         "created_at": r[14],
-        "creator_first": r[15],
-        "creator_last": r[16],
-        "creator_username": r[17],
+        "owner_finished": r[15],
+        "worker_finished": r[16],
+        "creator_first": r[17],
+        "creator_last": r[18],
+        "creator_username": r[19],
     })
 
 
