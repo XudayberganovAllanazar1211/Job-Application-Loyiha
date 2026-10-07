@@ -159,6 +159,21 @@ export default function Payments() {
                                 Bu vaqtinchalik dummy/test to‘lov. To‘lov darhol ishchiga berilmaydi: mablag‘ FinJob escrowida waiting holatida turadi va ish ikki tomon tomonidan yakunlangachgina ishchiga o‘tadi. Ishchi almashtirilsa ham shu to‘lov saqlanadi.
                             </div>
 
+                            {payment?.status !== "held" && (
+                                <div className="notice warn" style={{ marginBottom: 16 }}>
+                                    <strong>To‘lovdan oldin muhim:</strong> FinJob platforma komissiyasi <strong>{Number(payment?.commission_percent ?? 10).toLocaleString("uz-UZ")}%</strong>.
+                                    Bu komissiya to‘lov ustiga qo‘shimcha ravishda olinmaydi — ish yakunlanganda to‘lov summasidan ushlab qolinadi.
+                                    {payment?.amount ? (
+                                        <div style={{ marginTop: 8 }}>
+                                            {Number(payment.amount).toLocaleString("uz-UZ")} UZS to‘lovdan{" "}
+                                            {Number(payment?.commission_amount ?? (Number(payment.amount) * Number(payment?.commission_percent ?? 10) / 100)).toLocaleString("uz-UZ")} UZS komissiya,
+                                            bajaruvchiga esa taxminan{" "}
+                                            {Number(payment?.worker_amount ?? (Number(payment.amount) - Number(payment?.commission_amount ?? (Number(payment.amount) * Number(payment?.commission_percent ?? 10) / 100)))).toLocaleString("uz-UZ")} UZS o‘tadi.
+                                        </div>
+                                    ) : null}
+                                </div>
+                            )}
+
                             {payment?.status === "held" ? (
                                 <div className="notice ok" style={{ marginBottom: 16 }}>
                                     To‘lov qabul qilindi. {Number(payment.amount || 0).toLocaleString("uz-UZ")} UZS hozir waiting holatida turibdi. Ish ikki tomon tomonidan yakunlangach pul ishchiga o‘tadi.
