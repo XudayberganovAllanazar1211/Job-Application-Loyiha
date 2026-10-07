@@ -8,6 +8,7 @@ import Chat from "./pages/Chat"
 import Rating from "./pages/Rating"
 import Leaderboard from "./pages/Leaderboard"
 import Profile from "./pages/Profile"
+import PublicProfile from "./pages/PublicProfile"
 import PrivacyPolicy from "./pages/PrivacyPolicy"
 import Terms from "./pages/Terms"
 import CommunityRules from "./pages/CommunityRules"
@@ -47,6 +48,7 @@ export default function App() {
 
             <Route path="/leaderboard" element={<Protected><Leaderboard /></Protected>} />
             <Route path="/profile" element={<Protected><Profile /></Protected>} />
+            <Route path="/profiles/:username" element={<Protected><PublicProfile /></Protected>} />
             <Route path="/admin" element={<Protected><AdminOnly><Admin /></AdminOnly></Protected>} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
