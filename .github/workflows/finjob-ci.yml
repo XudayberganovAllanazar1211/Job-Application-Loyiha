@@ -2,11 +2,10 @@ name: FinJob CI
 
 on:
   push:
-    branches:
-      - finjob-ui-redesign
   pull_request:
     branches:
-      - finjob-ui-redesign
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: read

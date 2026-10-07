@@ -329,10 +329,20 @@ export default function Dashboard() {
                             <input
                                 className="input"
                                 style={{ minWidth: 220 }}
-                                placeholder="Qidirish..."
+                                placeholder="Ishlar ichidan tez qidirish..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                        navigate(search.trim() ? "/jobs?q=" + encodeURIComponent(search.trim()) : "/jobs")
+                                    }
+                                }}
                             />
+                            {search.trim() && (
+                                <button className="btn btn-secondary" onClick={() => navigate("/jobs?q=" + encodeURIComponent(search.trim()))}>
+                                    Kengaytirilgan qidiruv
+                                </button>
+                            )}
                             <button className="btn btn-primary" onClick={() => navigate("/create")}>
                                 Ish yaratish
                             </button>

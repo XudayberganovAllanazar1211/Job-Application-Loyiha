@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import AppLayout from "../components/AppLayout"
 import { api } from "../api"
@@ -34,7 +34,7 @@ function formatTimeAgo(dateString) {
 export default function Jobs() {
     const [jobs, setJobs] = useState([])
     const [services, setServices] = useState([])
-    const [search, setSearch] = useState("")
+    const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get("q") || "")
     const [serviceSearch, setServiceSearch] = useState("")
     const [selectedServices, setSelectedServices] = useState([])
     const [favoriteJobIds, setFavoriteJobIds] = useState([])
@@ -61,6 +61,8 @@ export default function Jobs() {
     const [reportDetails, setReportDetails] = useState("")
     const [pageSize, setPageSize] = useState(10)
     const [currentPage, setCurrentPage] = useState(1)
+    const [sort, setSort] = useState("newest")
+    const [searchMeta, setSearchMeta] = useState({ total: 0, pages: 1 })
     const [selectedJob, setSelectedJob] = useState(null)
     const [jobDetails, setJobDetails] = useState(null)
     const [jobDetailsLoading, setJobDetailsLoading] = useState(false)
@@ -79,18 +81,16 @@ export default function Jobs() {
         [services]
     )
 
-    const load = async () => {
-        setLoading(true)
+    const loadSupportingData = useCallback(async () => {
         try {
-            const [jobResult, serviceResult, profileResult, favoriteResult] = await Promise.all([
-                api("/jobs", { token }),
+            const [serviceResult, profileResult, favoriteResult] = await Promise.all([
                 api("/services", { token }),
                 api("/profile", { token }),
                 api("/favorites?target_type=job", { token })
             ])
 
-            if (Array.isArray(jobResult)) setJobs(jobResult)
             if (Array.isArray(serviceResult)) setServices(serviceResult)
+
             if (Array.isArray(favoriteResult)) {
                 setFavoriteJobIds(
                     favoriteResult
@@ -111,67 +111,127 @@ export default function Jobs() {
             }
         } catch {
             setNoticeType("warn")
-            setNotice("Ma'lumotlarni yuklashda xatolik yuz berdi.")
+            setNotice("Qidiruv uchun qo‘shimcha ma’lumotlarni yuklashda xatolik yuz berdi.")
+        }
+    }, [token])
+
+    const loadJobs = useCallback(async () => {
+        setLoading(true)
+        try {
+            const params = new URLSearchParams()
+            const query = search.trim()
+            if (query) params.set("q", query)
+
+            const serviceIds = selectedServices
+                .map((id) => Number(id))
+                .filter((id) => Number.isFinite(id))
+
+            if (serviceIds.length) params.set("service_ids", serviceIds.join(","))
+            if (minPrice !== "") params.set("min_price", minPrice)
+            if (maxPrice !== "") params.set("max_price", maxPrice)
+            if (timeFilter !== "all") params.set("days", timeFilter)
+            if (locationFilter.trim()) params.set("location", locationFilter.trim())
+            if (savedOnly) params.set("saved_only", "1")
+
+            params.set("sort", sort)
+            params.set("page", String(currentPage))
+            params.set("limit", String(pageSize))
+
+            const result = await api("/jobs/search?" + params.toString(), { token })
+
+            if (result?.ok === false) {
+                setNoticeType("warn")
+                setNotice(result.msg || "Ishlarni qidirishda xatolik yuz berdi.")
+                return
+            }
+
+            setJobs(Array.isArray(result?.items) ? result.items : [])
+
+            if (result?.pagination) {
+                const total = Number(result.pagination.total)
+                const pages = Math.max(1, Number(result.pagination.pages) || 1)
+                const serverPage = Math.max(1, Number(result.pagination.page) || 1)
+                setSearchMeta({
+                    total: Number.isFinite(total) ? total : 0,
+                    pages
+                })
+                if (serverPage !== currentPage) setCurrentPage(serverPage)
+            }
         } finally {
             setLoading(false)
         }
-    }
+    }, [
+        token,
+        search,
+        selectedServices,
+        services,
+        minPrice,
+        maxPrice,
+        timeFilter,
+        locationFilter,
+        savedOnly,
+        sort,
+        currentPage,
+        pageSize
+    ])
 
     useEffect(() => {
-        load()
-    }, [])
+        loadSupportingData()
+    }, [loadSupportingData])
 
-    const availableServices = useMemo(() => {
-        const leafServices = services
-            .filter((service) => !services.some((item) => String(item.parent_id) === String(service.id)))
-            .map((service) => String(service.name).trim())
-            .filter(Boolean)
+    useEffect(() => {
+        const delay = search.trim() ? 300 : 0
+        const timer = setTimeout(loadJobs, delay)
+        return () => clearTimeout(timer)
+    }, [loadJobs, search])
 
-        const jobServices = jobs
-            .flatMap((job) => String(job.service_name || serviceMap[String(job.service_id)] || "").split(","))
-            .map((name) => name.trim())
-            .filter(Boolean)
+    const serviceTreeRows = useMemo(() => {
+        const childrenByParent = new Map()
+        for (const service of services) {
+            const parentKey = service.parent_id == null ? null : String(service.parent_id)
+            if (!childrenByParent.has(parentKey)) childrenByParent.set(parentKey, [])
+            childrenByParent.get(parentKey).push(service)
+        }
 
-        return [...new Set([...leafServices, ...jobServices])]
-            .sort((a, b) => a.localeCompare(b, "uz"))
-    }, [services, jobs, serviceMap])
+        for (const children of childrenByParent.values()) {
+            children.sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "uz"))
+        }
 
-    const matchingServices = useMemo(() => {
+        const rows = []
+        const visited = new Set()
+
+        const walk = (parentId, depth) => {
+            const key = parentId == null ? null : String(parentId)
+            for (const service of childrenByParent.get(key) || []) {
+                const id = String(service.id)
+                if (visited.has(id)) continue
+                visited.add(id)
+                const hasChildren = (childrenByParent.get(id) || []).length > 0
+                rows.push({ service, depth, hasChildren })
+                walk(service.id, depth + 1)
+            }
+        }
+
+        walk(null, 0)
+
+        for (const service of services) {
+            const id = String(service.id)
+            if (visited.has(id)) continue
+            visited.add(id)
+            rows.push({
+                service,
+                depth: 0,
+                hasChildren: (childrenByParent.get(id) || []).length > 0
+            })
+        }
+
         const query = serviceSearch.trim().toLowerCase()
-        return availableServices.filter((service) => {
-            return !selectedServices.includes(service) && (!query || service.toLowerCase().includes(query))
-        }).slice(0, 30)
-    }, [availableServices, serviceSearch, selectedServices])
+        return query
+            ? rows.filter(({ service }) => String(service.name || "").toLowerCase().includes(query)).slice(0, 50)
+            : rows
+    }, [services, serviceSearch])
 
-    const filtered = useMemo(() => {
-        const query = search.trim().toLowerCase()
-        const locationQuery = locationFilter.trim().toLowerCase()
-        const min = minPrice === "" ? null : Number(minPrice)
-        const max = maxPrice === "" ? null : Number(maxPrice)
-        const now = Date.now()
-        const timeLimits = { today: 1, three_days: 3, week: 7, month: 30 }
-
-        return jobs.filter((job) => {
-            const text = `${job.title || ""} ${job.description || ""} ${job.location || ""}`.toLowerCase()
-            const jobServices = String(job.service_name || serviceMap[String(job.service_id)] || "")
-                .split(",")
-                .map((name) => name.trim())
-                .filter(Boolean)
-
-            const price = Number(job.price)
-            const priceMatches = (min === null || (!Number.isNaN(price) && price >= min)) && (max === null || (!Number.isNaN(price) && price <= max))
-            const locationMatches = !locationQuery || String(job.location || "").toLowerCase().includes(locationQuery)
-            const days = timeLimits[timeFilter]
-            const created = new Date(String(job.created_at || "").replace(" ", "T")).getTime()
-            const timeMatches = !days || (!Number.isNaN(created) && created <= now && now - created <= days * 24 * 60 * 60 * 1000)
-            const textMatches = !query || text.includes(query)
-            const serviceMatches = !selectedServices.length || selectedServices.some((service) => jobServices.includes(service))
-            const savedMatches = !savedOnly || favoriteJobIds.includes(Number(job.id))
-
-            return textMatches && serviceMatches && priceMatches && timeMatches && locationMatches && savedMatches
-        })
-    }, [jobs, search, selectedServices, serviceMap, minPrice, maxPrice, timeFilter, locationFilter, savedOnly, favoriteJobIds])
-
+    const filtered = jobs
     const recommendationData = useMemo(() => {
         const normalizedSkills = profileSkills.map((skill) => skill.toLowerCase().trim()).filter(Boolean)
         const scored = filtered.map((job) => {
@@ -182,6 +242,7 @@ export default function Jobs() {
             const jobText = (job.title || "") + " " + (job.description || "") + " " + jobServices.join(" ")
             let score = 0
             const matchedSkills = []
+
             normalizedSkills.forEach((skill) => {
                 if (jobServices.some((service) => service === skill)) {
                     score += 100
@@ -194,24 +255,21 @@ export default function Jobs() {
                     matchedSkills.push(skill)
                 }
             })
+
             return { job, score, matchedSkills }
         })
-        scored.sort((a, b) => b.score - a.score || new Date(String(b.job.created_at || "").replace(" ", "T")).getTime() - new Date(String(a.job.created_at || "").replace(" ", "T")).getTime())
+
         return {
-            recommended: scored.filter((item) => item.score > 0).slice(0, 6),
-            ranked: scored
+            recommended: scored.filter((item) => item.score > 0).sort((a, b) => b.score - a.score).slice(0, 6),
+            ranked: filtered.map((job) => ({ job }))
         }
     }, [filtered, profileSkills, serviceMap])
 
-    const totalPages = Math.max(1, Math.ceil(recommendationData.ranked.length / pageSize))
-    const pagedRanked = useMemo(() => {
-        const start = (currentPage - 1) * pageSize
-        return recommendationData.ranked.slice(start, start + pageSize)
-    }, [recommendationData.ranked, currentPage, pageSize])
-
+    const totalPages = Math.max(1, Number(searchMeta.pages) || 1)
+    const pagedRanked = recommendationData.ranked
     useEffect(() => {
         setCurrentPage(1)
-    }, [search, selectedServices, minPrice, maxPrice, timeFilter, locationFilter, savedOnly, pageSize])
+    }, [search, selectedServices, minPrice, maxPrice, timeFilter, locationFilter, savedOnly, pageSize, sort])
 
     useEffect(() => {
         if (currentPage > totalPages) setCurrentPage(totalPages)
@@ -291,13 +349,20 @@ export default function Jobs() {
 
 
     useEffect(() => {
-        if (!selectedJob?.id && pagedRanked.length > 0) {
-            setSelectedJob(pagedRanked[0].job)
+        if (!jobs.length) {
+            setSelectedJob(null)
+            setJobDetails(null)
+            return
         }
-    }, [pagedRanked, selectedJob?.id])
+
+        if (!selectedJob?.id || !jobs.some((job) => String(job.id) === String(selectedJob.id))) {
+            setSelectedJob(jobs[0])
+            setJobDetails(null)
+        }
+    }, [jobs, selectedJob?.id])
 
     const addServiceFilter = (service) => {
-        setSelectedServices([...selectedServices, service])
+        setSelectedServices([...selectedServices, String(service)])
         setServiceSearch("")
         setShowServiceMenu(true)
     }
@@ -371,7 +436,7 @@ export default function Jobs() {
                         ? "Siz ishni yakunladingiz. Ikkinchi tomonning ham «Yakunlash» tugmasini bosishini kuting."
                         : (result?.msg || "Xato")
             )
-            await load()
+            await loadJobs()
         } finally {
             setActionJobId(null)
         }
@@ -396,7 +461,7 @@ export default function Jobs() {
                         ? "Siz ishni yakunladingiz. Ikkinchi tomonning ham «Yakunlash» tugmasini bosishini kuting."
                         : "Ishni yakunlashda xatolik yuz berdi."
             )
-            await load()
+            await loadJobs()
         } finally {
             setActionJobId(null)
         }
@@ -421,7 +486,7 @@ export default function Jobs() {
                 ? "Bajaruvchi bekor qilindi. Ish yana barcha uchun ochiq."
                 : (result?.msg || "Xatolik yuz berdi")
         )
-        load()
+        loadJobs()
     }
 
     const submitReport = async (job) => {
@@ -535,7 +600,7 @@ export default function Jobs() {
                 setProposalModalExisting(null)
                 const refreshed = await api(`/jobs/${jobId}/proposals`, { token })
                 setProposals(Array.isArray(refreshed) ? refreshed : [])
-                await load()
+                await loadJobs()
             } else {
                 setNoticeType("warn")
                 setNotice(result?.msg || "Taklif yuborilmadi.")
@@ -560,7 +625,7 @@ export default function Jobs() {
             setNotice(result?.msg || "Taklif yangilandi.")
             const refreshed = await api(`/jobs/${proposal.job_id}/proposals`, { token })
             setProposals(Array.isArray(refreshed) ? refreshed : [])
-            await load()
+            await loadJobs()
         } else {
             setNoticeType("warn")
             setNotice(result?.msg || "Taklifni yangilab bo‘lmadi.")
@@ -581,7 +646,7 @@ export default function Jobs() {
             setNotice(result?.msg || "Taklif bekor qilindi.")
             const refreshed = await api(`/jobs/${proposal.job_id}/proposals`, { token })
             setProposals(Array.isArray(refreshed) ? refreshed : [])
-            await load()
+            await loadJobs()
         } else {
             setNoticeType("warn")
             setNotice(result?.msg || "Taklifni bekor qilib bo‘lmadi.")
@@ -613,7 +678,7 @@ export default function Jobs() {
                 <div className="section-toolbar" style={{ marginBottom: 0 }}>
                     <div className="page-head">
                         <h2 style={{ margin: 0 }}>Mavjud ishlar</h2>
-                        <p className="muted" style={{ margin: 0 }}>Ishlarni qidirish, filtrlash va boshqarish bo‘limi.</p>
+                        <p className="muted" style={{ margin: 0 }}>Server tomonda tez qidirish, kategoriya bo‘yicha kashf qilish va natijalarni saralash.</p>
                     </div>
                     <div className="actions jobs-toolbar">
                         <input className="input jobs-search-input" placeholder="Ish qidirish..." value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -626,19 +691,33 @@ export default function Jobs() {
                                 <div className="jobs-service-menu">
                                     {selectedServices.length > 0 && (
                                         <div className="jobs-selected-services">
-                                            {selectedServices.map((service) => (
-                                                <button type="button" className="jobs-selected-chip" key={service} onClick={() => removeServiceFilter(service)}>{service} ×</button>
+                                            {selectedServices.map((serviceId) => (
+                                                <button type="button" className="jobs-selected-chip" key={serviceId} onClick={() => removeServiceFilter(serviceId)}>
+                                                    {serviceMap[String(serviceId)] || "Xizmat"} ×
+                                                </button>
                                             ))}
                                             <button type="button" className="jobs-clear-services" onClick={clearServiceFilters}>Tozalash</button>
                                         </div>
                                     )}
-                                    <div className="jobs-service-results">
-                                        {matchingServices.map((service) => (
-                                            <button type="button" className="jobs-service-option" key={service} onClick={() => addServiceFilter(service)}>
-                                                <span>{service}</span><span>+</span>
-                                            </button>
-                                        ))}
-                                        {!matchingServices.length && <div className="jobs-service-empty">Mos soha topilmadi.</div>}
+                                    <div className="jobs-service-results jobs-service-tree-results">
+                                        {serviceTreeRows.map(({ service, depth, hasChildren }) => {
+                                            const selected = selectedServices.includes(String(service.id))
+                                            return (
+                                                <div className="jobs-service-tree-row" key={service.id}>
+                                                    <span className="jobs-service-tree-indent" style={{ width: depth * 16 }} />
+                                                    <button
+                                                        type="button"
+                                                        className={"jobs-service-option" + (selected ? " selected" : "")}
+                                                        onClick={() => addServiceFilter(String(service.id))}
+                                                        title={hasChildren ? "Kategoriya va uning barcha quyi xizmatlarini qidirish" : "Shu xizmat bo‘yicha qidirish"}
+                                                    >
+                                                        <span>{service.name}</span>
+                                                        <span>{selected ? "✓" : "+"}</span>
+                                                    </button>
+                                                </div>
+                                            )
+                                        })}
+                                        {!serviceTreeRows.length && <div className="jobs-service-empty">Mos soha topilmadi.</div>}
                                     </div>
                                 </div>
                             )}
@@ -662,6 +741,17 @@ export default function Jobs() {
                                             </label>
                                         </label>
                                         <label>
+                                            <span>Tartiblash</span>
+                                            <select className="input" value={sort} onChange={(e) => setSort(e.target.value)}>
+                                                <option value="newest">Eng yangi</option>
+                                                <option value="relevance">Moslik bo‘yicha</option>
+                                                <option value="price_asc">Narx: arzonidan</option>
+                                                <option value="price_desc">Narx: qimmatidan</option>
+                                                <option value="proposals">Takliflar ko‘pligi</option>
+                                                <option value="oldest">Eng eski</option>
+                                            </select>
+                                        </label>
+                                        <label>
                                             <span>Vaqt</span>
                                             <select className="input" value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}>
                                                 <option value="all">Barchasi</option>
@@ -676,12 +766,12 @@ export default function Jobs() {
                                 </div>
                             )}
                         </div>
-                        <button className="btn btn-secondary" onClick={load} disabled={loading}>{loading ? "Yangilanmoqda..." : "Yangilash"}</button>
+                        <button className="btn btn-secondary" onClick={loadJobs} disabled={loading}>{loading ? "Yangilanmoqda..." : "Yangilash"}</button>
                         <button className="btn btn-primary" onClick={() => navigate("/create")}>Ish yaratish</button>
                     </div>
                 </div>
                 <div className="jobs-filter-note">
-                    <span><strong>{filtered.length}</strong> ta ish ko‘rsatilmoqda</span>
+                    <span><strong>{searchMeta.total}</strong> ta ish topildi</span>
                     {activeFilterCount > 0 && <span className="jobs-active-filter-label">{activeFilterCount} ta filtr faol</span>}
                     {hasSearchOrFilters && <button type="button" className="jobs-clear-inline" onClick={clearAllFilters}>Hammasini tozalash</button>}
                 </div>
@@ -848,7 +938,7 @@ export default function Jobs() {
                                             </select>
                                             <span>job</span>
                                         </div>
-                                        <div className="jobs-page-summary">{filtered.length} ta ish • {currentPage} / {totalPages} sahifa</div>
+                                        <div className="jobs-page-summary">{searchMeta.total} ta ish • {currentPage} / {totalPages} sahifa</div>
                                         <div className="jobs-page-controls">
                                             <button className="btn btn-secondary" disabled={currentPage === 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}>‹</button>
                                             <input className="input jobs-page-number" type="number" min="1" max={totalPages} value={currentPage} aria-label="Sahifa raqami" onChange={(e) => { const page = Number(e.target.value); if (Number.isFinite(page)) setCurrentPage(Math.min(totalPages, Math.max(1, page))) }} />

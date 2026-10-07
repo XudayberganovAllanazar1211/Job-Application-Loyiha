@@ -410,6 +410,12 @@ class DB:
             )
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_admin_audit_created ON admin_audit_log(created_at DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status_created ON jobs(status,created_at DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_price ON jobs(price)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_location ON jobs(location)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_job_services_service_job ON job_services(service_id,job_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_job_proposals_job_status ON job_proposals(job_id,status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_favorites_user_target ON favorites(user_id,target_type,target_id)")
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS user_blocks(
@@ -2390,6 +2396,287 @@ def add_job():
 
     notify_matching_users(job_id, title, request.uid)
     return jsonify({"msg": "ok"})
+
+
+@app.route("/jobs/search")
+@auth
+def search_jobs():
+    block_response = enforce_block("full")
+    if block_response:
+        return block_response
+
+    query = str(request.args.get("q", "")).strip()
+    if len(query) > 120:
+        return jsonify({"msg": "Qidiruv so‘rovi 120 belgidan oshmasligi kerak"}), 400
+
+    location = str(request.args.get("location", "")).strip()
+    if len(location) > 120:
+        return jsonify({"msg": "Joylashuv qidiruvi 120 belgidan oshmasligi kerak"}), 400
+
+    try:
+        page = int(request.args.get("page", "1"))
+        limit = int(request.args.get("limit", request.args.get("per_page", "10")))
+    except (TypeError, ValueError):
+        return jsonify({"msg": "Sahifa parametrlari noto‘g‘ri"}), 400
+
+    if page < 1:
+        return jsonify({"msg": "Sahifa raqami 1 dan kichik bo‘lishi mumkin emas"}), 400
+    if limit < 1 or limit > 50:
+        return jsonify({"msg": "Bir sahifada 1 dan 50 tagacha ish ko‘rsatish mumkin"}), 400
+
+    def parse_price(value, label):
+        if value is None or str(value).strip() == "":
+            return None, None
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None, (jsonify({"msg": f"{label} narx noto‘g‘ri"}), 400)
+        if not math.isfinite(number) or number < 0 or number > 100000000000:
+            return None, (jsonify({"msg": f"{label} narx noto‘g‘ri"}), 400)
+        return number, None
+
+    min_price, min_error = parse_price(request.args.get("min_price"), "Minimal")
+    if min_error:
+        return min_error
+    max_price, max_error = parse_price(request.args.get("max_price"), "Maksimal")
+    if max_error:
+        return max_error
+    if min_price is not None and max_price is not None and min_price > max_price:
+        return jsonify({"msg": "Minimal narx maksimal narxdan katta bo‘lishi mumkin emas"}), 400
+
+    days_raw = str(request.args.get("days", "")).strip().lower()
+    day_options = {"today": 1, "three_days": 3, "week": 7, "month": 30}
+    if days_raw not in ("", *day_options.keys()):
+        return jsonify({"msg": "Vaqt filtri noto‘g‘ri"}), 400
+
+    sort = str(request.args.get("sort", "newest")).strip().lower()
+    allowed_sorts = {"newest", "oldest", "price_asc", "price_desc", "proposals", "relevance"}
+    if sort not in allowed_sorts:
+        return jsonify({"msg": "Saralash turi noto‘g‘ri"}), 400
+    if sort == "relevance" and not query:
+        sort = "newest"
+
+    saved_only = str(request.args.get("saved_only", "0")).strip().lower() in {"1", "true", "yes"}
+
+    raw_service_ids = str(request.args.get("service_ids", "")).strip()
+    if not raw_service_ids:
+        raw_service_ids = ",".join(str(value) for value in request.args.getlist("service_id"))
+    requested_service_ids = []
+    for value in raw_service_ids.split(","):
+        value = value.strip()
+        if not value:
+            continue
+        try:
+            service_id = int(value)
+        except (TypeError, ValueError):
+            return jsonify({"msg": "Xizmat filtri noto‘g‘ri"}), 400
+        if service_id not in requested_service_ids:
+            requested_service_ids.append(service_id)
+
+    if len(requested_service_ids) > 20:
+        return jsonify({"msg": "Ko‘pi bilan 20 ta xizmat bo‘yicha qidirish mumkin"}), 400
+
+    service_rows = db.q("SELECT id,parent_id FROM services").fetchall()
+    service_children = {}
+    existing_service_ids = set()
+    for service_id, parent_id in service_rows:
+        existing_service_ids.add(int(service_id))
+        parent_key = None if parent_id is None else int(parent_id)
+        service_children.setdefault(parent_key, []).append(int(service_id))
+
+    expanded_service_ids = {service_id for service_id in requested_service_ids if service_id in existing_service_ids}
+    pending_services = list(expanded_service_ids)
+    while pending_services:
+        parent_id = pending_services.pop()
+        for child_id in service_children.get(parent_id, []):
+            if child_id not in expanded_service_ids:
+                expanded_service_ids.add(child_id)
+                pending_services.append(child_id)
+
+    where = [
+        """(
+            j.status = 'active'
+            OR (
+                j.status IN ('payment_pending','accepted','pending_finish','finished')
+                AND (j.user_id = ? OR j.worker_id = ?)
+            )
+        )"""
+    ]
+    params = [request.uid, request.uid]
+
+    if query:
+        like = f"%{query.casefold()}%"
+        where.append(
+            """(
+                LOWER(COALESCE(j.title,'')) LIKE ?
+                OR LOWER(COALESCE(j.description,'')) LIKE ?
+                OR LOWER(COALESCE(j.location,'')) LIKE ?
+                OR LOWER(COALESCE(j.custom_service,'')) LIKE ?
+                OR LOWER(COALESCE(c.first_name,'')) LIKE ?
+                OR LOWER(COALESCE(c.last_name,'')) LIKE ?
+                OR LOWER(COALESCE(c.username,'')) LIKE ?
+                OR EXISTS (
+                    SELECT 1
+                    FROM job_services jsq
+                    LEFT JOIN services ssq ON ssq.id = jsq.service_id
+                    WHERE jsq.job_id = j.id
+                      AND LOWER(COALESCE(ssq.name,jsq.custom_service,'')) LIKE ?
+                )
+            )"""
+        )
+        params.extend([like] * 8)
+
+    if location:
+        where.append("LOWER(COALESCE(j.location,'')) LIKE ?")
+        params.append(f"%{location.casefold()}%")
+
+    if expanded_service_ids:
+        placeholders = ",".join("?" for _ in sorted(expanded_service_ids))
+        where.append(
+            f"""(
+                j.service_id IN ({placeholders})
+                OR EXISTS (
+                    SELECT 1
+                    FROM job_services jsf
+                    WHERE jsf.job_id = j.id AND jsf.service_id IN ({placeholders})
+                )
+            )"""
+        )
+        values = sorted(expanded_service_ids)
+        params.extend(values)
+        params.extend(values)
+    elif requested_service_ids:
+        where.append("1=0")
+
+    if min_price is not None:
+        where.append("COALESCE(j.agreed_price,j.price) >= ?")
+        params.append(min_price)
+    if max_price is not None:
+        where.append("COALESCE(j.agreed_price,j.price) <= ?")
+        params.append(max_price)
+    if days_raw:
+        cutoff = datetime.datetime.now() - datetime.timedelta(days=day_options[days_raw])
+        where.append("j.created_at >= ?")
+        params.append(cutoff.strftime("%Y-%m-%d %H:%M:%S"))
+    if saved_only:
+        where.append(
+            """EXISTS (
+                SELECT 1
+                FROM favorites fav
+                WHERE fav.user_id = ?
+                  AND fav.target_type = 'job'
+                  AND fav.target_id = j.id
+            )"""
+        )
+        params.append(request.uid)
+
+    where_sql = " AND ".join(where)
+
+    total_row = db.q(
+        f"""SELECT COUNT(*)
+            FROM jobs j
+            LEFT JOIN users c ON c.id = j.user_id
+            WHERE {where_sql}""",
+        tuple(params),
+    ).fetchone()
+    total = int(total_row[0] if total_row else 0)
+    total_pages = max(1, math.ceil(total / limit))
+    page = min(page, total_pages)
+    offset = (page - 1) * limit
+
+    order_sql = {
+        "newest": "j.created_at DESC, j.id DESC",
+        "oldest": "j.created_at ASC, j.id ASC",
+        "price_asc": "COALESCE(j.agreed_price,j.price) ASC, j.id DESC",
+        "price_desc": "COALESCE(j.agreed_price,j.price) DESC, j.id DESC",
+        "proposals": "(SELECT COUNT(*) FROM job_proposals jp_sort WHERE jp_sort.job_id=j.id AND jp_sort.status='pending') DESC, j.created_at DESC, j.id DESC",
+        "relevance": """(
+            CASE
+                WHEN LOWER(COALESCE(j.title,'')) LIKE ? THEN 100
+                WHEN LOWER(COALESCE(j.custom_service,'')) LIKE ? THEN 80
+                WHEN LOWER(COALESCE(j.description,'')) LIKE ? THEN 60
+                WHEN LOWER(COALESCE(j.location,'')) LIKE ? THEN 30
+                ELSE 0
+            END
+        ) DESC, j.created_at DESC, j.id DESC""",
+    }[sort]
+
+    order_params = []
+    if sort == "relevance":
+        like = f"%{query.casefold()}%"
+        order_params = [like, like, like, like]
+
+    select_favorite_param = [request.uid]
+    query_params = select_favorite_param + list(params) + order_params + [limit, offset]
+    result = db.q(
+        f"""
+        SELECT
+            j.id, j.title, COALESCE(j.agreed_price,j.price) AS price, j.currency, j.location, j.status,
+            j.user_id, j.worker_id,
+            w.first_name, w.last_name, w.username,
+            j.description, j.service_id,
+            (SELECT COUNT(*) FROM job_proposals jp WHERE jp.job_id=j.id AND jp.status='pending') AS proposal_count,
+            COALESCE(
+                (
+                    SELECT GROUP_CONCAT(
+                        CASE WHEN js.service_id IS NOT NULL THEN ss.name ELSE js.custom_service END,
+                        ', '
+                    )
+                    FROM job_services js
+                    LEFT JOIN services ss ON ss.id=js.service_id
+                    WHERE js.job_id=j.id
+                ),
+                COALESCE(NULLIF(s.name,''),j.custom_service)
+            ) AS service_name,
+            j.created_at, j.owner_finished, j.worker_finished,
+            c.first_name AS creator_first, c.last_name AS creator_last, c.username AS creator_username,
+            CASE WHEN EXISTS (
+                SELECT 1
+                FROM favorites fav2
+                WHERE fav2.user_id = ? AND fav2.target_type='job' AND fav2.target_id=j.id
+            ) THEN 1 ELSE 0 END AS is_favorite
+        FROM jobs j
+        LEFT JOIN users w ON w.id=j.worker_id
+        LEFT JOIN users c ON c.id=j.user_id
+        LEFT JOIN services s ON s.id=j.service_id
+        WHERE {where_sql}
+        ORDER BY {order_sql}
+        LIMIT ? OFFSET ?
+        """,
+        tuple(query_params),
+    ).fetchall()
+
+    items = rows(
+        result,
+        [
+            "id","title","price","currency","location","status","user_id","worker_id",
+            "worker_first","worker_last","worker_username","description","service_id",
+            "proposal_count","service_name","created_at","owner_finished","worker_finished",
+            "creator_first","creator_last","creator_username","is_favorite",
+        ],
+    )
+    return jsonify({
+        "items": items,
+        "pagination": {
+            "page": page,
+            "limit": limit,
+            "total": total,
+            "pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1,
+        },
+        "filters": {
+            "q": query,
+            "location": location,
+            "service_ids": requested_service_ids,
+            "expanded_service_ids": sorted(expanded_service_ids),
+            "min_price": min_price,
+            "max_price": max_price,
+            "days": days_raw or "all",
+            "saved_only": saved_only,
+            "sort": sort,
+        },
+    })
 
 
 @app.route("/jobs")

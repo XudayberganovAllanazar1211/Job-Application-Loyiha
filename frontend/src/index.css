@@ -511,6 +511,12 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .jobs-clear-services:hover{color:#dc2626}
 .jobs-service-results{display:grid}
 .jobs-service-option{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:10px 11px;border:0;border-radius:9px;background:transparent;color:#334155;text-align:left;font:600 12px Manrope,sans-serif;cursor:pointer}
+.jobs-service-tree-results{display:grid;gap:2px}
+.jobs-service-tree-row{display:flex;align-items:center;min-width:0}
+.jobs-service-tree-indent{flex:0 0 auto}
+.jobs-service-tree-row .jobs-service-option{flex:1;min-width:0}
+.jobs-service-tree-row .jobs-service-option.selected{background:#eff6ff;color:#1d4ed8}
+.jobs-service-tree-row .jobs-service-option.selected>span:last-child{color:#2563eb}
 .jobs-service-option:hover{background:#f8fafc;color:#1d4ed8}
 .jobs-service-option>span:last-child{color:#94a3b8;font-size:16px}
 .jobs-service-empty{padding:12px;color:#94a3b8;font-size:12px;text-align:center}
@@ -1724,7 +1730,10 @@ button,input,select,textarea{touch-action:manipulation}
         text-overflow:ellipsis;
         white-space:nowrap;
     }
-    .mobile-menu-button{appearance:none}
+    .mobile-menu-button,.mobile-nav-menu-button{appearance:none;border:0;font:inherit}
+.admin-moderation-modal{max-width:920px}
+.appeal-review-modal,.appeal-modal{max-width:700px}
+.appeal-textarea{min-height:170px;resize:vertical}
     .mobile-menu-backdrop{
         display:block;
         position:fixed;

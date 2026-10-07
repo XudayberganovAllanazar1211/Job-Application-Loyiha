@@ -1213,9 +1213,6 @@ class JobPlatformTestCase(unittest.TestCase):
         self.assertEqual(profile.status_code, 401)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
     def test_12_deep_regression(self):
         def register_user(username, email):
             sent = self.client.post(
@@ -1379,3 +1376,206 @@ if __name__ == "__main__":
         self.assertEqual(self.client.delete(f"/admin/job/{deep_job_id}", headers={"Authorization": f"Bearer {admin_token}"}).status_code, 200)
         self.assertEqual(self.client.delete(f"/admin/job/{chat_job_id}", headers={"Authorization": f"Bearer {admin_token}"}).status_code, 200)
         self.assertEqual(self.client.delete(f"/admin/job/{cleanup_job_id}", headers={"Authorization": f"Bearer {admin_token}"}).status_code, 200)
+
+
+    def test_13_search_discovery(self):
+        admin_login = self.client.post(
+            "/login",
+            json={"username": "tester_creator", "password": "Password123!"},
+        )
+        self.assertEqual(admin_login.status_code, 200)
+        admin_token = admin_login.get_json()["token"]
+        admin_id = main.db.q(
+            "SELECT id FROM users WHERE username=?",
+            ("tester_creator",),
+        ).fetchone()[0]
+
+        parent_cursor = main.db.q(
+            "INSERT INTO services(name,parent_id,created_by) VALUES(?,?,?)",
+            ("P2DISC Programming", None, admin_id),
+        )
+        parent_id = parent_cursor.lastrowid
+        parent_cursor.close()
+        child_cursor = main.db.q(
+            "INSERT INTO services(name,parent_id,created_by) VALUES(?,?,?)",
+            ("P2DISC Backend", parent_id, admin_id),
+        )
+        child_id = child_cursor.lastrowid
+        child_cursor.close()
+
+        services = self.client.get("/services").get_json()
+        other_service_id = next(
+            item["id"]
+            for item in services
+            if item["id"] not in {parent_id, child_id}
+        )
+
+        child_job = self.client.post(
+            "/job",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={
+                "service_ids": [child_id],
+                "title": "P2DISC Child Job",
+                "description": "Backend React discovery target",
+                "price": 450000,
+                "location": "Toshkent Yunusobod",
+            },
+        )
+        self.assertEqual(child_job.status_code, 200)
+
+        other_job = self.client.post(
+            "/job",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={
+                "service_id": other_service_id,
+                "title": "P2DISC Other Job",
+                "description": "General discovery target",
+                "price": 150000,
+                "location": "Samarqand",
+            },
+        )
+        self.assertEqual(other_job.status_code, 200)
+
+        all_search = self.client.get(
+            "/jobs/search?q=P2DISC&limit=5",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        self.assertEqual(all_search.status_code, 200)
+        all_data = all_search.get_json()
+        self.assertEqual(all_data["pagination"]["total"], 2)
+        self.assertEqual(len(all_data["items"]), 2)
+
+        parent_search = self.client.get(
+            f"/jobs/search?service_ids={parent_id}&limit=5",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        self.assertEqual(parent_search.status_code, 200)
+        parent_items = parent_search.get_json()["items"]
+        self.assertEqual(len(parent_items), 1)
+        self.assertEqual(parent_items[0]["title"], "P2DISC Child Job")
+
+        text_search = self.client.get(
+            "/jobs/search?q=Backend%20React&limit=5",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        self.assertEqual(text_search.status_code, 200)
+        self.assertEqual(
+            [item["title"] for item in text_search.get_json()["items"]],
+            ["P2DISC Child Job"],
+        )
+
+        price_search = self.client.get(
+            "/jobs/search?min_price=400000&max_price=500000&limit=5",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        self.assertEqual(price_search.status_code, 200)
+        self.assertEqual(price_search.get_json()["pagination"]["total"], 1)
+
+        location_search = self.client.get(
+            "/jobs/search?location=Yunusobod&limit=5",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        self.assertEqual(location_search.status_code, 200)
+        self.assertEqual(location_search.get_json()["items"][0]["title"], "P2DISC Child Job")
+
+        relevance_search = self.client.get(
+            "/jobs/search?q=P2DISC%20Backend&sort=relevance&limit=5",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        self.assertEqual(relevance_search.status_code, 200)
+        self.assertEqual(relevance_search.get_json()["items"][0]["title"], "P2DISC Child Job")
+
+        sorted_search = self.client.get(
+            "/jobs/search?q=P2DISC&sort=price_desc&limit=5",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        self.assertEqual(sorted_search.status_code, 200)
+        self.assertEqual(
+            [item["title"] for item in sorted_search.get_json()["items"]],
+            ["P2DISC Child Job", "P2DISC Other Job"],
+        )
+
+        first_page = self.client.get(
+            "/jobs/search?q=P2DISC&page=1&limit=1",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        ).get_json()
+        second_page = self.client.get(
+            "/jobs/search?q=P2DISC&page=2&limit=1",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        ).get_json()
+        self.assertEqual(first_page["pagination"]["total"], 2)
+        self.assertEqual(second_page["pagination"]["total"], 2)
+        self.assertEqual(len(first_page["items"]), 1)
+        self.assertEqual(len(second_page["items"]), 1)
+        self.assertNotEqual(first_page["items"][0]["id"], second_page["items"][0]["id"])
+
+        child_job_id = next(
+            item["id"]
+            for item in all_data["items"]
+            if item["title"] == "P2DISC Child Job"
+        )
+        favorite = self.client.post(
+            "/favorites",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"target_type": "job", "target_id": child_job_id},
+        )
+        self.assertEqual(favorite.status_code, 200)
+
+        saved_search = self.client.get(
+            "/jobs/search?q=P2DISC&saved_only=1&limit=5",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        self.assertEqual(saved_search.status_code, 200)
+        saved_data = saved_search.get_json()
+        self.assertEqual(saved_data["pagination"]["total"], 1)
+        self.assertTrue(saved_data["items"][0]["is_favorite"])
+
+        injection = self.client.get(
+            "/jobs/search?q=' OR 1=1 --&limit=5",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        self.assertEqual(injection.status_code, 200)
+        self.assertEqual(injection.get_json()["pagination"]["total"], 0)
+
+        invalid_range = self.client.get(
+            "/jobs/search?min_price=900000&max_price=100000&limit=5",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        self.assertEqual(invalid_range.status_code, 400)
+
+        blocked_user = main.db.q(
+            "SELECT id FROM users WHERE username=?",
+            ("tester_worker",),
+        ).fetchone()[0]
+        full_block = self.client.post(
+            f"/admin/user/{blocked_user}/block",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"block_type": "full", "reason": "Search access test", "duration_minutes": 60},
+        )
+        self.assertEqual(full_block.status_code, 201)
+
+        blocked_search = self.client.get(
+            "/jobs/search?q=P2DISC",
+            headers={"Authorization": f"Bearer " + self.client.post(
+                "/login",
+                json={"username": "tester_worker", "password": "Password123!"},
+            ).get_json()["token"]},
+        )
+        self.assertEqual(blocked_search.status_code, 403)
+        self.assertEqual(blocked_search.get_json()["block_type"], "full")
+
+        self.assertEqual(
+            self.client.patch(
+                f"/admin/block/{full_block.get_json()['block_id']}",
+                headers={"Authorization": f"Bearer {admin_token}"},
+                json={"action": "lift"},
+            ).status_code,
+            200,
+        )
+
+        unauthenticated = self.client.get("/jobs/search?q=P2DISC")
+        self.assertEqual(unauthenticated.status_code, 401)
+
+
+if __name__ == "__main__":
+    unittest.main()
