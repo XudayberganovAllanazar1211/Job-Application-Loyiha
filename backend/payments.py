@@ -587,12 +587,13 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
                FROM users ORDER BY balance DESC, id DESC"""
         ).fetchall()
         platform = db.q(
-            "SELECT balance FROM platform_wallet WHERE id=1"
+            "SELECT balance,COALESCE(escrow_balance,0) FROM platform_wallet WHERE id=1"
         ).fetchone() if db.q(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='platform_wallet'"
         ).fetchone() else None
         return jsonify({
             "platform_balance": float(platform[0]) if platform else 0,
+            "escrow_balance": float(platform[1]) if platform else 0,
             "users": [
                 {"id":x[0],"username":x[1],"first_name":x[2],"last_name":x[3],"balance":float(x[4] or 0)}
                 for x in rows
