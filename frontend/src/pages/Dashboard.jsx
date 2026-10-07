@@ -43,8 +43,6 @@ export default function Dashboard() {
     const user = JSON.parse(localStorage.getItem("user") || localStorage.getItem("foydalanuvchi") || "null")
     const navigate = useNavigate()
 
-    const [activeConfirmJobId, setActiveConfirmJobId] = useState(null)
-    const [adminContactJobId, setAdminContactJobId] = useState(null)
 
     const serviceMap = useMemo(
         () => Object.fromEntries(services.map((service) => [String(service.id), service.name])),
@@ -151,35 +149,6 @@ export default function Dashboard() {
         load()
     }
 
-    // Ish bajaruvchi uchun panelni ochish
-    const openConfirmPanel = (jobId) => {
-        setActiveConfirmJobId(jobId)
-    }
-
-    const handleConfirmFinish = async (jobId, choice) => {
-        const result = await api("/confirm_finish", {
-            method: "POST",
-            body: { job_id: jobId, choice },
-            token
-        })
-
-        if (result?.msg === "ok") {
-            setNoticeType("ok")
-            setNotice("Ish muvaffaqiyatli yakunlandi va yopildi")
-            setAdminContactJobId(null)
-            setActiveConfirmJobId(null)
-        } else if (result?.msg === "rejected") {
-            setNoticeType("warn")
-            setNotice("Siz rad etdingiz. Ish o'z joyida faol holatda qoldi.")
-            setAdminContactJobId(jobId)
-            setActiveConfirmJobId(null)
-        } else {
-            setNoticeType("warn")
-            setNotice(result?.msg || "Xatolik yuz berdi")
-        }
-        load()
-    }
-
     const filtered = useMemo(() => {
         return jobs.filter((job) => {
             const text = `${job.title || ""} ${job.description || ""} ${job.location || ""}`.toLowerCase()
@@ -247,6 +216,7 @@ export default function Dashboard() {
                             const isIAccepted = String(job.worker_id) === String(user?.id)
                             const isParticipant = isMyJob || isIAccepted
                             const canAccept = status === "active" && !isMyJob && job.worker_id == null
+                            const canFinish = status === "accepted" && ((isMyJob && !job.owner_finished) || (isIAccepted && !job.worker_finished))
                             const statusLabel = {
                                 active: "Faol",
                                 accepted: "Qabul qilingan",
@@ -270,36 +240,6 @@ export default function Dashboard() {
                                         <span className="chip job-service-chip">🧩 {job.service_name || serviceMap[String(job.service_id)] || job.service_id || "Noma’lum"}</span>
                                         <span className={`chip status-chip status-${status}`}><span className="status-dot" />{statusLabel}</span>
                                     </div>
-
-                                    {/* --- IJROCHI TASDIQLASH SINOVI OYNASI --- */}
-                                    {isIAccepted && activeConfirmJobId === job.id && (
-                                        <div style={{
-                                            background: "rgba(245, 158, 11, 0.1)",
-                                            border: "1px solid rgba(245, 158, 11, 0.3)",
-                                            padding: "12px",
-                                            borderRadius: "8px",
-                                            marginBottom: "12px"
-                                        }} onClick={(e) => e.stopPropagation()}>
-                                            <strong style={{ color: "#f59e0b", display: "block", marginBottom: 6, fontSize: 13 }}>
-                                                Ishni tugatib, to'lovni qabul qildingizmi?
-                                            </strong>
-                                            <div style={{ display: "flex", gap: "8px" }}>
-                                                <button className="btn btn-success" style={{ padding: "2px 10px", fontSize: 12 }} onClick={() => handleConfirmFinish(job.id, "yes")}>
-                                                    Ha
-                                                </button>
-                                                <button className="btn btn-warn" style={{ padding: "2px 10px", fontSize: 12, background: "#ef4444" }} onClick={() => handleConfirmFinish(job.id, "no")}>
-                                                    Yo'q
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* --- ADMIN BILAN BOG'LANISH OGOHLANTIRISHI --- */}
-                                    {adminContactJobId === job.id && (
-                                        <div className="notice warn" style={{ marginBottom: 12, fontSize: 12 }} onClick={(e) => e.stopPropagation()}>
-                                            ⚠️ Muammo bormi? administrator bilan bog‘laning.
-                                        </div>
-                                    )}
 
                                     <div className="actions">
                                         {isParticipant && (
@@ -359,7 +299,7 @@ export default function Dashboard() {
                                         )}
 
                                         {/* --- FINISH TUGMASI (Ish beruvchi uchun) --- */}
-                                        {isMyJob && status === "accepted" && (
+                                        {isMyJob && canFinish && (
                                             <button
                                                 className="btn btn-success"
                                                 onClick={(e) => {
@@ -372,17 +312,22 @@ export default function Dashboard() {
                                         )}
 
                                         {/* --- FINISH TUGMASI (Bajaruvchi uchun) --- */}
-                                        {isIAccepted && status === "pending_finish" && activeConfirmJobId !== job.id && (
+                                        {isIAccepted && canFinish && (
                                             <button
                                                 className="btn btn-success"
-                                                style={{ background: "#f59e0b" }}
                                                 onClick={(e) => {
                                                     e.stopPropagation()
-                                                    openConfirmPanel(job.id)
+                                                    finishJobSeeker(job)
                                                 }}
                                             >
                                                 Yakunlash
                                             </button>
+                                        )}
+
+                                        {isParticipant && status === "accepted" && (job.owner_finished || job.worker_finished) && (
+                                            <span className="chip">
+                                                ⏳ Ikkinchi tomonning yakunlashini kutmoqda
+                                            </span>
                                         )}
                                     </div>
                                 </article>
