@@ -90,6 +90,22 @@ export default function Admin() {
         }
     }
 
+    const addTestBalance = async (item) => {
+        const value = window.prompt("@" + item.username + " hisobiga qancha test UZS qo‘shilsin?")
+        if (value === null) return
+        const amount = Number(value)
+        if (!Number.isFinite(amount) || amount <= 0) {
+            setNoticeType("warn")
+            setNotice("Musbat summa kiriting.")
+            return
+        }
+        await action(
+            "/admin/wallet/" + item.id,
+            { method: "POST", body: { amount } },
+            "Test balansi qo‘shildi."
+        )
+    }
+
     const deleteUser = async (item) => {
         if (!window.confirm("@"+item.username+" foydalanuvchisini va unga bog'liq ma'lumotlarni o'chirishni tasdiqlaysizmi?")) return
         await action("/admin/user/"+item.id, { method: "DELETE" }, "Foydalanuvchi o'chirildi.")
@@ -186,7 +202,7 @@ export default function Admin() {
                 {data && tab === "users" && (
                     <div className="admin-table-wrap">
                         <table className="admin-table">
-                            <thead><tr><th>ID</th><th>Foydalanuvchi</th><th>Elektron pochta</th><th>Rol</th><th>Baho</th><th>Qo‘shilgan sana</th><th>Amallar</th></tr></thead>
+                            <thead><tr><th>ID</th><th>Foydalanuvchi</th><th>Elektron pochta</th><th>Rol</th><th>Baho</th><th>Test balansi</th><th>Qo‘shilgan sana</th><th>Amallar</th></tr></thead>
                             <tbody>
                                 {data.users.map((item) => (
                                     <tr key={item.id}>
@@ -200,10 +216,14 @@ export default function Admin() {
                                             </select>
                                         </td>
                                         <td>{Number(item.average_rating || 0).toFixed(1)}</td>
+                                        <td><strong>{Number(item.balance || 0).toLocaleString("uz-UZ")} UZS</strong></td>
                                         <td>{item.created_at || "—"}</td>
                                         <td>
                                             <button className="btn btn-secondary admin-small-btn" onClick={() => editFoydalanuvchi(item)}>
                                                 Tahrirlash
+                                            </button>
+                                            <button className="btn btn-secondary admin-small-btn" onClick={() => addTestBalance(item)}>
+                                                + Test pul
                                             </button>
                                             <button className="btn btn-danger admin-small-btn" disabled={item.id === user.id || item.role === "admin"} onClick={() => deleteUser(item)}>
                                                 O'chirish
