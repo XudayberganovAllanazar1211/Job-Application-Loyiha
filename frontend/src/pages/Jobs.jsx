@@ -766,7 +766,7 @@ export default function Jobs() {
                                 </div>
                             )}
                         </div>
-                        <button className="btn btn-secondary" onClick={load} disabled={loading}>{loading ? "Yangilanmoqda..." : "Yangilash"}</button>
+                        <button className="btn btn-secondary" onClick={loadJobs} disabled={loading}>{loading ? "Yangilanmoqda..." : "Yangilash"}</button>
                         <button className="btn btn-primary" onClick={() => navigate("/create")}>Ish yaratish</button>
                     </div>
                 </div>
