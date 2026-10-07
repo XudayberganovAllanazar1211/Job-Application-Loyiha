@@ -636,6 +636,59 @@ class JobPlatformTestCase(unittest.TestCase):
         ).get_json()["balance"]
         self.assertAlmostEqual(balance_after, 500000.0, places=2)
 
+    def test_10b_favorites_flow(self):
+        login = self.client.post(
+            "/login",
+            json={"username": "tester_worker", "password": "Password123!"}
+        )
+        self.assertEqual(login.status_code, 200)
+        token = login.get_json()["token"]
+
+        jobs = self.client.get("/jobs", headers={"Authorization": f"Bearer {token}"}).get_json()
+        active_jobs = [item for item in jobs if item["status"] == "active" and item["user_id"] != main.db.q("SELECT id FROM users WHERE username=?", ("tester_worker",)).fetchone()[0]]
+        self.assertTrue(active_jobs)
+        job_id = active_jobs[0]["id"]
+
+        saved = self.client.post(
+            "/favorites",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"target_type": "job", "target_id": job_id}
+        )
+        self.assertEqual(saved.status_code, 200)
+        self.assertTrue(saved.get_json()["favorited"])
+
+        favorites = self.client.get(
+            "/favorites?target_type=job",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        self.assertEqual(favorites.status_code, 200)
+        self.assertTrue(any(int(item["target_id"]) == job_id for item in favorites.get_json()))
+
+        removed = self.client.delete(
+            "/favorites",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"target_type": "job", "target_id": job_id}
+        )
+        self.assertEqual(removed.status_code, 200)
+        self.assertFalse(removed.get_json()["favorited"])
+
+        owner_id = main.db.q("SELECT user_id FROM jobs WHERE id=?", (job_id,)).fetchone()[0]
+        saved_user = self.client.post(
+            "/favorites",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"target_type": "user", "target_id": owner_id}
+        )
+        self.assertEqual(saved_user.status_code, 200)
+        self.assertTrue(saved_user.get_json()["favorited"])
+
+        saved_service = self.client.post(
+            "/favorites",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"target_type": "service", "target_id": 1}
+        )
+        self.assertEqual(saved_service.status_code, 200)
+        self.assertTrue(saved_service.get_json()["favorited"])
+
     def test_10_logout_invalidates_token(self):
         res = self.client.post(
             "/login",
