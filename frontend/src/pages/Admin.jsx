@@ -15,12 +15,14 @@ export default function Admin() {
     const [serviceParent, setServiceParent] = useState("")
     const [editingUser, setEditingFoydalanuvchi] = useState(null)
     const [userForm, setUserForm] = useState({ username: "", email: "", first_name: "", last_name: "", birthday: "", bio: "", skills: "", password: "" })
+    const [commissionPercent, setCommissionPercent] = useState("10")
 
     const load = async () => {
         const result = await api("/admin/overview", { token })
         const wallet = await api("/admin/wallet/summary", { token })
         if (result?.ok) {
             setData(result)
+            setCommissionPercent(String(result.settings?.commission_percent ?? 10))
             if (wallet?.ok) setWalletSummary(wallet)
             setNotice("")
         } else {
@@ -48,6 +50,21 @@ export default function Admin() {
         setNotice(result?.msg || successMessage)
         await load()
         return true
+    }
+
+    const saveCommission = async (event) => {
+        event.preventDefault()
+        const value = Number(commissionPercent)
+        if (!Number.isFinite(value) || value < 0 || value > 100) {
+            setNoticeType("warn")
+            setNotice("Komissiya 0% dan 100% gacha bo‘lishi kerak.")
+            return
+        }
+        await action(
+            "/admin/settings/commission",
+            { method: "PATCH", body: { commission_percent: value } },
+            "Platforma komissiyasi yangilandi."
+        )
     }
 
     const changeRol = async (item, role) => {
@@ -174,7 +191,8 @@ export default function Admin() {
         ["jobs", "Ishlar"],
         ["services", "Xizmatlar"],
         ["ratings", "Baholar"],
-        ["reports", "Shikoyatlar"]
+        ["reports", "Shikoyatlar"],
+        ["settings", "Sozlamalar"]
     ]
 
     return (
@@ -203,6 +221,41 @@ export default function Admin() {
                 </div>
 
                 {!data && !notice && <div className="muted" style={{ padding: 20 }}>Yuklanmoqda...</div>}
+
+                {data && tab === "settings" && (
+                    <div className="admin-settings-grid">
+                        <div className="card" style={{ margin: 0 }}>
+                            <div className="page-head">
+                                <h2>To‘lov sozlamalari</h2>
+                                <p className="muted">Ish yakunlanganda bajaruvchiga o‘tkaziladigan summadan ushlab qolinadigan platforma komissiyasini boshqaring.</p>
+                            </div>
+                            <form onSubmit={saveCommission} className="grid-2">
+                                <label className="field">
+                                    <span>Platforma komissiyasi (%)</span>
+                                    <input
+                                        className="input"
+                                        type="number"
+                                        min="0"
+                                        max="100"
+                                        step="0.01"
+                                        value={commissionPercent}
+                                        onChange={(event) => setCommissionPercent(event.target.value)}
+                                    />
+                                </label>
+                                <div className="field" style={{ justifyContent: "end" }}>
+                                    <span>Hozirgi qiymat</span>
+                                    <strong style={{ fontSize: 24 }}>{Number(commissionPercent || 0).toLocaleString("uz-UZ")}%</strong>
+                                </div>
+                                <div className="notice" style={{ gridColumn: "1 / -1" }}>
+                                    Bu komissiya to‘lov ustiga qo‘shilmaydi. Foydalanuvchi to‘lovdan oldin komissiya foizi va taxminiy yechiladigan summani ko‘radi.
+                                </div>
+                                <div className="actions" style={{ gridColumn: "1 / -1" }}>
+                                    <button className="btn btn-primary" type="submit">Komissiyani saqlash</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
 
                 {data && tab === "users" && (
                     <div className="admin-table-wrap">
