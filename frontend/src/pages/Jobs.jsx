@@ -645,14 +645,17 @@ export default function Jobs() {
                 </section>
 
                 <aside
-                    className="card"
+                    className="card jobs-detail-panel"
                     style={{
                         minWidth: 0,
                         width: "100%",
                         position: "sticky",
                         top: "var(--sticky-panel-top)",
                         maxHeight: "calc(100vh - var(--sticky-panel-top) - 18px)",
-                        alignSelf: "start"
+                        alignSelf: "start",
+                        overflowY: "auto",
+                        overflowX: "hidden",
+                        overscrollBehavior: "contain"
                     }}
                 >
                     <div className="dashboard-panel-head">
