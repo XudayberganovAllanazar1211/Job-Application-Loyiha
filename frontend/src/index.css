@@ -1566,11 +1566,11 @@ html[data-theme="dark"] .dashboard-job-detail-facts strong{color:#e2e8f0}
 @media(max-width:1100px){.dashboard-workspace{grid-template-columns:minmax(300px,1fr) minmax(280px,.9fr)}.dashboard-workspace>.chat-wrap{grid-column:1/-1;position:static;max-height:none}}
 @media(max-width:700px){.dashboard-workspace{grid-template-columns:1fr}.dashboard-job-details{position:static;max-height:none}.dashboard-workspace>.chat-wrap{grid-column:auto}}
 
-.jobs-workspace{display:grid;grid-template-columns:minmax(0,1fr) 500px;grid-template-rows:auto;gap:20px;align-items:start;width:100%}
-.jobs-list-panel{grid-column:1;grid-row:1;min-width:0;width:100%}
+.jobs-split-layout{display:flex;flex-direction:row;align-items:flex-start;gap:20px;width:100%;flex-wrap:nowrap}
+.jobs-list-panel{flex:1 1 auto;min-width:0;width:auto}
 .jobs-single-column{grid-template-columns:1fr!important}
 .jobs-single-column .job-card{width:100%;min-width:0}
-.jobs-job-details{grid-column:2;grid-row:1;display:grid;gap:14px;position:sticky;top:18px;min-width:0;width:100%;align-self:start}
+.jobs-job-details{flex:0 0 500px;display:grid;gap:14px;position:sticky;top:18px;min-width:0;width:500px;max-width:500px;align-self:flex-start}
 .jobs-job-details .dashboard-job-detail-body{width:100%}
 .jobs-job-details .dashboard-job-detail-section p{white-space:pre-wrap;overflow-wrap:anywhere}
 .jobs-job-details .dashboard-job-detail-facts{grid-template-columns:1fr 1fr}
@@ -1581,6 +1581,11 @@ html[data-theme="dark"] .dashboard-job-detail-facts strong{color:#e2e8f0}
 .jobs-job-details .report-panel{margin-top:12px}
 .jobs-recommendation-grid{grid-template-columns:1fr!important}
 html[data-theme="dark"] .jobs-job-details{background:#111827}
-@media(max-width:700px){
-    .jobs-workspace{grid-template-columns:minmax(0,1fr) 500px}
+@media(max-width:900px){
+    .jobs-split-layout{flex-wrap:wrap}
+    .jobs-list-panel,.jobs-job-details{flex:1 1 100%;width:100%;max-width:none}
+    .jobs-job-details{position:static}
+}
+@media(max-width:600px){
+    .jobs-job-details .dashboard-job-detail-facts{grid-template-columns:1fr}
 }
