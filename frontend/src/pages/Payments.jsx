@@ -9,7 +9,8 @@ function statusLabel(status) {
         paid: "To‘langan",
         failed: "Xatolik",
         refunded: "Qaytarilgan",
-        released: "Yakunlangan"
+        released: "Yakunlangan",
+        held: "Waiting — ish yakunlanishini kutmoqda"
     }[status] || status
 }
 
@@ -103,9 +104,9 @@ export default function Payments() {
         setNotice("")
         const result = await api("/payments/dummy/" + jobId, { method: "POST", token })
         setCreating(false)
-        if (result?.status === "paid") {
+        if (result?.status === "held" || result?.status === "paid") {
             setPayment(result)
-            setNotice("Test to‘lovi muvaffaqiyatli amalga oshdi.")
+            setNotice("To‘lov amalga oshdi va hozircha waiting holatida saqlanmoqda.")
             await loadHistory()
             await loadWallet()
             return
@@ -133,10 +134,16 @@ export default function Payments() {
                     {notice && <div className="notice ok">{notice}</div>}
                     {error && <div className="notice warn">{error}</div>}
 
-                    {payment?.status === "paid" ? (
+                    {payment?.status === "released" ? (
                         <div className="empty-state">
-                            <strong>To‘lov muvaffaqiyatli amalga oshirilgan.</strong>
-                            <span>Ish endi bajarish uchun ochiq.</span>
+                            <strong>To‘lov ishchiga o‘tkazildi.</strong>
+                            <span>Ish ikki tomon tasdig‘i bilan yakunlangan.</span>
+                            <button className="btn btn-primary" onClick={() => navigate("/jobs")}>Ishlarga qaytish</button>
+                        </div>
+                    ) : payment?.status === "refunded" ? (
+                        <div className="empty-state">
+                            <strong>To‘lov qaytarilgan.</strong>
+                            <span>Admin qarori bilan mablag‘ egasining balansiga qaytarilgan.</span>
                             <button className="btn btn-primary" onClick={() => navigate("/jobs")}>Ishlarga qaytish</button>
                         </div>
                     ) : (
@@ -149,7 +156,7 @@ export default function Payments() {
                             </div>
 
                             <div className="notice" style={{ marginBottom: 16 }}>
-                                Bu vaqtinchalik dummy/test to‘lov. Admin sizning hisobingizga test UZS qo‘shishi mumkin. To‘lovda komissiya avtomatik hisoblanadi.
+                                Bu vaqtinchalik dummy/test to‘lov. To‘lov darhol ishchiga berilmaydi: mablag‘ FinJob escrowida waiting holatida turadi va ish ikki tomon tomonidan yakunlangachgina ishchiga o‘tadi. Ishchi almashtirilsa ham shu to‘lov saqlanadi.
                             </div>
 
                             <button className="btn btn-primary" disabled={creating || !payment?.payment_uuid} onClick={dummyPay}>
