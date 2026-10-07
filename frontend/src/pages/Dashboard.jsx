@@ -242,7 +242,7 @@ export default function Dashboard() {
                 </div>
             </div>
 
-            <div className="grid-2">
+            <div className="dashboard-workspace">
                 <section className="card">
                     <div className="topbar" style={{ marginBottom: 16 }}>
                         <div className="page-head">
@@ -457,6 +457,39 @@ export default function Dashboard() {
                         </div>
                     )}
                 </section>
+
+                <aside className="card dashboard-job-details">
+                    <div className="dashboard-panel-head">
+                        <div>
+                            <span className="profile-eyebrow">ISH MA'LUMOTI</span>
+                            <h2>To‘liq ma’lumot</h2>
+                            <p>Tanlangan jobning barcha asosiy ma’lumotlari.</p>
+                        </div>
+                    </div>
+
+                    {selectedJob ? (
+                        <div className="dashboard-job-detail-body">
+                            <div>
+                                <span className="helper">NOMI</span>
+                                <h2 className="dashboard-job-detail-title">{selectedJob.title}</h2>
+                            </div>
+                            <div className="dashboard-job-detail-section">
+                                <span className="helper">TAVSIF</span>
+                                <p>{selectedJob.description || "Tavsif kiritilmagan."}</p>
+                            </div>
+                            <div className="dashboard-job-detail-facts">
+                                <div><span>Narx</span><strong>{selectedJob.price ?? "-"} {selectedJob.currency || "UZS"}</strong></div>
+                                <div><span>Joylashuv</span><strong>{selectedJob.location || "—"}</strong></div>
+                                <div><span>Soha</span><strong>{selectedJob.service_name || serviceMap[String(selectedJob.service_id)] || "Noma’lum"}</strong></div>
+                                <div><span>Yaratilgan</span><strong>{selectedJob.created_at || "—"}</strong></div>
+                                <div><span>Holat</span><strong>{({ active: "Faol", payment_pending: "To‘lov kutilmoqda", accepted: "Qabul qilingan", pending_finish: "Tasdiqlash kutilmoqda", finished: "Yakunlangan" }[String(selectedJob.status || "").toLowerCase()] || selectedJob.status || "—")}</strong></div>
+                                <div><span>Bajaruvchi</span><strong>{selectedJob.worker_id ? (((selectedJob.worker_first || "") + " " + (selectedJob.worker_last || "")).trim() || selectedJob.worker_username) : "Hali qabul qilinmagan"}</strong></div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="empty-state">To‘liq ma’lumotni ko‘rish uchun job tanlang.</div>
+                    )}
+                </aside>
 
                 <aside className="card chat-wrap">
                     <div className="topbar" style={{ marginBottom: 0 }}>
