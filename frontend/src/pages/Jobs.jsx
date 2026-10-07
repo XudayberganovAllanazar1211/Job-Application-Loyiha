@@ -608,6 +608,7 @@ export default function Jobs() {
                                         </button>
                                     ) : "Hali qabul qilinmagan"}
                                 </span>
+                            </div>
                             {reportJobId === job.id && canReportParticipant && (
                                 <div className="report-panel">
                                     <strong>{isMyJob ? "Ishchi haqida shikoyat" : "Ish egasi haqida shikoyat"}</strong>
