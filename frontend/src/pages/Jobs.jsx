@@ -123,9 +123,8 @@ export default function Jobs() {
             if (query) params.set("q", query)
 
             const serviceIds = selectedServices
-                .map((name) => services.find((service) => String(service.name).trim() === name)?.id)
-                .filter((id) => Number.isFinite(Number(id)))
                 .map((id) => Number(id))
+                .filter((id) => Number.isFinite(id))
 
             if (serviceIds.length) params.set("service_ids", serviceIds.join(","))
             if (minPrice !== "") params.set("min_price", minPrice)
@@ -363,7 +362,7 @@ export default function Jobs() {
     }, [jobs, selectedJob?.id])
 
     const addServiceFilter = (service) => {
-        setSelectedServices([...selectedServices, service])
+        setSelectedServices([...selectedServices, String(service)])
         setServiceSearch("")
         setShowServiceMenu(true)
     }
@@ -692,22 +691,24 @@ export default function Jobs() {
                                 <div className="jobs-service-menu">
                                     {selectedServices.length > 0 && (
                                         <div className="jobs-selected-services">
-                                            {selectedServices.map((service) => (
-                                                <button type="button" className="jobs-selected-chip" key={service} onClick={() => removeServiceFilter(service)}>{service} ×</button>
+                                            {selectedServices.map((serviceId) => (
+                                                <button type="button" className="jobs-selected-chip" key={serviceId} onClick={() => removeServiceFilter(serviceId)}>
+                                                    {serviceMap[String(serviceId)] || "Xizmat"} ×
+                                                </button>
                                             ))}
                                             <button type="button" className="jobs-clear-services" onClick={clearServiceFilters}>Tozalash</button>
                                         </div>
                                     )}
                                     <div className="jobs-service-results jobs-service-tree-results">
                                         {serviceTreeRows.map(({ service, depth, hasChildren }) => {
-                                            const selected = selectedServices.includes(String(service.name).trim())
+                                            const selected = selectedServices.includes(String(service.id))
                                             return (
                                                 <div className="jobs-service-tree-row" key={service.id}>
                                                     <span className="jobs-service-tree-indent" style={{ width: depth * 16 }} />
                                                     <button
                                                         type="button"
                                                         className={"jobs-service-option" + (selected ? " selected" : "")}
-                                                        onClick={() => addServiceFilter(String(service.name).trim())}
+                                                        onClick={() => addServiceFilter(String(service.id))}
                                                         title={hasChildren ? "Kategoriya va uning barcha quyi xizmatlarini qidirish" : "Shu xizmat bo‘yicha qidirish"}
                                                     >
                                                         <span>{service.name}</span>
