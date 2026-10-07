@@ -637,6 +637,115 @@ class JobPlatformTestCase(unittest.TestCase):
         ).get_json()["balance"]
         self.assertAlmostEqual(balance_after, 500000.0, places=2)
 
+    def test_09b_chat_attachment_report_and_admin_access(self):
+        owner_login = self.client.post(
+            "/login",
+            json={"username": "tester_creator", "password": "Password123!"}
+        )
+        worker_login = self.client.post(
+            "/login",
+            json={"username": "tester_worker", "password": "Password123!"}
+        )
+        self.assertEqual(owner_login.status_code, 200)
+        self.assertEqual(worker_login.status_code, 200)
+        owner_token = owner_login.get_json()["token"]
+        worker_token = worker_login.get_json()["token"]
+
+        created = self.client.post(
+            "/job",
+            headers={"Authorization": f"Bearer {owner_token}"},
+            json={
+                "service_id": 1,
+                "title": "Chat Attachment Report Check",
+                "description": "Verify reported attachments are visible to admins.",
+                "price": 100000,
+                "location": "Remote"
+            }
+        )
+        self.assertEqual(created.status_code, 200)
+        job_id = [item for item in self.client.get(
+            "/jobs", headers={"Authorization": f"Bearer {owner_token}"}
+        ).get_json() if item["title"] == "Chat Attachment Report Check"][0]["id"]
+
+        accepted = self.client.post(
+            "/accept_job",
+            headers={"Authorization": f"Bearer {worker_token}"},
+            json={"job_id": job_id}
+        )
+        self.assertEqual(accepted.status_code, 200)
+
+        image_data = b"\x89PNG\r\n\x1a\n" + b"FinJob report attachment test"
+        sent = self.client.post(
+            "/message",
+            headers={"Authorization": f"Bearer {worker_token}"},
+            data={
+                "job_id": str(job_id),
+                "receiver_id": str(main.db.q("SELECT user_id FROM jobs WHERE id=?", (job_id,)).fetchone()[0]),
+                "message": "",
+                "file": (BytesIO(image_data), "reported.png"),
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(sent.status_code, 200)
+
+        message = main.db.q(
+            "SELECT id, attachment_url, attachment_name, attachment_type FROM messages WHERE job_id=? ORDER BY id DESC LIMIT 1",
+            (job_id,)
+        ).fetchone()
+        self.assertIsNotNone(message)
+        self.assertTrue(message[1])
+        self.assertEqual(message[2], "reported.png")
+        self.assertEqual(message[3], "image")
+
+        main.db.q(
+            "UPDATE jobs SET status='finished', finished_at=? WHERE id=?",
+            ("2026-10-07 12:00:00", job_id)
+        ).close()
+
+        reported_user_id = self.client.get(
+            "/profile", headers={"Authorization": f"Bearer {worker_token}"}
+        ).get_json()["id"]
+        report = self.client.post(
+            "/report",
+            headers={"Authorization": f"Bearer {owner_token}"},
+            json={
+                "job_id": job_id,
+                "message_id": message[0],
+                "reported_user_id": reported_user_id,
+                "reason": "Nomaqbul kontent",
+                "details": "Rasm biriktirilgan xabar testi."
+            }
+        )
+        self.assertEqual(report.status_code, 201)
+
+        reports = self.client.get(
+            "/admin/overview",
+            headers={"Authorization": f"Bearer {owner_token}"}
+        ).get_json()["reports"]
+        item = [item for item in reports if item["reason"] == "Nomaqbul kontent" and item["message_id"] == message[0]][0]
+        self.assertEqual(item["job_id"], job_id)
+        self.assertEqual(item["attachment_url"], message[1])
+        self.assertEqual(item["attachment_name"], "reported.png")
+        self.assertEqual(item["attachment_type"], "image")
+
+        attachment = self.client.get(
+            f"/admin/report/{item['id']}/attachment",
+            headers={"Authorization": f"Bearer {owner_token}"}
+        )
+        self.assertEqual(attachment.status_code, 200)
+        self.assertEqual(attachment.data, image_data)
+
+        worker_attachment = self.client.get(
+            f"/admin/report/{item['id']}/attachment",
+            headers={"Authorization": f"Bearer {worker_token}"}
+        )
+        self.assertEqual(worker_attachment.status_code, 403)
+
+        main.db.q("DELETE FROM messages WHERE id=?", (message[0],)).close()
+        filepath = os.path.join(main.CHAT_UPLOAD_DIR, message[1].split("/uploads/chat/")[-1])
+        if os.path.exists(filepath):
+            os.remove(filepath)
+
     def test_10b_favorites_flow(self):
         login = self.client.post(
             "/login",
