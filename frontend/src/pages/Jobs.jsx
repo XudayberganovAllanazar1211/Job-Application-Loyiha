@@ -37,6 +37,8 @@ export default function Jobs() {
     const [search, setSearch] = useState("")
     const [serviceSearch, setServiceSearch] = useState("")
     const [selectedServices, setSelectedServices] = useState([])
+    const [favoriteJobIds, setFavoriteJobIds] = useState([])
+    const [savedOnly, setSavedOnly] = useState(false)
     const [showServiceMenu, setShowServiceMenu] = useState(false)
     const [showFilters, setShowFilters] = useState(false)
     const [minPrice, setMinPrice] = useState("")
@@ -78,14 +80,23 @@ export default function Jobs() {
     const load = async () => {
         setLoading(true)
         try {
-            const [jobResult, serviceResult, profileResult] = await Promise.all([
+            const [jobResult, serviceResult, profileResult, favoriteResult] = await Promise.all([
                 api("/jobs", { token }),
                 api("/services", { token }),
-                api("/profile", { token })
+                api("/profile", { token }),
+                api("/favorites?target_type=job", { token })
             ])
 
             if (Array.isArray(jobResult)) setJobs(jobResult)
             if (Array.isArray(serviceResult)) setServices(serviceResult)
+            if (Array.isArray(favoriteResult)) {
+                setFavoriteJobIds(
+                    favoriteResult
+                        .filter((item) => item.target_type === "job")
+                        .map((item) => Number(item.target_id))
+                        .filter((id) => Number.isFinite(id))
+                )
+            }
 
             if (profileResult?.id) {
                 localStorage.setItem("user", JSON.stringify(profileResult))
@@ -153,10 +164,11 @@ export default function Jobs() {
             const timeMatches = !days || (!Number.isNaN(created) && created <= now && now - created <= days * 24 * 60 * 60 * 1000)
             const textMatches = !query || text.includes(query)
             const serviceMatches = !selectedServices.length || selectedServices.some((service) => jobServices.includes(service))
+            const savedMatches = !savedOnly || favoriteJobIds.includes(Number(job.id))
 
-            return textMatches && serviceMatches && priceMatches && timeMatches && locationMatches
+            return textMatches && serviceMatches && priceMatches && timeMatches && locationMatches && savedMatches
         })
-    }, [jobs, search, selectedServices, serviceMap, minPrice, maxPrice, timeFilter, locationFilter])
+    }, [jobs, search, selectedServices, serviceMap, minPrice, maxPrice, timeFilter, locationFilter, savedOnly, favoriteJobIds])
 
     const recommendationData = useMemo(() => {
         const normalizedSkills = profileSkills.map((skill) => skill.toLowerCase().trim()).filter(Boolean)
@@ -197,7 +209,7 @@ export default function Jobs() {
 
     useEffect(() => {
         setCurrentPage(1)
-    }, [search, selectedServices, minPrice, maxPrice, timeFilter, locationFilter, pageSize])
+    }, [search, selectedServices, minPrice, maxPrice, timeFilter, locationFilter, savedOnly, pageSize])
 
     useEffect(() => {
         if (currentPage > totalPages) setCurrentPage(totalPages)
@@ -298,6 +310,7 @@ export default function Jobs() {
         setMaxPrice("")
         setTimeFilter("all")
         setLocationFilter("")
+        setSavedOnly(false)
         setShowServiceMenu(false)
         setShowFilters(false)
     }
@@ -313,9 +326,27 @@ export default function Jobs() {
         (minPrice !== "" ? 1 : 0) +
         (maxPrice !== "" ? 1 : 0) +
         (timeFilter !== "all" ? 1 : 0) +
-        (locationFilter.trim() ? 1 : 0)
+        (locationFilter.trim() ? 1 : 0) +
+        (savedOnly ? 1 : 0)
 
     const hasSearchOrFilters = Boolean(search.trim() || serviceSearch.trim() || activeFilterCount)
+    
+    const toggleFavoriteJob = async (jobId) => {
+        const id = Number(jobId)
+        if (!Number.isFinite(id)) return
+        const isFavorite = favoriteJobIds.includes(id)
+        const result = await api("/favorites", {
+            method: isFavorite ? "DELETE" : "POST",
+            token,
+            body: { target_type: "job", target_id: id }
+        })
+        if (!result?.ok) {
+            setNoticeType("warn")
+            setNotice(result?.msg || "Saqlanganlar yangilanmadi.")
+            return
+        }
+        setFavoriteJobIds((current) => isFavorite ? current.filter((item) => item !== id) : [...current, id])
+    }
 
     // Ish beruvchi uchun ishni tugatish so'rovi
     const finishJobSeeker = async (job) => {
@@ -589,6 +620,13 @@ export default function Jobs() {
                                         <label><span>Minimal narx</span><input className="input" type="number" min="0" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} /></label>
                                         <label><span>Maksimal narx</span><input className="input" type="number" min="0" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} /></label>
                                         <label><span>Joylashuv</span><input className="input" placeholder="Masalan: Toshkent" value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)} /></label>
+                                        <label style={{ gridColumn: "1 / -1" }}>
+                                            <span>Saqlangan ishlar</span>
+                                            <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+                                                <input type="checkbox" checked={savedOnly} onChange={(e) => setSavedOnly(e.target.checked)} />
+                                                <span>Faqat ★ bilan saqlangan ishlarni ko‘rsatish</span>
+                                            </label>
+                                        </label>
                                         <label>
                                             <span>Vaqt</span>
                                             <select className="input" value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}>
@@ -683,7 +721,18 @@ export default function Jobs() {
                                             onClick={() => selectJob(job)}
                                             style={{ cursor: "pointer" }}
                                         >
-                                            <h3 className="job-title">{job.title}</h3>
+                                            <div style={{ display: "flex", gap: 10, alignItems: "flex-start", justifyContent: "space-between" }}>
+                                                <h3 className="job-title" style={{ margin: 0 }}>{job.title}</h3>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-secondary"
+                                                    style={{ minWidth: 44, padding: "8px 10px" }}
+                                                    aria-label={favoriteJobIds.includes(Number(job.id)) ? "Saqlangan ishni olib tashlash" : "Ishni saqlash"}
+                                                    onClick={(event) => { event.stopPropagation(); toggleFavoriteJob(job.id) }}
+                                                >
+                                                    {favoriteJobIds.includes(Number(job.id)) ? "★" : "☆"}
+                                                </button>
+                                            </div>
                                             <p className="job-desc">{job.description || "Tavsif kiritilmagan"}</p>
                                             <div className="meta">
                                                 <span className="chip">🕒 {formatTimeAgo(job.created_at)}</span>
@@ -766,7 +815,17 @@ export default function Jobs() {
                         <div className="dashboard-job-detail-body">
                             <div>
                                 <span className="helper">ISH NOMI</span>
-                                <h2 className="dashboard-job-detail-title">{activeJobDetails.title}</h2>
+                                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                                    <h2 className="dashboard-job-detail-title" style={{ marginBottom: 0 }}>{activeJobDetails.title}</h2>
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        onClick={() => toggleFavoriteJob(activeJobDetails.id)}
+                                        aria-label={favoriteJobIds.includes(Number(activeJobDetails.id)) ? "Saqlangan ishni olib tashlash" : "Ishni saqlash"}
+                                    >
+                                        {favoriteJobIds.includes(Number(activeJobDetails.id)) ? "★ Saqlangan" : "☆ Saqlash"}
+                                    </button>
+                                </div>
                             </div>
                             <div className="dashboard-job-detail-section">
                                 <span className="helper">TAVSIF</span>
