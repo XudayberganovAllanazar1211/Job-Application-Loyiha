@@ -20,6 +20,7 @@ export default function Chat() {
     const [otherLastSeen, setOtherLastSeen] = useState("")
     const [otherTyping, setOtherTyping] = useState(false)
     const [otherName, setOtherName] = useState("Foydalanuvchi")
+    const [otherUsername, setOtherUsername] = useState("")
     const bottomRef = useRef(null)
     const typingTimerRef = useRef(null)
 
@@ -81,7 +82,9 @@ export default function Chat() {
             const targetName = jobData.user_id === me?.id
                 ? ([jobData.worker_first, jobData.worker_last].filter(Boolean).join(" ") || jobData.worker_username)
                 : ([jobData.creator_first, jobData.creator_last].filter(Boolean).join(" ") || jobData.creator_username)
+            const targetUsername = jobData.user_id === me?.id ? jobData.worker_username : jobData.creator_username
             if (targetName) setOtherName(targetName)
+            if (targetUsername) setOtherUsername(targetUsername)
             if (targetId && targetId !== "null" && targetId !== "undefined") {
                 setReceiverId(targetId)
             }
@@ -128,7 +131,9 @@ export default function Chat() {
             const targetName = currentJob.user_id === me?.id
                 ? ([currentJob.worker_first, currentJob.worker_last].filter(Boolean).join(" ") || currentJob.worker_username)
                 : ([currentJob.creator_first, currentJob.creator_last].filter(Boolean).join(" ") || currentJob.creator_username)
+            const targetUsername = currentJob.user_id === me?.id ? currentJob.worker_username : currentJob.creator_username
             if (targetName) setOtherName(targetName)
+            if (targetUsername) setOtherUsername(targetUsername)
             if (targetId && targetId !== "null" && targetId !== "undefined") {
                 setReceiverId(targetId)
             }
@@ -178,7 +183,24 @@ export default function Chat() {
                             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                                 <span className="profile-online-dot" style={{ opacity: otherOnline || otherTyping ? 1 : 0.35 }} />
                                 <div>
-                                    <h2 style={{ margin: 0 }}>{otherName}</h2>
+                                    <button
+                                        type="button"
+                                        onClick={() => otherUsername && navigate(`/profile/${otherUsername}`)}
+                                        disabled={!otherUsername}
+                                        style={{
+                                            margin: 0,
+                                            padding: 0,
+                                            border: 0,
+                                            background: "transparent",
+                                            font: "inherit",
+                                            fontWeight: 700,
+                                            color: "inherit",
+                                            cursor: otherUsername ? "pointer" : "default",
+                                            textAlign: "left"
+                                        }}
+                                    >
+                                        {otherName}
+                                    </button>
                                     <p className="muted" style={{ margin: 0 }}>
                                         {otherTyping ? "Yozmoqda..." : otherOnline ? "Online" : otherLastSeen ? `Offline · Oxirgi faollik: ${formatLastSeen(otherLastSeen)}` : "Offline"}
                                     </p>
