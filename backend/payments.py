@@ -690,6 +690,9 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
         except (TypeError,ValueError):
             return click_error(-8, "Invalid parameters")
 
+        if not math.isfinite(amount) or amount <= 0:
+            return click_error(-2, "Incorrect amount")
+
         if service_id != CLICK_SERVICE_ID:
             return click_error(-3, "Service not found")
 
