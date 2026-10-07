@@ -5,6 +5,7 @@ import Dashboard from "./pages/Dashboard"
 import CreateJob from "./pages/CreateJob"
 import Jobs from "./pages/Jobs"
 import Chat from "./pages/Chat"
+import Conversations from "./pages/Conversations"
 import Rating from "./pages/Rating"
 import Leaderboard from "./pages/Leaderboard"
 import Profile from "./pages/Profile"
@@ -42,6 +43,7 @@ export default function App() {
             <Route path="/create" element={<Protected><CreateJob /></Protected>} />
             <Route path="/jobs" element={<Protected><Jobs /></Protected>} />
             <Route path="/chat/:jobId" element={<Protected><Chat /></Protected>} />
+            <Route path="/conversations" element={<Protected><Conversations /></Protected>} />
             <Route path="/rating/:jobId" element={<Protected><Rating /></Protected>} />
             <Route path="/payments" element={<Protected><Payments /></Protected>} />
             <Route path="/payments/job/:jobId" element={<Protected><Payments /></Protected>} />
