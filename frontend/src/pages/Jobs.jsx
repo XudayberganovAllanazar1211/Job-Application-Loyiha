@@ -514,6 +514,7 @@ export default function Jobs() {
                     const canReportParticipant = (isMyJob && job.worker_id != null && ["accepted", "pending_finish", "finished"].includes(status)) || isIAccepted
                     const statusLabel = {
                         active: "Faol",
+                        payment_pending: "To‘lov kutilmoqda",
                         accepted: "Qabul qilingan",
                         pending_finish: "Tasdiqlash kutilmoqda",
                         finished: "Yakunlangan"
@@ -629,10 +630,22 @@ export default function Jobs() {
                                 )}
 
                                 {/* --- SIZ QABUL QILGANSIS CHIP --- */}
+                                {isIAccepted && status === "payment_pending" && (
+                                    <span className="chip job-accepted-chip">
+                                        ⏳ Ish egasining to‘lovi kutilmoqda
+                                    </span>
+                                )}
+
                                 {isIAccepted && status === "accepted" && (
                                     <span className="chip job-accepted-chip">
                                         ✅ Siz qabul qilgansiz
                                     </span>
+                                )}
+
+                                {isMyJob && status === "payment_pending" && (
+                                    <button className="btn btn-primary" onClick={() => navigate("/payments/job/" + job.id)}>
+                                        💳 To‘lovni amalga oshirish
+                                    </button>
                                 )}
 
                                 {/* --- ISHCHINI BEKOR QILISH (Ish egasi uchun) --- */}
