@@ -1565,3 +1565,17 @@ html[data-theme="dark"] .dashboard-job-detail-facts>div{border-color:#334155}
 html[data-theme="dark"] .dashboard-job-detail-facts strong{color:#e2e8f0}
 @media(max-width:1100px){.dashboard-workspace{grid-template-columns:minmax(300px,1fr) minmax(280px,.9fr)}.dashboard-workspace>.chat-wrap{grid-column:1/-1;position:static;max-height:none}}
 @media(max-width:700px){.dashboard-workspace{grid-template-columns:1fr}.dashboard-job-details{position:static;max-height:none}.dashboard-workspace>.chat-wrap{grid-column:auto}}
+
+.jobs-workspace{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(300px,.75fr);gap:14px;align-items:start}
+.jobs-list-panel{min-width:0}
+.jobs-single-column{grid-template-columns:1fr!important}
+.jobs-single-column .job-card{width:100%;min-width:0}
+.jobs-job-details{display:grid;gap:14px;position:sticky;top:18px;max-height:calc(100vh - 36px);overflow:auto}
+.jobs-job-details .dashboard-job-detail-section p{white-space:pre-wrap}
+.jobs-job-details .profile-link-button{font-weight:800}
+.jobs-recommendation-grid{grid-template-columns:1fr!important}
+html[data-theme="dark"] .jobs-job-details{background:#111827}
+@media(max-width:900px){
+    .jobs-workspace{grid-template-columns:1fr}
+    .jobs-job-details{position:static;max-height:none}
+}
