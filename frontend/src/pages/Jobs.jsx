@@ -271,14 +271,14 @@ export default function Jobs() {
         if (actionJobId) return
         setActionJobId(jobId)
         try {
-            const result = await api("/confirm_finish", {
+            const result = await api("/finish_job", {
                 method: "POST",
-                body: { job_id: jobId, choice: "yes" },
+                body: { job_id: jobId },
                 token
             })
             const finished = result?.msg === "ok"
             setNoticeType(finished ? "ok" : "warn")
-            setNotice(finished ? "Ish yakunlandi. To‘lov bajaruvchiga o‘tkazildi." : (result?.msg || "Xato"))
+            setNotice(finished ? "Ish yakunlandi. To‘lov bajaruvchiga o‘tkazildi." : "Siz ishni yakunladingiz. Ikkinchi tomonning ham yakunlashini kuting.")
             await load()
         } finally {
             setActionJobId(null)
@@ -481,6 +481,7 @@ export default function Jobs() {
                     const isParticipant = isMyJob || isIAccepted
                     const canAccept = status === "active" && !isMyJob && job.worker_id == null
                     const canReportParticipant = (isMyJob && job.worker_id != null && ["accepted", "pending_finish", "finished"].includes(status)) || isIAccepted
+                    const canFinish = status === "accepted" && ((isMyJob && !job.owner_finished) || (isIAccepted && !job.worker_finished))
                     const statusLabel = {
                         active: "Faol",
                         payment_pending: "To‘lov kutilmoqda",
@@ -588,7 +589,7 @@ export default function Jobs() {
                                 )}
 
                                 {/* --- ISHCHINI BEKOR QILISH (Ish egasi uchun) --- */}
-                                {isMyJob && status === "accepted" && (
+                                {isMyJob && canFinish && (
                                     <button className="btn btn-warn" onClick={() => cancelWorker(job)}>
                                         Ishchini almashtirish
                                     </button>
@@ -602,7 +603,7 @@ export default function Jobs() {
                                 )}
 
                                 {/* --- FINISH TUGMASI (Bajaruvchi uchun) --- */}
-                                {isIAccepted && status === "pending_finish" && (
+                                {isIAccepted && canFinish && (
                                     <button className="btn btn-success" disabled={actionJobId === job.id} onClick={() => finishJobWorker(job.id)}>
                                         {actionJobId === job.id ? "Yakunlanmoqda..." : "Yakunlash"}
                                     </button>
