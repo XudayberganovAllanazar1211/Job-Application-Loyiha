@@ -8,9 +8,14 @@ class JobPlatformTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.test_db_name = "test_app.db"
+        cls.original_db.db_name = cls.original_db_name
         if os.path.exists(cls.test_db_name):
             os.remove(cls.test_db_name)
-        main.db = DB(cls.test_db_name)
+        cls.original_db = main.db
+        cls.original_db_name = cls.original_db.db_name
+        DB(cls.test_db_name)
+        cls.original_db.db_name = cls.test_db_name
+        main.db = cls.original_db
         app.config["TESTING"] = True
         cls.client = app.test_client()
 
@@ -49,8 +54,7 @@ class JobPlatformTestCase(unittest.TestCase):
         # 3. Verify with correct code
         res_verify = self.client.post("/register/verify", json={"email": email_key, "code": code})
         self.assertEqual(res_verify.status_code, 200)
-        # First user is admin
-        self.assertEqual(res_verify.get_json().get("role"), "admin")
+        self.assertEqual(res_verify.get_json().get("role"), "user")
 
     def test_02_login_and_profile(self):
         # Login with username
@@ -69,7 +73,9 @@ class JobPlatformTestCase(unittest.TestCase):
         prof_data = res_prof.get_json()
         self.assertEqual(prof_data["username"], "tester_creator")
         self.assertEqual(prof_data["email"], "tester_creator@example.com")
-        self.assertEqual(prof_data["role"], "admin")
+        self.assertEqual(prof_data["role"], "user")
+
+        main.db.q("UPDATE users SET role='admin' WHERE username=?", ("tester_creator",)).close()
         self.assertIn("skills", prof_data)
         self.assertIn("bio", prof_data)
 
@@ -224,17 +230,22 @@ class JobPlatformTestCase(unittest.TestCase):
         self.assertEqual(detail["id"], job_id)
         self.assertEqual(detail["worker_id"], worker_id)
 
+        main.db.q("UPDATE users SET balance=10000000 WHERE id=?", (creator_id,)).close()
+        res_pay = self.client.post(f"/payments/dummy/{job_id}", headers={"Authorization": f"Bearer {token_creator}"})
+        self.assertEqual(res_pay.status_code, 200)
+        self.assertEqual(res_pay.get_json()["status"], "held")
+
         # Creator requests finish
         res_fin = self.client.post("/finish_job", headers={"Authorization": f"Bearer {token_creator}"}, json={"job_id": job_id})
         self.assertEqual(res_fin.status_code, 200)
+        self.assertFalse(res_fin.get_json()["finished"])
 
         # Worker confirms finish
-        res_conf = self.client.post("/confirm_finish", headers={"Authorization": f"Bearer {token_worker}"}, json={
-            "job_id": job_id,
-            "choice": "yes"
+        res_conf = self.client.post("/finish_job", headers={"Authorization": f"Bearer {token_worker}"}, json={
+            "job_id": job_id
         })
         self.assertEqual(res_conf.status_code, 200)
-        self.assertEqual(res_conf.get_json()["status"], "finished")
+        self.assertTrue(res_conf.get_json()["finished"])
 
         # Finished jobs remain visible to participants
         creator_jobs = self.client.get(
@@ -295,8 +306,8 @@ class JobPlatformTestCase(unittest.TestCase):
             headers={"Authorization": f"Bearer {token_admin}"},
             json={"name": "Konditsioner Ta'mirlash"}
         )
-        self.assertEqual(res_ok.status_code, 200)
-        self.assertEqual(res_ok.get_json()["msg"], "ok")
+        self.assertEqual(res_ok.status_code, 201)
+        self.assertEqual(res_ok.get_json()["msg"], "Xizmat qo‘shildi.")
 
 if __name__ == "__main__":
     unittest.main()
