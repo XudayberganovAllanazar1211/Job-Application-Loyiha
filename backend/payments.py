@@ -81,9 +81,13 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
         )""")
         conn.execute("""CREATE TABLE IF NOT EXISTS platform_wallet(
             id INTEGER PRIMARY KEY CHECK(id=1),
-            balance REAL NOT NULL DEFAULT 0
+            balance REAL NOT NULL DEFAULT 0,
+            escrow_balance REAL NOT NULL DEFAULT 0
         )""")
-        conn.execute("INSERT OR IGNORE INTO platform_wallet(id,balance) VALUES(1,0)")
+        platform_columns = [row[1] for row in conn.execute("PRAGMA table_info(platform_wallet)").fetchall()]
+        if "escrow_balance" not in platform_columns:
+            conn.execute("ALTER TABLE platform_wallet ADD COLUMN escrow_balance REAL NOT NULL DEFAULT 0")
+        conn.execute("INSERT OR IGNORE INTO platform_wallet(id,balance,escrow_balance) VALUES(1,0,0)")
         conn.commit()
     finally:
         conn.close()
@@ -198,7 +202,8 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
         ).fetchone()
         if not payment:
             return jsonify({"msg": "To‘lov topilmadi"}), 404
-        if request.uid not in (payment[2],payment[3]):
+        current_job = db.q("SELECT user_id,worker_id FROM jobs WHERE id=?", (payment[1],)).fetchone()
+        if not current_job or request.uid not in (current_job[0], current_job[1]):
             return jsonify({"msg": "Ruxsat berilmadi"}), 403
 
         return jsonify({
@@ -241,20 +246,148 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
         ])
 
 
+    def _wallet_tx(cur, user_id, tx_type, amount, balance_after, job_id, description, now):
+        cur.execute(
+            """INSERT INTO wallet_transactions
+               (user_id,type,amount,balance_after,job_id,description,created_at)
+               VALUES(?,?,?,?,?,?,?)""",
+            (user_id, tx_type, amount, balance_after, job_id, description, now),
+        )
+
+    def _commission_percent():
+        try:
+            value = float(os.environ.get("FINJOB_COMMISSION_PERCENT", "10"))
+        except (TypeError, ValueError):
+            value = 10
+        return max(0, min(100, value))
+
+    def release_payment(job_id):
+        job = db.q("SELECT user_id,worker_id,status,price,title FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if not job or not job[1]:
+            return False, "Ish yoki bajaruvchi topilmadi", None
+        payment = db.q(
+            """SELECT id,payment_uuid,payer_id,payee_id,amount,status
+               FROM payments WHERE job_id=? ORDER BY id DESC LIMIT 1""",
+            (job_id,),
+        ).fetchone()
+        if not payment:
+            return False, "Bu ish uchun to‘lov topilmadi", None
+        payment_id,payment_uuid,payer_id,payee_id,amount,status = payment
+        if status == "released":
+            return True, "already_released", {"amount": float(amount)}
+        if status != "held":
+            return False, "To‘lov hali waiting holatida emas", None
+        if payee_id != job[1]:
+            return False, "To‘lovning bajaruvchisi ishdagi hozirgi bajaruvchi bilan mos emas", None
+
+        amount = float(amount)
+        commission = round(amount * _commission_percent() / 100, 2)
+        worker_amount = round(amount - commission, 2)
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+        conn = db.get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE platform_wallet SET escrow_balance=ROUND(escrow_balance-?,2) WHERE id=1 AND escrow_balance>=?",
+                (amount, amount),
+            )
+            if cur.rowcount != 1:
+                raise ValueError("escrow_insufficient")
+            cur.execute(
+                "UPDATE users SET balance=ROUND(COALESCE(balance,0)+?,2) WHERE id=?",
+                (worker_amount, job[1]),
+            )
+            worker_after = cur.execute("SELECT COALESCE(balance,0) FROM users WHERE id=?", (job[1],)).fetchone()[0]
+            cur.execute("UPDATE platform_wallet SET balance=ROUND(balance+?,2) WHERE id=1", (commission,))
+            cur.execute(
+                "UPDATE payments SET status='released',payee_id=?,released_at=?,provider_payload=? WHERE id=? AND status='held'",
+                (job[1], now, json.dumps({"commission": commission, "worker_amount": worker_amount}, ensure_ascii=False), payment_id),
+            )
+            if cur.rowcount != 1:
+                raise ValueError("payment_state_changed")
+            _wallet_tx(cur, job[1], "payment_release", worker_amount, worker_after, job_id, f"«{job[4]}» ishidan yechilgan waiting to‘lovi", now)
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            if str(e) == "escrow_insufficient":
+                return False, "Escrow balansida mablag‘ yetarli emas", None
+            if str(e) == "payment_state_changed":
+                return False, "To‘lov holati o‘zgardi", None
+            raise
+        finally:
+            conn.close()
+
+        create_notification(payer_id, "payment_released", "To‘lov ishchiga o‘tkazildi",
+            f"«{job[4]}» bo‘yicha {amount:,.0f} UZS waiting to‘lovi ish yakunlangani tasdiqlangach ishchiga o‘tkazildi.", "/payments")
+        create_notification(job[1], "payment_received", "To‘lov balansingizga tushdi",
+            f"«{job[4]}» bo‘yicha {worker_amount:,.0f} UZS daromad balansingizga o‘tkazildi.", "/payments")
+        return True, "released", {"amount": amount, "commission": commission, "worker_amount": worker_amount}
+
+    def refund_payment(job_id):
+        job = db.q("SELECT user_id,worker_id,status,price,title FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if not job:
+            return False, "Ish topilmadi", None
+        payment = db.q(
+            """SELECT id,payment_uuid,payer_id,payee_id,amount,status
+               FROM payments WHERE job_id=? ORDER BY id DESC LIMIT 1""",
+            (job_id,),
+        ).fetchone()
+        if not payment:
+            return False, "Bu ish uchun to‘lov topilmadi", None
+        payment_id,payment_uuid,payer_id,payee_id,amount,status = payment
+        if status == "refunded":
+            return True, "already_refunded", {"amount": float(amount)}
+        if status != "held":
+            return False, "Faqat waiting holatidagi to‘lovni refund qilish mumkin", None
+
+        amount = float(amount)
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        conn = db.get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE platform_wallet SET escrow_balance=ROUND(escrow_balance-?,2) WHERE id=1 AND escrow_balance>=?",
+                (amount, amount),
+            )
+            if cur.rowcount != 1:
+                raise ValueError("escrow_insufficient")
+            cur.execute("UPDATE users SET balance=ROUND(COALESCE(balance,0)+?,2) WHERE id=?", (amount, payer_id))
+            payer_after = cur.execute("SELECT COALESCE(balance,0) FROM users WHERE id=?", (payer_id,)).fetchone()[0]
+            cur.execute(
+                "UPDATE payments SET status='refunded',refunded_at=?,provider_payload=? WHERE id=? AND status='held'",
+                (now, json.dumps({"refund": True, "amount": amount}, ensure_ascii=False), payment_id),
+            )
+            if cur.rowcount != 1:
+                raise ValueError("payment_state_changed")
+            _wallet_tx(cur, payer_id, "payment_refund", amount, payer_after, job_id, f"«{job[4]}» bo‘yicha refund", now)
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            if str(e) == "escrow_insufficient":
+                return False, "Escrow balansida yetarli mablag‘ yo‘q", None
+            if str(e) == "payment_state_changed":
+                return False, "To‘lov holati o‘zgardi", None
+            raise
+        finally:
+            conn.close()
+
+        create_notification(payer_id, "payment_refunded", "To‘lov qaytarildi",
+            f"«{job[4]}» bo‘yicha {amount:,.0f} UZS to‘liq refund qilindi.", "/payments")
+        if payee_id:
+            create_notification(payee_id, "payment_refunded", "To‘lov refund qilindi",
+                f"«{job[4]}» bo‘yicha admin qarori sabab waiting to‘lovi qaytarildi.", "/payments")
+        return True, "refunded", {"amount": amount}
+
+    app.config["FINJOB_RELEASE_PAYMENT"] = release_payment
+    app.config["FINJOB_REFUND_PAYMENT"] = refund_payment
+
     @app.route("/payments/dummy/<int:job_id>", methods=["POST"])
     @auth
     def dummy_payment(job_id):
-        commission_percent = float(os.environ.get("FINJOB_COMMISSION_PERCENT", "10"))
-        if commission_percent < 0 or commission_percent > 100:
-            commission_percent = 10
-
-        job = db.q(
-            "SELECT user_id,worker_id,status,price,currency,title FROM jobs WHERE id=?",
-            (job_id,),
-        ).fetchone()
+        job = db.q("SELECT user_id,worker_id,status,price,currency,title FROM jobs WHERE id=?", (job_id,)).fetchone()
         if not job:
             return jsonify({"msg": "Ish topilmadi"}), 404
-
         owner_id, worker_id, job_status, price, currency, title = job
         if owner_id != request.uid:
             return jsonify({"msg": "To‘lovni faqat ish egasi amalga oshirishi mumkin"}), 403
@@ -263,40 +396,29 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
         if float(price) <= 0:
             return jsonify({"msg": "Ish narxi noto‘g‘ri"}), 400
 
-        existing = db.q(
-            "SELECT payment_uuid,status FROM payments WHERE job_id=? AND provider='dummy'",
-            (job_id,),
-        ).fetchone()
-        if existing and existing[1] == "paid":
-            return jsonify({"msg": "already_paid", "status": "paid"})
+        existing = db.q("SELECT payment_uuid,status FROM payments WHERE job_id=? AND provider='dummy'", (job_id,)).fetchone()
+        if existing and existing[1] == "held":
+            return jsonify({"msg": "already_paid", "status": "held", "payment_uuid": existing[0]})
+        if existing and existing[1] in ("released", "refunded"):
+            return jsonify({"msg": "already_processed", "status": existing[1]})
 
         payer_balance = db.q("SELECT COALESCE(balance,0) FROM users WHERE id=?", (owner_id,)).fetchone()
-        if not payer_balance or float(payer_balance[0]) < float(price):
-            return jsonify({
-                "msg": "Hisobingizda mablag‘ yetarli emas",
-                "required": float(price),
-                "balance": float(payer_balance[0]) if payer_balance else 0,
-            }), 400
+        amount = float(price)
+        if not payer_balance or float(payer_balance[0]) < amount:
+            return jsonify({"msg": "Hisobingizda mablag‘ yetarli emas", "required": amount, "balance": float(payer_balance[0]) if payer_balance else 0}), 400
 
         payment_uuid = existing[0] if existing else str(uuid.uuid4())
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        amount = float(price)
-        commission = round(amount * commission_percent / 100, 2)
-        worker_amount = round(amount - commission, 2)
-
         conn = db.get_connection()
         try:
             cur = conn.cursor()
+            payload = json.dumps({"test": True, "escrow": True}, ensure_ascii=False)
             if existing:
                 cur.execute(
                     """UPDATE payments SET payer_id=?,payee_id=?,amount=?,currency='UZS',
-                       status='paid',paid_at=?,provider_payload=?
+                       status='held',paid_at=?,provider_payload=?
                        WHERE payment_uuid=? AND provider='dummy'""",
-                    (
-                        owner_id, worker_id, amount, now,
-                        json.dumps({"test": True, "commission": commission}, ensure_ascii=False),
-                        payment_uuid,
-                    ),
+                    (owner_id, worker_id, amount, now, payload, payment_uuid),
                 )
             else:
                 cur.execute(
@@ -304,37 +426,26 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
                         payment_uuid,job_id,payer_id,payee_id,amount,currency,provider,status,
                         provider_payload,created_at,paid_at
                     ) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
-                    (
-                        payment_uuid,job_id,owner_id,worker_id,amount,"UZS","dummy","paid",
-                        json.dumps({"test": True, "commission": commission}, ensure_ascii=False),
-                        now,now,
-                    ),
+                    (payment_uuid,job_id,owner_id,worker_id,amount,"UZS","dummy","held",payload,now,now),
                 )
-
             cur.execute(
                 "UPDATE users SET balance=ROUND(COALESCE(balance,0)-?,2) WHERE id=? AND COALESCE(balance,0)>=?",
                 (amount, owner_id, amount),
             )
             if cur.rowcount != 1:
                 raise ValueError("insufficient_balance")
-
-            cur.execute(
-                "UPDATE users SET balance=ROUND(COALESCE(balance,0)+?,2) WHERE id=?",
-                (worker_amount, worker_id),
-            )
-
             cur.execute(
                 """CREATE TABLE IF NOT EXISTS platform_wallet(
                     id INTEGER PRIMARY KEY CHECK(id=1),
-                    balance REAL NOT NULL DEFAULT 0
+                    balance REAL NOT NULL DEFAULT 0,
+                    escrow_balance REAL NOT NULL DEFAULT 0
                 )"""
             )
-            cur.execute("INSERT OR IGNORE INTO platform_wallet(id,balance) VALUES(1,0)")
-            cur.execute(
-                "UPDATE platform_wallet SET balance=ROUND(balance+?,2) WHERE id=1",
-                (commission,),
-            )
-
+            platform_columns = [row[1] for row in cur.execute("PRAGMA table_info(platform_wallet)").fetchall()]
+            if "escrow_balance" not in platform_columns:
+                cur.execute("ALTER TABLE platform_wallet ADD COLUMN escrow_balance REAL NOT NULL DEFAULT 0")
+            cur.execute("INSERT OR IGNORE INTO platform_wallet(id,balance,escrow_balance) VALUES(1,0,0)")
+            cur.execute("UPDATE platform_wallet SET escrow_balance=ROUND(escrow_balance+?,2) WHERE id=1", (amount,))
             cur.execute(
                 """CREATE TABLE IF NOT EXISTS wallet_transactions(
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -348,53 +459,47 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
                 )"""
             )
             payer_after = cur.execute("SELECT balance FROM users WHERE id=?", (owner_id,)).fetchone()[0]
-            worker_after = cur.execute("SELECT balance FROM users WHERE id=?", (worker_id,)).fetchone()[0]
-            cur.execute(
-                """INSERT INTO wallet_transactions
-                   (user_id,type,amount,balance_after,job_id,description,created_at)
-                   VALUES(?,?,?,?,?,?,?)""",
-                (owner_id,"payment_debit",-amount,payer_after,job_id,f"«{title}» uchun test to‘lovi",now),
-            )
-            cur.execute(
-                """INSERT INTO wallet_transactions
-                   (user_id,type,amount,balance_after,job_id,description,created_at)
-                   VALUES(?,?,?,?,?,?,?)""",
-                (worker_id,"payment_credit",worker_amount,worker_after,job_id,f"«{title}» ishidan daromad",now),
-            )
-            cur.execute(
-                "UPDATE jobs SET status='accepted' WHERE id=? AND status='payment_pending'",
-                (job_id,),
-            )
+            _wallet_tx(cur, owner_id, "payment_hold", -amount, payer_after, job_id, f"«{title}» uchun waiting to‘lovi", now)
+            cur.execute("UPDATE jobs SET status='accepted' WHERE id=? AND status='payment_pending'", (job_id,))
+            if cur.rowcount != 1:
+                raise ValueError("job_state_changed")
             conn.commit()
         except Exception as e:
             conn.rollback()
             if str(e) == "insufficient_balance":
                 return jsonify({"msg": "Hisobingizda mablag‘ yetarli emas"}), 400
+            if str(e) == "job_state_changed":
+                return jsonify({"msg": "Ish holati o‘zgardi. Qayta urinib ko‘ring"}), 409
             raise
         finally:
             conn.close()
 
-        create_notification(
-            owner_id,"payment_success","Test to‘lovi amalga oshdi",
-            f"«{title}» uchun {amount:,.0f} UZS test to‘lovi yechildi. FinJob komissiyasi: {commission:,.0f} UZS.",
-            "/payments"
-        )
-        create_notification(
-            worker_id,"payment_received","Test to‘lovi qabul qilindi",
-            f"«{title}» uchun {worker_amount:,.0f} UZS balansingizga qo‘shildi.",
-            "/payments"
-        )
-        return jsonify({
-            "msg": "ok",
-            "status": "paid",
-            "payment_uuid": payment_uuid,
-            "amount": amount,
-            "commission": commission,
-            "worker_amount": worker_amount,
-            "currency": "UZS",
-            "provider": "dummy",
-        })
+        create_notification(owner_id, "payment_success", "To‘lov waiting holatiga o‘tdi",
+            f"«{title}» uchun {amount:,.0f} UZS yechildi va ish yakunlanguncha FinJob escrowida saqlanadi.", "/payments")
+        create_notification(worker_id, "payment_held", "To‘lov waiting holatida",
+            f"«{title}» uchun {amount:,.0f} UZS to‘lov qilingan. Ish yakunlangach va tasdiqlangach pul balansingizga o‘tadi.", "/jobs")
+        return jsonify({"msg": "ok", "status": "held", "payment_uuid": payment_uuid, "amount": amount, "currency": "UZS", "provider": "dummy"})
 
+    @app.route("/payments/release/<int:job_id>", methods=["POST"])
+    @auth
+    def release_payment_route(job_id):
+        job = db.q("SELECT user_id,worker_id,status FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if not job or job[1] != request.uid:
+            return jsonify({"msg": "Faqat shu ishning hozirgi ishchisi to‘lovni yakunlay oladi"}), 403
+        if job[2] != "finished":
+            return jsonify({"msg": "Ish hali ikki tomon tomonidan yakunlanmagan"}), 400
+        ok, message, data = release_payment(job_id)
+        if not ok:
+            return jsonify({"msg": message}), 400
+        return jsonify({"msg": "ok", "status": "released", **(data or {})})
+
+    @app.route("/payments/refund/<int:job_id>", methods=["POST"])
+    @admin_required
+    def refund_payment_route(job_id):
+        ok, message, data = refund_payment(job_id)
+        if not ok:
+            return jsonify({"msg": message}), 400
+        return jsonify({"msg": "ok", "status": "refunded", **(data or {})})
 
     @app.route("/wallet")
     @auth
@@ -568,7 +673,7 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
             cursor = conn.cursor()
             cursor.execute(
                 """UPDATE payments SET provider_transaction_id=?,provider_payload=?,
-                   status='paid',paid_at=? WHERE id=? AND status!='paid'""",
+                   status='held',paid_at=? WHERE id=? AND status IN ('pending','paid')""",
                 (click_trans_id,json.dumps(data,ensure_ascii=False),now,payment_id),
             )
             changed = cursor.rowcount
@@ -587,11 +692,11 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
         if changed:
             create_notification(
                 payer_id,"payment_success","To‘lov muvaffaqiyatli amalga oshdi",
-                f"«{payment_uuid}» to‘lovingiz muvaffaqiyatli qabul qilindi.","/payments"
+                f"«{payment_uuid}» to‘lovingiz qabul qilindi va ish yakunlanguncha ushlab turiladi.","/payments"
             )
             create_notification(
                 payee_id,"payment_received","To‘lov qabul qilindi",
-                "Ish bo‘yicha to‘lov muvaffaqiyatli qabul qilindi. Endi ishni bajarishingiz mumkin.","/jobs"
+                "Ish bo‘yicha to‘lov qabul qilindi. Ish yakunlangach va tasdiqlangach pul balansingizga o‘tadi.","/jobs"
             )
 
         return jsonify({
