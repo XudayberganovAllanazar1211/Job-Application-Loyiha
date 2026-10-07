@@ -9,6 +9,7 @@ export default function PublicProfile() {
     const [profile, setProfile] = useState(null)
     const [loading, setLoading] = useState(true)
     const [notice, setNotice] = useState("")
+    const [favorited, setFavorited] = useState(false)
 
     useEffect(() => {
         const load = async () => {
@@ -16,8 +17,11 @@ export default function PublicProfile() {
             const result = await api(`/profiles/${encodeURIComponent(username || "")}`, {
                 token: localStorage.getItem("token") || ""
             })
-            if (result?.id) setProfile(result)
-            else setNotice(result?.msg || "Profilni yuklashda xatolik yuz berdi")
+            if (result?.id) {
+                setProfile(result)
+                const favorites = await api("/favorites?target_type=user", { token: localStorage.getItem("token") || "" })
+                setFavorited(Array.isArray(favorites) && favorites.some((item) => Number(item.target_id) === Number(result.id)))
+            } else setNotice(result?.msg || "Profilni yuklashda xatolik yuz berdi")
             setLoading(false)
         }
         load()
@@ -90,6 +94,21 @@ export default function PublicProfile() {
 
                             <div className="profile-hero-actions">
                                 <span className="profile-status">Ko'rish rejimi</span>
+                                <button
+                                    className="btn btn-secondary"
+                                    type="button"
+                                    onClick={async () => {
+                                        const result = await api("/favorites", {
+                                            method: favorited ? "DELETE" : "POST",
+                                            token: localStorage.getItem("token") || "",
+                                            body: { target_type: "user", target_id: profile.id }
+                                        })
+                                        if (result?.ok) setFavorited((value) => !value)
+                                        else setNotice(result?.msg || "Saqlangan foydalanuvchini yangilab bo‘lmadi.")
+                                    }}
+                                >
+                                    {favorited ? "★ Saqlangan" : "☆ Saqlash"}
+                                </button>
                             </div>
                         </section>
 
@@ -215,6 +234,36 @@ export default function PublicProfile() {
                             </div>
                         </div>
                     </div>
+
+                    <section className="card" style={{ marginTop: 18 }}>
+                        <div className="profile-section-head">
+                            <div>
+                                <span className="profile-eyebrow">PORTFOLIO</span>
+                                <h3 className="section-title">Ish namunalari</h3>
+                            </div>
+                            <span className="profile-count">{Array.isArray(profile.portfolio) ? profile.portfolio.length : 0}</span>
+                        </div>
+                        {Array.isArray(profile.portfolio) && profile.portfolio.length > 0 ? (
+                            <div style={{ display: "grid", gap: 10 }}>
+                                {profile.portfolio.map((item) => (
+                                    <article key={item.id} className="card" style={{ margin: 0 }}>
+                                        <strong>{item.title}</strong>
+                                        {item.description && <p style={{ margin: "6px 0 0" }}>{item.description}</p>}
+                                        {item.url && (
+                                            <a href={item.url} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 8 }}>
+                                                Loyihani ko‘rish →
+                                            </a>
+                                        )}
+                                    </article>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="profile-empty">
+                                <strong>Portfolio hali qo‘shilmagan</strong>
+                                <span>Bu foydalanuvchi hozircha ish namunalari joylamagan.</span>
+                            </div>
+                        )}
+                    </section>
                 )}
             </AppLayout>
         </>
