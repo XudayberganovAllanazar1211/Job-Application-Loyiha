@@ -1730,7 +1730,10 @@ button,input,select,textarea{touch-action:manipulation}
         text-overflow:ellipsis;
         white-space:nowrap;
     }
-    .mobile-menu-button{appearance:none}
+    .mobile-menu-button,.mobile-nav-menu-button{appearance:none;border:0;font:inherit}
+.admin-moderation-modal{max-width:920px}
+.appeal-review-modal,.appeal-modal{max-width:700px}
+.appeal-textarea{min-height:170px;resize:vertical}
     .mobile-menu-backdrop{
         display:block;
         position:fixed;
