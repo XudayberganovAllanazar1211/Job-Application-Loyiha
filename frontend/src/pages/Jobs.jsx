@@ -72,6 +72,7 @@ export default function Jobs() {
     const [proposalMessage, setProposalMessage] = useState("")
     const [proposalActionId, setProposalActionId] = useState(null)
     const [proposalSubmitting, setProposalSubmitting] = useState(false)
+    const [proposalModalLoading, setProposalModalLoading] = useState(false)
 
     const serviceMap = useMemo(
         () => Object.fromEntries(services.map((service) => [String(service.id), service.name])),
@@ -467,16 +468,24 @@ export default function Jobs() {
     }
 
 
-    const openProposalModal = (job) => {
-        const existingProposal = proposals.find(
-            (item) => String(item.worker_id) === String(user?.id) && item.status === "pending"
-        )
+    const openProposalModal = async (job) => {
+        if (!job?.id || String(job.user_id) === String(user?.id) || job.worker_id != null || String(job.status).toLowerCase() !== "active") return
         setProposalModalJob(job)
-        setProposalPrice(String(existingProposal?.price ?? job.price ?? ""))
-        setProposalDeadline(existingProposal?.deadline || "")
-        setProposalMessage(existingProposal?.message || "")
+        setProposalPrice(String(job.price ?? ""))
+        setProposalDeadline("")
+        setProposalMessage("")
+        setProposalModalLoading(true)
+        const result = await api(`/jobs/${job.id}/proposals`, { token })
+        const ownProposal = Array.isArray(result)
+            ? result.find((item) => String(item.worker_id) === String(user?.id) && item.status === "pending")
+            : null
+        if (ownProposal) {
+            setProposalPrice(String(ownProposal.price ?? job.price ?? ""))
+            setProposalDeadline(ownProposal.deadline || "")
+            setProposalMessage(ownProposal.message || "")
+        }
+        setProposalModalLoading(false)
     }
-
     const submitProposal = async (event) => {
         event.preventDefault()
         if (!proposalModalJob || proposalSubmitting) return
@@ -585,7 +594,7 @@ export default function Jobs() {
     const detailIsWorker = String(activeJobDetails?.worker_id) === String(user?.id)
     const detailIsParticipant = detailIsMyJob || detailIsWorker
     const detailCanPropose = detailStatus === "active" && !detailIsMyJob && activeJobDetails?.worker_id == null
-    const myProposal = proposals.find((item) => String(item.worker_id) === String(user?.id))
+    const myProposal = proposals.find((item) => String(item.job_id) === String(activeJobDetails?.id) && String(item.worker_id) === String(user?.id) && item.status === "pending")
     const detailCanFinish = detailStatus === "accepted" && ((detailIsMyJob && !activeJobDetails?.owner_finished) || (detailIsWorker && !activeJobDetails?.worker_finished))
     const detailCanReport = detailIsParticipant && activeJobDetails?.worker_id != null && ["accepted", "pending_finish"].includes(detailStatus)
     const detailStatusLabel = {
@@ -728,6 +737,21 @@ export default function Jobs() {
                                                     <span className="chip">📍 {job.location || "-"}</span>
                                                     <span className="chip">🧩 {job.service_name || serviceMap[String(job.service_id)] || "Noma’lum"}</span>
                                                 </div>
+                                                {String(job.status || "").toLowerCase() === "active" && String(job.user_id) !== String(user?.id) && job.worker_id == null && (
+                                                    <div className="actions" style={{ marginTop: 12 }}>
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-primary"
+                                                            onClick={(event) => {
+                                                                event.stopPropagation()
+                                                                openProposalModal(job)
+                                                            }}
+                                                        >
+                                                            Taklif yuborish
+                                                        </button>
+                                                        {Number(job.proposal_count || 0) > 0 && <span className="muted" style={{ alignSelf: "center" }}>{job.proposal_count} ta taklif mavjud</span>}
+                                                    </div>
+                                                )}
                                                 <div className="job-recommended-skills">Mos sohalar: {matchedSkills.join(", ")}</div>
                                             </article>
                                         ))}
@@ -785,6 +809,24 @@ export default function Jobs() {
                                                     ) : " Hali qabul qilinmagan"}
                                                 </span>
                                             </div>
+
+                                            {String(job.status || "").toLowerCase() === "active" && String(job.user_id) !== String(user?.id) && job.worker_id == null && (
+                                                <div className="actions" style={{ marginTop: 12 }}>
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-primary"
+                                                        onClick={(event) => {
+                                                            event.stopPropagation()
+                                                            openProposalModal(job)
+                                                        }}
+                                                    >
+                                                        Taklif yuborish
+                                                    </button>
+                                                    <span className="muted" style={{ alignSelf: "center" }}>
+                                                        {Number(job.proposal_count || 0) > 0 ? String(job.proposal_count) + " ta taklif mavjud" : "Birinchi taklifni yuboring"}
+                                                    </span>
+                                                </div>
+                                            )}
                                         </article>
                                     ))}
                                     {!pagedRanked.length && (
