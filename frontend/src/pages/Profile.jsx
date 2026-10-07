@@ -1000,7 +1000,7 @@ export default function Profile() {
                                 ref={portfolioFileRef}
                                 className="input"
                                 type="file"
-                                accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp"
+                                accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,application/pdf,image/png,image/jpeg,image/webp,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                                 onChange={(event) => {
                                     const file = event.target.files?.[0] || null
                                     if (!file) {
@@ -1017,7 +1017,7 @@ export default function Profile() {
                                     setNotice("")
                                 }}
                             />
-                            <span className="helper">PDF, PNG, JPG yoki WEBP. Maksimal hajm: 10 MB.</span>
+                            <span className="helper">PDF, DOC, DOCX, PNG, JPG yoki WEBP. Maksimal hajm: 10 MB.</span>
                         </label>
                         <button className="btn btn-primary" type="submit" disabled={portfolioLoading}>
                             {portfolioLoading ? "Saqlanmoqda..." : "Portfolio qo‘shish"}
