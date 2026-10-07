@@ -701,7 +701,7 @@ def create_report():
     if not worker_id or request.uid not in (owner_id, worker_id):
         return jsonify({"msg":"Faqat ish egasi yoki ishchi bir-biridan shikoyat qila oladi"}),403
 
-    if job_status not in ("accepted", "pending_finish", "finished"):
+    if job_status not in ("accepted", "pending_finish"):
         return jsonify({"msg":"Bu ish bo‘yicha hozircha shikoyat qilish mumkin emas"}),400
 
     target_user_id = worker_id if request.uid == owner_id else owner_id
@@ -1127,6 +1127,7 @@ def admin_delete_rating(rating_id):
 def login():
     d = request.json or {}
     username_or_email = d.get("username", "").strip()
+    login_email = username_or_email.lower()
     password = d.get("password", "")
 
     if not username_or_email or not password:
@@ -1136,8 +1137,8 @@ def login():
         return jsonify({"msg": "Parol kamida 8 ta belgidan iborat bo‘lishi kerak"}), 400
 
     u = db.q(
-        "SELECT id, password, role FROM users WHERE username=? OR email=?",
-        (username_or_email, username_or_email),
+        "SELECT id, password, role FROM users WHERE username=? OR lower(email)=?",
+        (username_or_email, login_email),
     ).fetchone()
     if u and check_password_hash(u[1], password):
         user_role = u[2] if len(u) > 2 and u[2] else "user"
@@ -1382,8 +1383,8 @@ def add_job():
     if price <= 0 or price > 100000000000:
         return jsonify({"msg": "Narx 0 dan katta va 100 000 000 000 dan oshmasligi kerak"}), 400
 
-    if currency not in {"UZS", "USD", "EUR"}:
-        return jsonify({"msg": "Valyuta noto‘g‘ri tanlangan"}), 400
+    if currency != "UZS":
+        return jsonify({"msg": "Hozircha FinJob to‘lovlari faqat UZS valyutasida ishlaydi"}), 400
 
     primary_service_id = valid_service_ids[0] if valid_service_ids else None
     custom_service_text = ", ".join(custom_services)
@@ -1975,8 +1976,6 @@ def public_profile(username):
         "username": u[1],
         "first_name": u[2] or "",
         "last_name": u[3] or "",
-        "email": u[4] or "",
-        "birthday": u[5] or "",
         "bio": u[6] or "",
         "skills": u[7] or "",
         "created_at": u[8] or "",
