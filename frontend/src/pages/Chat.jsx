@@ -248,15 +248,13 @@ export default function Chat() {
                                     {message.message && <div>{message.message}</div>}
                                     {message.attachment_url && (
                                         <div style={{ marginTop: message.message ? 8 : 0 }}>
-                                            {message.attachment_type === "image" ? (
-                                                <a href={message.attachment_url} target="_blank" rel="noreferrer">
-                                                    <img src={message.attachment_url} alt={message.attachment_name || "Fayl"} style={{ maxWidth: "260px", maxHeight: "260px", borderRadius: 10, display: "block" }} />
-                                                </a>
-                                            ) : (
-                                                <a href={message.attachment_url} target="_blank" rel="noreferrer" className="btn btn-secondary">
-                                                    📎 {message.attachment_name || "Faylni ochish"}
-                                                </a>
-                                            )}
+                                            <button
+                                                type="button"
+                                                className="btn btn-secondary"
+                                                onClick={() => openAttachment(message.attachment_url)}
+                                            >
+                                                {message.attachment_type === "image" ? "Rasmni ochish" : "Fayl: " + (message.attachment_name || "Faylni ochish")}
+                                            </button>
                                         </div>
                                     )}
                                     {mine && <small className="muted" style={{ display: "block", marginTop: 4 }}>{message.read_at ? "✓✓ Ko‘rildi" : "✓ Yuborildi"}</small>}
