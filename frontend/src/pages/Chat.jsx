@@ -58,8 +58,8 @@ export default function Chat() {
             setJob(jobData)
             const targetId = String(jobData.user_id === me?.id ? jobData.worker_id : jobData.user_id)
             const targetName = jobData.user_id === me?.id
-                ? (jobData.worker_name || jobData.worker_username)
-                : (jobData.user_name || jobData.user_username)
+                ? ([jobData.worker_first, jobData.worker_last].filter(Boolean).join(" ") || jobData.worker_username)
+                : ([jobData.creator_first, jobData.creator_last].filter(Boolean).join(" ") || jobData.creator_username)
             if (targetName) setOtherName(targetName)
             if (targetId && targetId !== "null" && targetId !== "undefined") {
                 setReceiverId(targetId)
@@ -106,8 +106,8 @@ export default function Chat() {
             setJob(currentJob)
             const targetId = String(currentJob.user_id === me?.id ? currentJob.worker_id : currentJob.user_id)
             const targetName = currentJob.user_id === me?.id
-                ? (currentJob.worker_name || currentJob.worker_username)
-                : (currentJob.user_name || currentJob.user_username)
+                ? ([currentJob.worker_first, currentJob.worker_last].filter(Boolean).join(" ") || currentJob.worker_username)
+                : ([currentJob.creator_first, currentJob.creator_last].filter(Boolean).join(" ") || currentJob.creator_username)
             if (targetName) setOtherName(targetName)
             if (targetId && targetId !== "null" && targetId !== "undefined") {
                 setReceiverId(targetId)
