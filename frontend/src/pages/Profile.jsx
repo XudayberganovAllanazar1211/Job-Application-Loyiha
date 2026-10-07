@@ -862,7 +862,6 @@ export default function Profile() {
                             </section>
                         </div>
                     </div>
-                </div>
 
                 <section className="card" style={{ marginTop: 18 }}>
                     <div className="profile-section-head">
@@ -956,6 +955,7 @@ export default function Profile() {
                         </button>
                     </form>
                 </section>
+                </div>
             )}
         </AppLayout>
         {cropImageUrl && (
