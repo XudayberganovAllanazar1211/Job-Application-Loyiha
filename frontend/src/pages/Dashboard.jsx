@@ -121,9 +121,16 @@ export default function Dashboard() {
             body: { job_id: job.id },
             token
         })
-        const requested = result?.msg === "ok"
-        setNoticeType(requested ? "ok" : "warn")
-        setNotice(requested ? "Yakunlash so'rovi yuborildi. Bajaruvchi tasdiqlashi kutilmoqda." : (result?.msg || "Xato"))
+        const waiting = result?.msg === "waiting"
+        const completed = result?.msg === "ok"
+        setNoticeType((waiting || completed) ? "ok" : "warn")
+        setNotice(
+            completed
+                ? "Ish yakunlandi. To‘lov bajaruvchiga o‘tkazildi."
+                : waiting
+                    ? "Siz ishni yakunladingiz. Ikkinchi tomonning ham «Yakunlash» tugmasini bosishini kuting."
+                    : (result?.msg || "Xato")
+        )
         load()
     }
 
@@ -286,7 +293,7 @@ export default function Dashboard() {
                                         )}
 
                                         {/* --- ISHCHINI BEKOR QILISH (Ish beruvchi uchun) --- */}
-                                        {isMyJob && status === "accepted" && (
+                                        {isMyJob && canFinish && (
                                             <button
                                                 className="btn btn-warn"
                                                 onClick={(e) => {
