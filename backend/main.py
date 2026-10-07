@@ -1949,7 +1949,7 @@ def public_profile(username):
         return jsonify({"msg": "Foydalanuvchi nomi kiritilmagan"}), 400
 
     u = db.q(
-        """SELECT id, username, first_name, last_name, bio, skills, created_at,
+        """SELECT id, username, first_name, last_name, email, birthday, bio, skills, created_at,
                   average_rating, role, avatar_url
            FROM users
            WHERE username=?""",
@@ -1970,13 +1970,15 @@ def public_profile(username):
         "username": u[1],
         "first_name": u[2] or "",
         "last_name": u[3] or "",
-        "bio": u[4] or "",
-        "skills": u[5] or "",
-        "created_at": u[6] or "",
+        "email": u[4] or "",
+        "birthday": u[5] or "",
+        "bio": u[6] or "",
+        "skills": u[7] or "",
+        "created_at": u[8] or "",
         "average_rating": avg_rating,
         "avg_rating": avg_rating,
-        "role": u[8] or "user",
-        "avatar_url": u[9] or "",
+        "role": u[10] or "user",
+        "avatar_url": u[11] or "",
         "created_jobs_count": created_jobs_count,
         "completed_jobs_count": completed_jobs_count,
     })
