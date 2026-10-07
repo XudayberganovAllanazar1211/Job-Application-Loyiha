@@ -71,6 +71,7 @@ export default function Jobs() {
     const [proposalDeadline, setProposalDeadline] = useState("")
     const [proposalMessage, setProposalMessage] = useState("")
     const [proposalActionId, setProposalActionId] = useState(null)
+    const [proposalSubmitting, setProposalSubmitting] = useState(false)
 
     const serviceMap = useMemo(
         () => Object.fromEntries(services.map((service) => [String(service.id), service.name])),
@@ -467,15 +468,18 @@ export default function Jobs() {
 
 
     const openProposalModal = (job) => {
+        const existingProposal = proposals.find(
+            (item) => String(item.worker_id) === String(user?.id) && item.status === "pending"
+        )
         setProposalModalJob(job)
-        setProposalPrice(String(job.price || ""))
-        setProposalDeadline("")
-        setProposalMessage("")
+        setProposalPrice(String(existingProposal?.price ?? job.price ?? ""))
+        setProposalDeadline(existingProposal?.deadline || "")
+        setProposalMessage(existingProposal?.message || "")
     }
 
     const submitProposal = async (event) => {
         event.preventDefault()
-        if (!proposalModalJob) return
+        if (!proposalModalJob || proposalSubmitting) return
 
         const price = Number(proposalPrice)
         if (!Number.isFinite(price) || price <= 0) {
@@ -489,26 +493,47 @@ export default function Jobs() {
             return
         }
 
-        const result = await api(`/jobs/${proposalModalJob.id}/proposals`, {
-            method: "POST",
-            token,
-            body: {
-                price,
-                deadline: proposalDeadline.trim(),
-                message: proposalMessage.trim()
-            }
-        })
+        const existingProposal = proposals.find(
+            (item) => String(item.worker_id) === String(user?.id) && item.status === "pending"
+        )
 
-        if (result?.ok) {
-            setNoticeType("ok")
-            setNotice("Taklif muvaffaqiyatli yuborildi.")
-            setProposalModalJob(null)
-            const refreshed = await api(`/jobs/${proposalModalJob.id}/proposals`, { token })
-            setProposals(Array.isArray(refreshed) ? refreshed : [])
-            await load()
-        } else {
-            setNoticeType("warn")
-            setNotice(result?.msg || "Taklif yuborilmadi.")
+        setProposalSubmitting(true)
+        try {
+            const result = existingProposal
+                ? await api(`/proposals/${existingProposal.id}`, {
+                    method: "PATCH",
+                    token,
+                    body: {
+                        action: "edit",
+                        price,
+                        deadline: proposalDeadline.trim(),
+                        message: proposalMessage.trim()
+                    }
+                })
+                : await api(`/jobs/${proposalModalJob.id}/proposals`, {
+                    method: "POST",
+                    token,
+                    body: {
+                        price,
+                        deadline: proposalDeadline.trim(),
+                        message: proposalMessage.trim()
+                    }
+                })
+
+            if (result?.ok) {
+                setNoticeType("ok")
+                setNotice(existingProposal ? "Taklif yangilandi." : "Taklif muvaffaqiyatli yuborildi.")
+                const jobId = proposalModalJob.id
+                setProposalModalJob(null)
+                const refreshed = await api(`/jobs/${jobId}/proposals`, { token })
+                setProposals(Array.isArray(refreshed) ? refreshed : [])
+                await load()
+            } else {
+                setNoticeType("warn")
+                setNotice(result?.msg || "Taklif yuborilmadi.")
+            }
+        } finally {
+            setProposalSubmitting(false)
         }
     }
 
@@ -922,7 +947,7 @@ export default function Jobs() {
                                 <div className="actions" style={{ marginTop: 10 }}>
                                     {detailIsParticipant && <button className="btn btn-secondary" onClick={() => navigate(`/chat/${activeJobDetails.id}`, { state: { job: activeJobDetails } })}>Suhbat</button>}
                                     {detailIsParticipant && detailStatus === "finished" && <button className="btn btn-secondary" onClick={() => navigate(`/rating/${activeJobDetails.id}`, { state: { job: activeJobDetails } })}>Baho</button>}
-                                    {detailCanPropose && <button className="btn btn-primary" onClick={() => openProposalModal(activeJobDetails)}>{myProposal?.status === "pending" ? "Taklifingizni ko‘rish" : "Taklif yuborish"}</button>}
+                                    {detailCanPropose && <button className="btn btn-primary" onClick={() => openProposalModal(activeJobDetails)}>{myProposal?.status === "pending" ? "Taklifni tahrirlash" : "Taklif yuborish"}</button>}
                                     {detailIsMyJob && detailStatus === "payment_pending" && <button className="btn btn-primary" onClick={() => navigate(`/payments/job/${activeJobDetails.id}`)}>💳 To‘lovni amalga oshirish</button>}
                                     {detailCanReport && <button className="btn btn-secondary" onClick={() => setReportJobId(reportJobId === activeJobDetails.id ? null : activeJobDetails.id)}>⚑ Shikoyat</button>}
                                     {detailIsMyJob && detailCanFinish && <button className="btn btn-warn" onClick={() => cancelWorker(activeJobDetails)}>Ishchini almashtirish</button>}
@@ -974,9 +999,9 @@ export default function Jobs() {
                     <div className="card" style={{ width: "min(560px, 100%)", margin: 0, maxHeight: "90vh", overflow: "auto" }}>
                         <div className="section-toolbar">
                             <div className="page-head">
-                                <span className="profile-eyebrow">TAKLIF YUBORISH</span>
+                                <span className="profile-eyebrow">{myProposal?.status === "pending" ? "TAKLIFNI TAHRIRLASH" : "TAKLIF YUBORISH"}</span>
                                 <h2>{proposalModalJob.title}</h2>
-                                <p className="muted">Narxingiz, bajarish muddatingiz va qisqa izohni kiriting.</p>
+                                <p className="muted">{myProposal?.status === "pending" ? "Taklifingizdagi narx, muddat yoki izohni yangilang." : "Narxingiz, bajarish muddatingiz va qisqa izohni kiriting."}</p>
                             </div>
                             <button className="btn btn-secondary" type="button" onClick={() => setProposalModalJob(null)}>×</button>
                         </div>
@@ -996,7 +1021,9 @@ export default function Jobs() {
                             </label>
                             <div className="actions">
                                 <button className="btn btn-secondary" type="button" onClick={() => setProposalModalJob(null)}>Bekor qilish</button>
-                                <button className="btn btn-primary" type="submit">Taklifni yuborish</button>
+                                <button className="btn btn-primary" type="submit" disabled={proposalSubmitting}>
+                                    {proposalSubmitting ? "Saqlanmoqda..." : myProposal?.status === "pending" ? "Taklifni yangilash" : "Taklifni yuborish"}
+                                </button>
                             </div>
                         </form>
                     </div>
