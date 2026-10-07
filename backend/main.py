@@ -936,7 +936,15 @@ def admin_overview():
            ORDER BY r.id DESC"""
     ).fetchall()
 
+    commission_row = db.q(
+        "SELECT value FROM platform_settings WHERE key='commission_percent'"
+    ).fetchone()
+    commission_percent = float(commission_row[0]) if commission_row else 10.0
+
     return jsonify({
+        "settings": {
+            "commission_percent": commission_percent,
+        },
         "stats": {
             "users": len(users),
             "jobs": len(jobs),
@@ -952,6 +960,28 @@ def admin_overview():
         "ratings": rows(ratings, ["id", "job_id", "score", "comment", "created_at", "from_username", "to_username"]),
         "reports": rows(reports, ["id", "reason", "details", "status", "created_at", "reporter_username", "reported_username"]),
     })
+
+
+@app.route("/admin/settings/commission", methods=["PATCH"])
+@admin_required
+def admin_update_commission():
+    d = request.json or {}
+    try:
+        value = float(d.get("commission_percent"))
+    except (TypeError, ValueError):
+        return jsonify({"msg": "Komissiya foizi noto‘g‘ri kiritildi."}), 400
+
+    if not math.isfinite(value) or value < 0 or value > 100:
+        return jsonify({"msg": "Komissiya 0% dan 100% gacha bo‘lishi kerak."}), 400
+
+    value = round(value, 2)
+    db.q(
+        """INSERT INTO platform_settings(key,value) VALUES('commission_percent',?)
+           ON CONFLICT(key) DO UPDATE SET value=excluded.value""",
+        (str(value),)
+    ).close()
+
+    return jsonify({"ok": True, "msg": f"Platforma komissiyasi {value:g}% ga o‘zgartirildi.", "commission_percent": value})
 
 
 @app.route("/admin/user-role", methods=["PATCH"])
