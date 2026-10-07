@@ -510,13 +510,6 @@ export default function Dashboard() {
 
                     {selectedJob ? (
                         <>
-                            <div className="card" style={{ padding: 16, background: "rgba(255,255,255,.03)" }}>
-                                <div className="helper">Tanlangan ish</div>
-                                <div style={{ fontWeight: 800, fontSize: 18, marginTop: 6 }}>{selectedJob.title}</div>
-                                <div className="meta" style={{ marginTop: 10 }}>
-                                    <span className="chip">💰 {selectedJob.price ?? "-"} UZS</span>
-                                    <span className="chip">📍 {selectedJob.location || "-"}</span>
-                                </div>
                             </div>
 
                             <div className="message-list">
