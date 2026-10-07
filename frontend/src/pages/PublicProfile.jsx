@@ -137,6 +137,13 @@ export default function PublicProfile() {
                             <div className="profile-stat card">
                                 <span className="profile-stat-icon">04</span>
                                 <div>
+                                    <div className="stat-label">Muvaffaqiyat darajasi</div>
+                                    <div className="stat-value profile-stat-small">{Number(profile.success_rate || 0).toFixed(0)}%</div>
+                                </div>
+                            </div>
+                            <div className="profile-stat card">
+                                <span className="profile-stat-icon">05</span>
+                                <div>
                                     <div className="stat-label">FinJob'da</div>
                                     <div className="stat-value profile-stat-small">{getMembershipDuration(profile.created_at)}</div>
                                 </div>
