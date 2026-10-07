@@ -207,6 +207,19 @@ class JobPlatformTestCase(unittest.TestCase):
         )
         self.assertEqual(proposal.status_code, 201)
 
+        proposal_id = proposal.get_json()["proposal_id"]
+        edited = self.client.patch(
+            f"/proposals/{proposal_id}",
+            headers={"Authorization": f"Bearer {worker_token}"},
+            json={
+                "action": "edit",
+                "price": 700000,
+                "deadline": "2026-10-22",
+                "message": "Updated offer with an earlier delivery date."
+            }
+        )
+        self.assertEqual(edited.status_code, 200)
+
         owner_proposals = self.client.get(
             f"/jobs/{job_id}/proposals",
             headers={"Authorization": f"Bearer {owner_token}"}
@@ -214,7 +227,9 @@ class JobPlatformTestCase(unittest.TestCase):
         self.assertEqual(owner_proposals.status_code, 200)
         proposal_items = owner_proposals.get_json()
         self.assertEqual(len(proposal_items), 1)
-        self.assertEqual(proposal_items[0]["price"], 750000.0)
+        self.assertEqual(proposal_items[0]["price"], 700000.0)
+        self.assertEqual(proposal_items[0]["deadline"], "2026-10-22")
+        self.assertEqual(proposal_items[0]["message"], "Updated offer with an earlier delivery date.")
         proposal_id = proposal_items[0]["id"]
 
         accepted = self.client.patch(
