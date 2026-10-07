@@ -88,6 +88,9 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
         if "escrow_balance" not in platform_columns:
             conn.execute("ALTER TABLE platform_wallet ADD COLUMN escrow_balance REAL NOT NULL DEFAULT 0")
         conn.execute("INSERT OR IGNORE INTO platform_wallet(id,balance,escrow_balance) VALUES(1,0,0)")
+        conn.execute(
+            "UPDATE payments SET status='released',released_at=COALESCE(released_at,paid_at) WHERE provider='dummy' AND status='paid' AND released_at IS NULL"
+        )
         conn.commit()
     finally:
         conn.close()
