@@ -265,7 +265,7 @@ export default function Dashboard() {
                         </div>
                     </div>
 
-                    <div className="job-grid">
+                    <div className="job-grid dashboard-job-grid">
                         {pagedJobs.map((job) => {
                             const status = String(job.status || "").trim().toLowerCase()
                             const isMyJob = String(job.user_id) === String(user?.id)
