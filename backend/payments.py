@@ -96,12 +96,20 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
     finally:
         conn.close()
 
+    def _commission_preview(amount):
+        amount = float(amount)
+        commission_percent = _commission_percent()
+        commission = round(amount * commission_percent / 100, 2)
+        worker_amount = round(amount - commission, 2)
+        return commission_percent, commission, worker_amount
+
     @app.route("/payments/config")
     @auth
     def payment_config():
         return jsonify({
             "click_enabled": bool(CLICK_SERVICE_ID and CLICK_MERCHANT_ID and CLICK_SECRET_KEY),
             "providers": ["click"] if CLICK_SERVICE_ID and CLICK_MERCHANT_ID and CLICK_SECRET_KEY else [],
+            "commission_percent": _commission_percent(),
         })
 
     @app.route("/payments/create/<int:job_id>", methods=["POST"])
@@ -135,6 +143,9 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
                     "currency": existing[2],
                     "provider": "dummy",
                     "title": title,
+                    "commission_percent": _commission_preview(existing[1])[0],
+                    "commission_amount": _commission_preview(existing[1])[1],
+                    "worker_amount": _commission_preview(existing[1])[2],
                 })
             payment_uuid = str(uuid.uuid4())
             now = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -153,6 +164,9 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
                 "currency": "UZS",
                 "provider": "dummy",
                 "title": title,
+                "commission_percent": _commission_preview(float(price))[0],
+                "commission_amount": _commission_preview(float(price))[1],
+                "worker_amount": _commission_preview(float(price))[2],
             })
 
         existing = db.q(
@@ -172,6 +186,9 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
                 "currency": payment_currency,
                 "checkout_url": build_checkout_url(payment_uuid, amount),
                 "title": title,
+                "commission_percent": _commission_preview(amount)[0],
+                "commission_amount": _commission_preview(amount)[1],
+                "worker_amount": _commission_preview(amount)[2],
             })
 
         payment_uuid = str(uuid.uuid4())
@@ -223,6 +240,9 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
             "created_at": payment[9],
             "paid_at": payment[10],
             "title": payment[11],
+            "commission_percent": _commission_preview(payment[4])[0],
+            "commission_amount": _commission_preview(payment[4])[1],
+            "worker_amount": _commission_preview(payment[4])[2],
         })
 
     @app.route("/payments")
