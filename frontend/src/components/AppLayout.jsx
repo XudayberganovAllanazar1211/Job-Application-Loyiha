@@ -22,6 +22,7 @@ export default function AppLayout({ title, subtitle, children }) {
     const token = localStorage.getItem("token") || ""
     const user = JSON.parse(localStorage.getItem("user") || "null")
     const isAdmin = user?.role === "admin"
+    const mobileNavItems = [navItems[0], navItems[2], navItems[1], navItems[3]]
     const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(" ") || user?.username || "Mehmon"
     const initials = fullName.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()
     const avatarSrc = user?.avatar_url
@@ -149,7 +150,7 @@ export default function AppLayout({ title, subtitle, children }) {
                 </div>
             </aside>
             <nav className="mobile-nav" aria-label="Mobil navigatsiya">
-                {navItems.filter(([to]) => to !== "/leaderboard").map(([to, label, icon]) => (
+                {mobileNavItems.map(([to, label, icon]) => (
                     <NavLink key={to} to={to} end={to === "/"} className={({ isActive }) => `mobile-nav-item ${isActive ? "active" : ""}`}>
                         <span className="mobile-nav-icon">{icon}</span>
                         <span className="mobile-nav-label">{label}</span>
