@@ -411,6 +411,37 @@ class DB:
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_admin_audit_created ON admin_audit_log(created_at DESC)")
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_blocks(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                block_type TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                duration_minutes INTEGER,
+                created_at TEXT NOT NULL,
+                expires_at TEXT,
+                active INTEGER NOT NULL DEFAULT 1,
+                created_by INTEGER NOT NULL,
+                lifted_at TEXT,
+                lifted_by INTEGER
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_blocks_user_active ON user_blocks(user_id,active,expires_at)")
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS appeals(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                block_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                appeal_text TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'open',
+                admin_response TEXT DEFAULT '',
+                created_at TEXT NOT NULL,
+                reviewed_at TEXT,
+                reviewed_by INTEGER
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_appeals_status_created ON appeals(status,created_at)")
+
         # Dynamic migrations for any existing tables missing new columns
         cursor.execute("PRAGMA table_info(users)")
         existing_user_cols = [row[1] for row in cursor.fetchall()]
@@ -925,6 +956,71 @@ def admin_audit(action, target_type="", target_id=None, details=""):
         app.logger.exception("Admin audit log yozilmadi")
 
 
+BLOCK_TYPE_LABELS = {
+    "full": "To‘liq blok",
+    "chat": "Chat blok",
+    "job_creation": "Ish yaratish blok",
+    "job_accept": "Ish qabul qilish blok",
+    "proposal": "Taklif yuborish blok",
+    "rating": "Baholash blok",
+    "withdrawal": "Mablag‘ yechish blok",
+}
+
+
+def _active_block_row(user_id, block_type=None):
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    if block_type:
+        return db.q(
+            """SELECT id,user_id,block_type,reason,duration_minutes,created_at,expires_at,active,created_by,lifted_at,lifted_by
+               FROM user_blocks
+               WHERE user_id=? AND active=1 AND block_type=?
+                 AND (expires_at IS NULL OR expires_at>?)
+               ORDER BY id DESC LIMIT 1""",
+            (user_id, block_type, now),
+        ).fetchone()
+    return db.q(
+        """SELECT id,user_id,block_type,reason,duration_minutes,created_at,expires_at,active,created_by,lifted_at,lifted_by
+           FROM user_blocks
+           WHERE user_id=? AND active=1
+             AND (expires_at IS NULL OR expires_at>?)
+           ORDER BY id DESC""",
+        (user_id, now),
+    ).fetchall()
+
+
+def _block_payload(row):
+    if not row:
+        return None
+    return {
+        "id": row[0], "user_id": row[1], "block_type": row[2],
+        "block_label": BLOCK_TYPE_LABELS.get(row[2], row[2]),
+        "reason": row[3], "duration_minutes": row[4],
+        "created_at": row[5], "expires_at": row[6], "active": bool(row[7]),
+        "created_by": row[8], "lifted_at": row[9], "lifted_by": row[10],
+    }
+
+
+def enforce_block(block_type):
+    if getattr(request, "user_role", "user") == "admin":
+        return None
+    block = _active_block_row(request.uid, "full") or _active_block_row(request.uid, block_type)
+    if not block:
+        return None
+    expiry = "muddatsiz" if not block[6] else block[6]
+    return jsonify({
+        "msg": f"{BLOCK_TYPE_LABELS.get(block[2], block[2])} mavjud. Sabab: {block[3]}. Tugash vaqti: {expiry}.",
+        "blocked": True,
+        "block_type": block[2],
+        "block_id": block[0],
+        "reason": block[3],
+        "expires_at": block[6],
+    }), 403
+
+
+def _ensure_user_blocked(user_id, block_type):
+    return _active_block_row(user_id, "full") or _active_block_row(user_id, block_type)
+
+
 def create_notification(user_id, notification_type, title, message, link=""):
     if not user_id:
         return
@@ -1038,8 +1134,8 @@ def create_report():
         owner_id, worker_id, job_status = job
         if not worker_id or request.uid not in (owner_id, worker_id):
             return jsonify({"msg":"Faqat ish egasi yoki ishchi bir-biridan shikoyat qila oladi"}),403
-        if job_status not in ("accepted", "pending_finish"):
-            return jsonify({"msg":"Bu ish bo‘yicha hozircha shikoyat qilish mumkin emas"}),400
+        if job_status not in ("active", "payment_pending", "accepted", "pending_finish", "finished", "blocked"):
+            return jsonify({"msg":"Bu ish bo‘yicha shikoyat qilish mumkin emas"}),400
         target_user_id = worker_id if request.uid == owner_id else owner_id
         if reported_user_id != target_user_id:
             return jsonify({"msg":"Faqat shu ishdagi boshqa ishtirokchi haqida shikoyat qilish mumkin"}),403
@@ -1121,6 +1217,226 @@ def update_report(report_id):
 
     admin_audit("report_status_update","report",report_id,f"status={status}")
     return jsonify({"msg":"Shikoyat holati yangilandi","status":status})
+
+
+@app.route("/admin/user/<int:user_id>/blocks")
+@admin_required
+def admin_user_blocks(user_id):
+    target=db.q("SELECT id,username,role FROM users WHERE id=?",(user_id,)).fetchone()
+    if not target:
+        return jsonify({"msg":"Foydalanuvchi topilmadi"}),404
+    blocks=db.q(
+        """SELECT b.id,b.user_id,b.block_type,b.reason,b.duration_minutes,b.created_at,b.expires_at,b.active,b.created_by,b.lifted_at,b.lifted_by,u.username
+           FROM user_blocks b LEFT JOIN users u ON u.id=b.created_by
+           WHERE b.user_id=? ORDER BY b.id DESC LIMIT 100""",(user_id,)
+    ).fetchall()
+    return jsonify({"user":{"id":target[0],"username":target[1],"role":target[2]},
+        "blocks":[{**_block_payload(x[:11]),"created_by_username":x[11] or "—"} for x in blocks]})
+
+
+@app.route("/admin/blocks")
+@admin_required
+def admin_blocks():
+    search=str(request.args.get("q","")).strip()[:100]
+    status=str(request.args.get("status","active")).strip().lower()
+    where=[]
+    params=[]
+    if search:
+        where.append("(u.username LIKE ? OR b.reason LIKE ? OR b.block_type LIKE ?)")
+        like=f"%{search}%"; params += [like,like,like]
+    if status=="active":
+        where.append("(b.active=1 AND (b.expires_at IS NULL OR b.expires_at>?))")
+        params.append(datetime.datetime.now(datetime.timezone.utc).isoformat())
+    elif status=="lifted":
+        where.append("b.active=0")
+    clause=" WHERE "+" AND ".join(where) if where else ""
+    items=db.q(
+        f"""SELECT b.id,b.user_id,u.username,b.block_type,b.reason,b.created_at,b.expires_at,b.active,
+                   a.username
+            FROM user_blocks b
+            JOIN users u ON u.id=b.user_id
+            LEFT JOIN users a ON a.id=b.created_by
+            {clause}
+            ORDER BY b.id DESC LIMIT 150""",tuple(params)
+    ).fetchall()
+    return jsonify({"items":[
+        {"id":x[0],"user_id":x[1],"username":x[2],"block_type":x[3],"block_label":BLOCK_TYPE_LABELS.get(x[3],x[3]),
+         "reason":x[4],"created_at":x[5],"expires_at":x[6],"active":bool(x[7]),"admin_username":x[8] or "—"}
+        for x in items
+    ]})
+
+
+@app.route("/admin/user/<int:user_id>/block", methods=["POST"])
+@admin_required
+def admin_create_block(user_id):
+    data=request.json or {}
+    block_type=str(data.get("block_type","")).strip().lower()
+    reason=str(data.get("reason","")).strip()
+    duration_raw=data.get("duration_minutes")
+    if block_type not in BLOCK_TYPE_LABELS:
+        return jsonify({"msg":"Block turi noto‘g‘ri"}),400
+    if not reason or len(reason)>2000:
+        return jsonify({"msg":"Block sababi 1–2000 belgidan iborat bo‘lishi kerak"}),400
+    if user_id==int(request.uid):
+        return jsonify({"msg":"O‘zingizni bloklay olmaysiz"}),400
+    target=db.q("SELECT id,username,role FROM users WHERE id=?",(user_id,)).fetchone()
+    if not target:
+        return jsonify({"msg":"Foydalanuvchi topilmadi"}),404
+    if target[2]=="admin":
+        return jsonify({"msg":"Administrator hisobini bloklash mumkin emas"}),400
+    duration=None
+    if duration_raw not in (None,"","null"):
+        try: duration=int(duration_raw)
+        except (TypeError,ValueError): return jsonify({"msg":"Muddat noto‘g‘ri"}),400
+        if duration<1 or duration>525600: return jsonify({"msg":"Muddat 1 daqiqadan 365 kungacha bo‘lishi kerak"}),400
+    now=datetime.datetime.now(datetime.timezone.utc)
+    expires=(now+datetime.timedelta(minutes=duration)).isoformat() if duration else None
+    existing=_active_block_row(user_id,block_type)
+    if existing:
+        return jsonify({"msg":"Bu turdagi faol block allaqachon mavjud","block_id":existing[0]}),409
+    result=db.q(
+        """INSERT INTO user_blocks(user_id,block_type,reason,duration_minutes,created_at,expires_at,active,created_by)
+           VALUES(?,?,?,?,?,?,1,?)""",
+        (user_id,block_type,reason,duration,now.isoformat(),expires,request.uid)
+    )
+    block_id=result.lastrowid; result.close()
+    admin_audit("user_block_created","user",user_id,f"{block_type}: {reason}")
+    deadline="muddatsiz" if not expires else expires
+    create_notification(
+        user_id,"account_moderation","Hisobingizga cheklov qo‘yildi",
+        f"{BLOCK_TYPE_LABELS[block_type]} qo‘yildi. Sabab: {reason}. Muddati: {deadline}. Appeal yuborish uchun Appeals bo‘limiga kiring.",
+        "/appeals"
+    )
+    return jsonify({"msg":"Block qo‘yildi","block_id":block_id,"expires_at":expires}),201
+
+
+@app.route("/admin/block/<int:block_id>", methods=["PATCH"])
+@admin_required
+def admin_update_block(block_id):
+    block=db.q("SELECT id,user_id,block_type,active FROM user_blocks WHERE id=?",(block_id,)).fetchone()
+    if not block:
+        return jsonify({"msg":"Block topilmadi"}),404
+    action=str((request.json or {}).get("action","")).strip().lower()
+    if action!="lift":
+        return jsonify({"msg":"Faqat lift amali qo‘llab-quvvatlanadi"}),400
+    if not block[3]:
+        return jsonify({"msg":"Block allaqachon olib tashlangan"}),409
+    now=datetime.datetime.now(datetime.timezone.utc).isoformat()
+    db.q("UPDATE user_blocks SET active=0,lifted_at=?,lifted_by=? WHERE id=?",(now,request.uid,block_id)).close()
+    admin_audit("user_block_lifted","user",block[1],f"block={block_id}:{block[2]}")
+    create_notification(block[1],"account_moderation","Cheklov olib tashlandi",
+                        f"{BLOCK_TYPE_LABELS.get(block[2],block[2])} administrator tomonidan olib tashlandi.","/appeals")
+    return jsonify({"msg":"Block olib tashlandi"})
+
+
+@app.route("/appeals")
+@auth
+def get_appeals():
+    blocks=_active_block_row(request.uid)
+    appeals=db.q(
+        """SELECT a.id,a.block_id,a.user_id,a.appeal_text,a.status,a.admin_response,a.created_at,a.reviewed_at,a.reviewed_by,
+                  b.block_type,b.reason,b.created_at,b.expires_at,u.username
+           FROM appeals a JOIN user_blocks b ON b.id=a.block_id
+           LEFT JOIN users u ON u.id=a.reviewed_by
+           WHERE a.user_id=? ORDER BY a.id DESC LIMIT 100""",(request.uid,)
+    ).fetchall()
+    return jsonify({
+        "active_blocks":[_block_payload(x) for x in blocks],
+        "appeals":[{"id":x[0],"block_id":x[1],"user_id":x[2],"appeal_text":x[3],"status":x[4],"admin_response":x[5] or "",
+                    "created_at":x[6],"reviewed_at":x[7],"reviewed_by_username":x[8] or "—",
+                    "block_type":x[9],"block_label":BLOCK_TYPE_LABELS.get(x[9],x[9]),"block_reason":x[10],
+                    "block_created_at":x[11],"block_expires_at":x[12]}
+                   for x in appeals]
+    })
+
+
+@app.route("/appeals", methods=["POST"])
+@auth
+def create_appeal():
+    data=request.json or {}
+    try: block_id=int(data.get("block_id"))
+    except (TypeError,ValueError): return jsonify({"msg":"Block ID noto‘g‘ri"}),400
+    appeal_text=str(data.get("appeal_text","")).strip()
+    if len(appeal_text)<10 or len(appeal_text)>4000:
+        return jsonify({"msg":"Appeal matni 10–4000 belgidan iborat bo‘lishi kerak"}),400
+    block=db.q("SELECT id,user_id,block_type,active,expires_at FROM user_blocks WHERE id=?",(block_id,)).fetchone()
+    if not block or block[1]!=request.uid:
+        return jsonify({"msg":"Block topilmadi"}),404
+    now=datetime.datetime.now(datetime.timezone.utc).isoformat()
+    if not block[3] or (block[4] and block[4]<=now):
+        return jsonify({"msg":"Bu block endi faol emas"}),409
+    existing=db.q("SELECT id FROM appeals WHERE block_id=? AND status IN ('open','reviewing') LIMIT 1",(block_id,)).fetchone()
+    if existing:
+        return jsonify({"msg":"Bu block uchun appeal allaqachon ko‘rib chiqilmoqda"}),409
+    result=db.q(
+        "INSERT INTO appeals(block_id,user_id,appeal_text,status,created_at) VALUES(?,?,?,?,?)",
+        (block_id,request.uid,appeal_text,"open",now)
+    )
+    appeal_id=result.lastrowid; result.close()
+    admin_audit("appeal_created","user",request.uid,f"block={block_id}")
+    for admin in db.q("SELECT id FROM users WHERE role='admin'").fetchall():
+        create_notification(admin[0],"appeal","Yangi appeal",f"Foydalanuvchidan yangi appeal: block #{block_id}.","/admin")
+    return jsonify({"msg":"Appeal yuborildi","appeal_id":appeal_id}),201
+
+
+@app.route("/admin/appeals")
+@admin_required
+def admin_appeals():
+    status=str(request.args.get("status","all")).strip().lower()
+    search=str(request.args.get("q","")).strip()[:100]
+    where=[]; params=[]
+    if status!="all":
+        if status not in ("open","reviewing","approved","rejected"): return jsonify({"msg":"Appeal status noto‘g‘ri"}),400
+        where.append("a.status=?"); params.append(status)
+    if search:
+        like=f"%{search}%"
+        where.append("(u.username LIKE ? OR a.appeal_text LIKE ? OR b.reason LIKE ? OR b.block_type LIKE ?)")
+        params += [like,like,like,like]
+    clause=" WHERE "+" AND ".join(where) if where else ""
+    items=db.q(
+        f"""SELECT a.id,a.block_id,a.user_id,u.username,a.appeal_text,a.status,a.admin_response,
+                   a.created_at,a.reviewed_at,b.block_type,b.reason,b.duration_minutes,b.expires_at,
+                   reviewer.username
+            FROM appeals a
+            JOIN users u ON u.id=a.user_id
+            JOIN user_blocks b ON b.id=a.block_id
+            LEFT JOIN users reviewer ON reviewer.id=a.reviewed_by
+            {clause} ORDER BY a.id DESC LIMIT 200""",tuple(params)
+    ).fetchall()
+    return jsonify({"items":[
+        {"id":x[0],"block_id":x[1],"user_id":x[2],"username":x[3],"appeal_text":x[4],"status":x[5],
+         "admin_response":x[6] or "","created_at":x[7],"reviewed_at":x[8],"block_type":x[9],
+         "block_label":BLOCK_TYPE_LABELS.get(x[9],x[9]),"block_reason":x[10],"duration_minutes":x[11],
+         "expires_at":x[12],"reviewer_username":x[13] or "—"}
+        for x in items
+    ]})
+
+
+@app.route("/admin/appeal/<int:appeal_id>", methods=["PATCH"])
+@admin_required
+def admin_review_appeal(appeal_id):
+    data=request.json or {}
+    status=str(data.get("status","")).strip().lower()
+    response=str(data.get("admin_response","")).strip()
+    if status not in ("reviewing","approved","rejected"): return jsonify({"msg":"Appeal status noto‘g‘ri"}),400
+    if len(response)>3000: return jsonify({"msg":"Admin javobi 3000 belgidan oshmasligi kerak"}),400
+    row=db.q("SELECT id,user_id,block_id,status FROM appeals WHERE id=?",(appeal_id,)).fetchone()
+    if not row: return jsonify({"msg":"Appeal topilmadi"}),404
+    if row[3] in ("approved","rejected") and status!=row[3]: return jsonify({"msg":"Yakunlangan appealni qayta o‘zgartirib bo‘lmaydi"}),409
+    now=datetime.datetime.now(datetime.timezone.utc).isoformat()
+    db.q("UPDATE appeals SET status=?,admin_response=?,reviewed_at=?,reviewed_by=? WHERE id=?",
+         (status,response if status!="reviewing" else "",now,request.uid,appeal_id)).close()
+    if status=="approved":
+        db.q("UPDATE user_blocks SET active=0,lifted_at=?,lifted_by=? WHERE id=?",(now,request.uid,row[2])).close()
+        message="Appealingiz tasdiqlandi va ushbu cheklov olib tashlandi."
+    elif status=="rejected":
+        message="Appealingiz rad etildi."
+    else:
+        message="Appealingiz administrator tomonidan ko‘rib chiqilmoqda."
+    admin_audit("appeal_reviewed","appeal",appeal_id,f"status={status}; {response}")
+    create_notification(row[1],"appeal","Appeal bo‘yicha qaror",
+                        message+(f" Admin izohi: {response}" if response else "" ),"/appeals")
+    return jsonify({"msg":"Appeal yangilandi","status":status})
 
 
 @app.route("/admin/analytics")
@@ -1888,7 +2204,10 @@ def reverse_geocode():
 # -------- JOBS --------
 @app.route("/job", methods=["POST"])
 @auth
-def add_job():
+def add_job():    block_response=enforce_block("job_creation")
+    if block_response: return block_response
+
+    
     d = request.json or {}
 
     title = str(d.get("title", "")).strip()
@@ -2018,7 +2337,10 @@ def add_job():
 
 @app.route("/jobs")
 @auth
-def get_jobs():
+def get_jobs():    block_response=enforce_block("full")
+    if block_response: return block_response
+
+    
     r = db.q(
         """
         SELECT j.id, j.title, COALESCE(j.agreed_price, j.price) as price, j.currency, j.location, j.status, j.user_id, j.worker_id,
@@ -2142,7 +2464,10 @@ def get_job_detail(job_id):
 
 @app.route("/jobs/<int:job_id>/proposals", methods=["GET", "POST"])
 @auth
-def job_proposals(job_id):
+def job_proposals(job_id):    block_response=enforce_block("proposal" if request.method=="POST" else "full")
+    if block_response: return block_response
+
+    
     job = db.q(
         "SELECT user_id, worker_id, status, price, title FROM jobs WHERE id=?",
         (job_id,),
@@ -2339,7 +2664,10 @@ def update_proposal(proposal_id):
 
 @app.route("/accept_job", methods=["POST"])
 @auth
-def accept():
+def accept():    block_response=enforce_block("job_accept")
+    if block_response: return block_response
+
+    
     d = request.json or {}
     job_id = d.get("job_id")
     if not job_id:
@@ -2565,7 +2893,10 @@ def _chat_participant(job_id, user_id):
 
 @app.route("/message", methods=["POST"])
 @auth
-def send_message():
+def send_message():    block_response=enforce_block("chat")
+    if block_response: return block_response
+
+    
     if request.content_type and request.content_type.startswith("multipart/form-data"):
         message_text = str(request.form.get("message", "")).strip()
         job_id_raw = request.form.get("job_id")
@@ -2651,7 +2982,10 @@ def send_message():
 
 @app.route("/messages/<int:job_id>")
 @auth
-def get_messages(job_id):
+def get_messages(job_id):    block_response=enforce_block("chat")
+    if block_response: return block_response
+
+    
     job = _chat_participant(job_id, request.uid)
     if not job:
         return jsonify({"msg": "Bu chatga kirish huquqingiz yo'q"}), 403
@@ -2985,7 +3319,10 @@ def unread_message_count():
 
 @app.route("/conversations")
 @auth
-def conversations():
+def conversations():    block_response=enforce_block("chat")
+    if block_response: return block_response
+
+    
     items = db.q(
         """SELECT m.id,m.job_id,m.sender_id,m.receiver_id,m.message,m.sent_at,m.read_at,j.title,
                   CASE WHEN m.sender_id=? THEN r.username ELSE s.username END as other_username
@@ -3042,7 +3379,10 @@ def get_presence(user_id):
 
 @app.route("/typing/<int:job_id>", methods=["GET", "POST"])
 @auth
-def typing(job_id):
+def typing(job_id):    block_response=enforce_block("chat")
+    if block_response: return block_response
+
+    
     job = db.q("SELECT user_id,worker_id FROM jobs WHERE id=?", (job_id,)).fetchone()
     if not job or request.uid not in (job[0],job[1]):
         return jsonify({"msg":"Ruxsat berilmadi"}),403
@@ -3072,7 +3412,10 @@ def typing(job_id):
 # -------- RATINGS --------
 @app.route("/rating", methods=["POST"])
 @auth
-def add_rating():
+def add_rating():    block_response=enforce_block("rating")
+    if block_response: return block_response
+
+    
     d = request.json or {}
     job_id = d.get("job_id")
     to_user = d.get("to_user")
@@ -3331,6 +3674,7 @@ def profile():
             "avg_rating": avg_rating,
             "avatar_url": avatar_url,
             "balance": balance,
+            "active_blocks": [_block_payload(x) for x in _active_block_row(request.uid)],
             "portfolio": [
                 {"id": x[0], "title": x[1], "description": x[2], "url": x[3], "image_url": x[4],
                  "file_url": x[5], "file_name": x[6], "created_at": x[7], "updated_at": x[8]}
