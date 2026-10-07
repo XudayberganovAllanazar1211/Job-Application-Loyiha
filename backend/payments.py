@@ -15,7 +15,7 @@ CLICK_RETURN_URL = os.environ.get("CLICK_RETURN_URL", "http://localhost:5173/job
 CLICK_CHECKOUT_URL = "https://my.click.uz/services/pay"
 
 
-def register_payment_routes(app, db, auth, create_notification):
+def register_payment_routes(app, db, auth, admin_required, create_notification):
     def click_signature(click_trans_id, service_id, secret_key, merchant_trans_id, amount, action, sign_time):
         raw = f"{click_trans_id}{service_id}{secret_key}{merchant_trans_id}{amount}{action}{sign_time}"
         return hashlib.md5(raw.encode("utf-8")).hexdigest()
@@ -64,6 +64,29 @@ def register_payment_routes(app, db, auth, create_notification):
             conn.close()
 
     ensure_table()
+    conn = db.get_connection()
+    try:
+        columns = [row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()]
+        if "balance" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0")
+        conn.execute("""CREATE TABLE IF NOT EXISTS wallet_transactions(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            type TEXT NOT NULL,
+            amount REAL NOT NULL,
+            balance_after REAL NOT NULL,
+            job_id INTEGER,
+            description TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )""")
+        conn.execute("""CREATE TABLE IF NOT EXISTS platform_wallet(
+            id INTEGER PRIMARY KEY CHECK(id=1),
+            balance REAL NOT NULL DEFAULT 0
+        )""")
+        conn.execute("INSERT OR IGNORE INTO platform_wallet(id,balance) VALUES(1,0)")
+        conn.commit()
+    finally:
+        conn.close()
 
     @app.route("/payments/config")
     @auth
