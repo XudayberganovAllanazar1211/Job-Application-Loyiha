@@ -2530,6 +2530,7 @@ def upload_portfolio_file():
     item_id = result.lastrowid
     result.close()
     return jsonify({
+        "ok": True,
         "msg": "Portfolio qo‘shildi.",
         "id": item_id,
         "file_url": file_url,
