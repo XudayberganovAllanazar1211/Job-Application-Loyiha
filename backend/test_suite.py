@@ -14,12 +14,15 @@ class JobPlatformTestCase(unittest.TestCase):
         DB(cls.test_db_name)
         cls.original_db.db_name = cls.test_db_name
         main.db = cls.original_db
+        cls.original_send_email_code = main.send_email_code
+        main.send_email_code = lambda to_email, code: True
         app.config["TESTING"] = True
         cls.client = app.test_client()
 
     @classmethod
     def tearDownClass(cls):
         cls.original_db.db_name = cls.original_db_name
+        main.send_email_code = cls.original_send_email_code
         if os.path.exists(cls.test_db_name):
             try:
                 os.remove(cls.test_db_name)
@@ -301,12 +304,56 @@ class JobPlatformTestCase(unittest.TestCase):
 
         # Admin adds service -> 200 OK
         res_ok = self.client.post(
-            "/service",
+            "/admin/service",
             headers={"Authorization": f"Bearer {token_admin}"},
             json={"name": "Konditsioner Ta'mirlash"}
         )
         self.assertEqual(res_ok.status_code, 201)
         self.assertEqual(res_ok.get_json()["msg"], "Xizmat qo‘shildi.")
+
+    def test_06_admin_commission_setting(self):
+        res_admin = self.client.post(
+            "/login",
+            json={"username": "tester_creator", "password": "Password123!"}
+        )
+        self.assertEqual(res_admin.status_code, 200)
+        token_admin = res_admin.get_json()["token"]
+
+        overview = self.client.get(
+            "/admin/overview",
+            headers={"Authorization": f"Bearer {token_admin}"}
+        )
+        self.assertEqual(overview.status_code, 200)
+        self.assertEqual(float(overview.get_json()["settings"]["commission_percent"]), 10.0)
+
+        updated = self.client.patch(
+            "/admin/settings/commission",
+            headers={"Authorization": f"Bearer {token_admin}"},
+            json={"commission_percent": 12.5}
+        )
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(updated.get_json()["commission_percent"], 12.5)
+
+        config = self.client.get(
+            "/payments/config",
+            headers={"Authorization": f"Bearer {token_admin}"}
+        )
+        self.assertEqual(config.status_code, 200)
+        self.assertEqual(config.get_json()["commission_percent"], 12.5)
+
+        invalid = self.client.patch(
+            "/admin/settings/commission",
+            headers={"Authorization": f"Bearer {token_admin}"},
+            json={"commission_percent": 100.01}
+        )
+        self.assertEqual(invalid.status_code, 400)
+
+        self.client.patch(
+            "/admin/settings/commission",
+            headers={"Authorization": f"Bearer {token_admin}"},
+            json={"commission_percent": 10}
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
