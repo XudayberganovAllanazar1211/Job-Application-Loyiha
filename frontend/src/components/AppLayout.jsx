@@ -213,6 +213,7 @@ export default function AppLayout({ title, subtitle, children }) {
                             <NavLink to="/conversations" className="mobile-menu-link">✉ <span>Suhbatlar{unreadMessages > 0 ? ` (${unreadMessages})` : ""}</span></NavLink>
                             <NavLink to="/leaderboard" className="mobile-menu-link">★ <span>Reyting jadvali</span></NavLink>
                             <NavLink to="/profile" className="mobile-menu-link">◎ <span>Profil</span></NavLink>
+                            <NavLink to="/appeals" className="mobile-menu-link">⚑ <span>Appeals</span></NavLink>
                             {isAdmin && <NavLink to="/admin" className="mobile-menu-link">⚙ <span>Administrator</span></NavLink>}
                             <NavLink to="/privacy" className="mobile-menu-link">⌁ <span>Maxfiylik</span></NavLink>
                             <NavLink to="/terms" className="mobile-menu-link">§ <span>Shartlar</span></NavLink>
