@@ -1281,7 +1281,7 @@ if __name__ == "__main__":
         self.assertEqual(blocked_post.get_json()["block_type"], "proposal")
 
         lifted = self.client.patch(
-            f"/admin/block/{proposal_block.get_json()["block_id"]}",
+            f"/admin/block/{proposal_block.get_json()['block_id']}",
             headers={"Authorization": f"Bearer {admin_token}"},
             json={"action": "lift"},
         )
@@ -1310,7 +1310,7 @@ if __name__ == "__main__":
         self.assertEqual([item for item in search["users"] if item["id"] == bidder_id][0]["is_blocked"], 1)
 
         full_lift = self.client.patch(
-            f"/admin/block/{full_block.get_json()["block_id"]}",
+            f"/admin/block/{full_block.get_json()['block_id']}",
             headers={"Authorization": f"Bearer {admin_token}"},
             json={"action": "lift"},
         )
