@@ -97,10 +97,14 @@ export default function AppLayout({ title, subtitle, children }) {
         }
     }
 
-    const logout = () => {
-        localStorage.removeItem("token")
-        localStorage.removeItem("user")
-        navigate("/login")
+    const logout = async () => {
+        try {
+            if (token) await api("/logout", { method: "POST", token })
+        } finally {
+            localStorage.removeItem("token")
+            localStorage.removeItem("user")
+            navigate("/login")
+        }
     }
 
     return (
