@@ -258,9 +258,16 @@ export default function Jobs() {
                 body: { job_id: job.id },
                 token
             })
-            const requested = result?.msg === "ok"
-            setNoticeType(requested ? "ok" : "warn")
-            setNotice(requested ? "Ishni yakunlash tasdiqlashga yuborildi." : (result?.msg || "Xato"))
+            const waiting = result?.msg === "waiting"
+            const completed = result?.msg === "ok"
+            setNoticeType((waiting || completed) ? "ok" : "warn")
+            setNotice(
+                completed
+                    ? "Ish yakunlandi. To‘lov bajaruvchiga o‘tkazildi."
+                    : waiting
+                        ? "Siz ishni yakunladingiz. Ikkinchi tomonning ham «Yakunlash» tugmasini bosishini kuting."
+                        : (result?.msg || "Xato")
+            )
             await load()
         } finally {
             setActionJobId(null)
@@ -276,9 +283,16 @@ export default function Jobs() {
                 body: { job_id: jobId },
                 token
             })
+            const waiting = result?.msg === "waiting"
             const finished = result?.msg === "ok"
-            setNoticeType(finished ? "ok" : "warn")
-            setNotice(finished ? "Ish yakunlandi. To‘lov bajaruvchiga o‘tkazildi." : "Siz ishni yakunladingiz. Ikkinchi tomonning ham yakunlashini kuting.")
+            setNoticeType((waiting || finished) ? "ok" : "warn")
+            setNotice(
+                finished
+                    ? "Ish yakunlandi. To‘lov bajaruvchiga o‘tkazildi."
+                    : waiting
+                        ? "Siz ishni yakunladingiz. Ikkinchi tomonning ham «Yakunlash» tugmasini bosishini kuting."
+                        : "Ishni yakunlashda xatolik yuz berdi."
+            )
             await load()
         } finally {
             setActionJobId(null)
@@ -596,7 +610,7 @@ export default function Jobs() {
                                 )}
 
                                 {/* --- FINISH TUGMASI (Ish egasi uchun) --- */}
-                                {isMyJob && status === "accepted" && (
+                                {isMyJob && canFinish && (
                                     <button className="btn btn-success" disabled={actionJobId === job.id} onClick={() => finishJobSeeker(job)}>
                                         {actionJobId === job.id ? "Yuborilmoqda..." : "Yakunlash"}
                                     </button>
