@@ -996,6 +996,12 @@ def admin_update_user(user_id):
 
     if not username or not email:
         return jsonify({"msg": "Foydalanuvchi nomi va elektron pochta bo‘sh bo‘lishi mumkin emas."}), 400
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{3,32}", username):
+        return jsonify({"msg": "Foydalanuvchi nomi 3–32 belgidan iborat bo‘lishi kerak."}), 400
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email) or len(email) > 254:
+        return jsonify({"msg": "Elektron pochta manzili noto‘g‘ri."}), 400
+    if len(first_name) > 100 or len(last_name) > 100 or len(birthday) > 32 or len(bio) > 2000 or len(skills) > 2000:
+        return jsonify({"msg": "Foydalanuvchi ma'lumotlaridan biri juda uzun."}), 400
 
     duplicate = db.q(
         """SELECT id FROM users
@@ -1014,7 +1020,7 @@ def admin_update_user(user_id):
         db.q(
             """UPDATE users
                SET username=?, email=?, first_name=?, last_name=?, birthday=?,
-                   bio=?, skills=?, password=?
+                   bio=?, skills=?, password=?, token_version=COALESCE(token_version,0)+1
                WHERE id=?""",
             (username, email, first_name, last_name, birthday, bio, skills, hashed, user_id)
         ).close()
@@ -1239,8 +1245,8 @@ def login():
     if not username_or_email or not password:
         return jsonify({"msg": "Foydalanuvchi nomi/elektron pochta va parol kiritilishi shart!"}), 400
 
-    if len(password) < 8:
-        return jsonify({"msg": "Parol kamida 8 ta belgidan iborat bo‘lishi kerak"}), 400
+    if len(password) < 8 or len(password) > 256:
+        return jsonify({"msg": "Parol 8–256 belgidan iborat bo‘lishi kerak"}), 400
 
     u = db.q(
         "SELECT id, password, role FROM users WHERE username=? OR lower(email)=?",
