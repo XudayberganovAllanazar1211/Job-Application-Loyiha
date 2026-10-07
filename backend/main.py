@@ -14,6 +14,7 @@ from functools import wraps
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
+from payments import register_payment_routes
 import jwt
 
 try:
@@ -642,6 +643,8 @@ def notify_matching_users(job_id, job_title, creator_id):
             create_notification(user_id, "matching_job", "Sizga mos yangi ish", f"Sizning sohalaringizga mos yangi ish yaratildi: {job_title}", "/jobs")
 
 
+register_payment_routes(app, db, auth, create_notification)
+
 @app.route("/notifications")
 @auth
 def get_notifications():
@@ -946,7 +949,7 @@ def admin_delete_user(user_id):
 def admin_update_job(job_id):
     d = request.json or {}
     status = str(d.get("status", "")).strip().lower()
-    allowed = {"active", "accepted", "pending_finish", "finished", "blocked"}
+    allowed = {"active", "payment_pending", "accepted", "pending_finish", "finished", "blocked"}
 
     if status not in allowed:
         return jsonify({"msg": "Ish holati noto‘g‘ri."}), 400
@@ -958,11 +961,13 @@ def admin_update_job(job_id):
     job_state = db.q("SELECT worker_id FROM jobs WHERE id=?", (job_id,)).fetchone()
     worker_id = job_state[0] if job_state else None
 
-    if status in {"accepted", "pending_finish", "finished"} and not worker_id:
+    if status in {"payment_pending", "accepted", "pending_finish", "finished"} and not worker_id:
         return jsonify({"msg": "Bu holatni tanlash uchun avval ishga bajaruvchi biriktirilishi kerak."}), 400
 
     if status == "active":
         db.q("UPDATE jobs SET status='active', worker_id=NULL, finished_at=NULL WHERE id=?", (job_id,)).close()
+    elif status == "payment_pending":
+        db.q("UPDATE jobs SET status='payment_pending', finished_at=NULL WHERE id=?", (job_id,)).close()
     elif status == "accepted":
         db.q("UPDATE jobs SET status='accepted', finished_at=NULL WHERE id=?", (job_id,)).close()
     elif status == "pending_finish":
@@ -1409,7 +1414,7 @@ def get_jobs():
         LEFT JOIN services s ON j.service_id = s.id
         WHERE j.status = 'active'
            OR (
-               j.status IN ('accepted', 'pending_finish', 'finished')
+               j.status IN ('payment_pending', 'accepted', 'pending_finish', 'finished')
                AND (j.user_id = ? OR j.worker_id = ?)
            )
         ORDER BY j.id DESC
@@ -1519,7 +1524,7 @@ def accept():
         return jsonify({"msg": "Ushbu ish allaqachon qabul qilingan"}), 409
 
     result = db.q(
-        "UPDATE jobs SET worker_id=?,status='accepted' WHERE id=? AND status='active' AND worker_id IS NULL AND user_id!=?",
+        "UPDATE jobs SET worker_id=?,status='payment_pending' WHERE id=? AND status='active' AND worker_id IS NULL AND user_id!=?",
         (request.uid, job_id, request.uid),
     )
     updated = result.rowcount
@@ -1531,9 +1536,9 @@ def accept():
     create_notification(
         job[0],
         "job_accepted",
-        "Ishingiz qabul qilindi",
-        f"Siz yaratgan «{job[3]}» nomli ishni bajaruvchi qabul qildi.",
-        "/jobs",
+        "Ishingiz qabul qilindi — to‘lov kutilmoqda",
+        f"Siz yaratgan «{job[3]}» nomli ishni bajaruvchi qabul qildi. Ishni boshlashdan oldin to‘lovni amalga oshiring.",
+        f"/payments/job/{job_id}",
     )
     return jsonify({"msg": "ok"})
 
@@ -1608,7 +1613,7 @@ def finish():
     if not job[1]:
         return jsonify({"msg": "Ishni yakunlashdan oldin bajaruvchi tanlanishi kerak"}), 400
     if job[2] != "accepted":
-        return jsonify({"msg": "Ish faqat qabul qilingan holatda yakunlanishi mumkin"}), 400
+        return jsonify({"msg": "Ish faqat to‘lov amalga oshirilgandan keyin yakunlanishi mumkin"}), 400
 
     result = db.q("UPDATE jobs SET status='pending_finish' WHERE id=?", (job_id,))
     result.close()
