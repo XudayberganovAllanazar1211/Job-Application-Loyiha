@@ -123,7 +123,7 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
     @auth
     def create_payment(job_id):
         job = db.q(
-            "SELECT user_id,worker_id,status,price,currency,title FROM jobs WHERE id=?",
+            "SELECT user_id,worker_id,status,COALESCE(agreed_price,price),currency,title FROM jobs WHERE id=?",
             (job_id,),
         ).fetchone()
         if not job:
@@ -297,7 +297,7 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
         return max(0, min(100, value))
 
     def release_payment(job_id):
-        job = db.q("SELECT user_id,worker_id,status,price,title FROM jobs WHERE id=?", (job_id,)).fetchone()
+        job = db.q("SELECT user_id,worker_id,status,COALESCE(agreed_price,price),title FROM jobs WHERE id=?", (job_id,)).fetchone()
         if not job or not job[1]:
             return False, "Ish yoki bajaruvchi topilmadi", None
         payment = db.q(
@@ -360,7 +360,7 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
         return True, "released", {"amount": amount, "commission": commission, "worker_amount": worker_amount}
 
     def refund_payment(job_id):
-        job = db.q("SELECT user_id,worker_id,status,price,title FROM jobs WHERE id=?", (job_id,)).fetchone()
+        job = db.q("SELECT user_id,worker_id,status,COALESCE(agreed_price,price),title FROM jobs WHERE id=?", (job_id,)).fetchone()
         if not job:
             return False, "Ish topilmadi", None
         payment = db.q(
@@ -420,7 +420,7 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
     @app.route("/payments/dummy/<int:job_id>", methods=["POST"])
     @auth
     def dummy_payment(job_id):
-        job = db.q("SELECT user_id,worker_id,status,price,currency,title FROM jobs WHERE id=?", (job_id,)).fetchone()
+        job = db.q("SELECT user_id,worker_id,status,COALESCE(agreed_price,price),currency,title FROM jobs WHERE id=?", (job_id,)).fetchone()
         if not job:
             return jsonify({"msg": "Ish topilmadi"}), 404
         owner_id, worker_id, job_status, price, currency, title = job
