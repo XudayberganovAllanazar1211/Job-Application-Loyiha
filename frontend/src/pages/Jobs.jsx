@@ -215,6 +215,29 @@ export default function Jobs() {
         setSelectedJob(job)
     }
 
+    useEffect(() => {
+        if (!selectedJob?.id) return
+
+        let cancelled = false
+
+        const loadSelectedJobDetails = async () => {
+            try {
+                const result = await api(`/jobs/${selectedJob.id}`, { token })
+                if (!cancelled && result?.id) {
+                    setSelectedJob((current) => current?.id === result.id ? { ...current, ...result } : current)
+                }
+            } catch {
+                // Ro‘yxatdagi ma’lumotlar panelni ko‘rsatishda davom etadi.
+            }
+        }
+
+        loadSelectedJobDetails()
+
+        return () => {
+            cancelled = true
+        }
+    }, [selectedJob?.id, token])
+
     const addServiceFilter = (service) => {
         setSelectedServices([...selectedServices, service])
         setServiceSearch("")
