@@ -178,7 +178,7 @@ export default function Profile() {
             setForm((current) => ({ ...current, balance: Number(result.balance) || 0 }))
             setWithdrawAmount("")
             setWithdrawOpen(false)
-            setNotice("Yechib olish muvaffaqiyatli bajarildi")
+            setNotice(`Yechib olish muvaffaqiyatli bajarildi. Qo‘shimcha withdrawal komissiyasi: 0 UZS.`)
             const wallet = await api("/wallet", { token })
             if (wallet && typeof wallet === "object") setWalletTransactions(Array.isArray(wallet.transactions) ? wallet.transactions : [])
         } else {
@@ -595,7 +595,7 @@ export default function Profile() {
                             <button type="button" className="profile-wallet-withdraw-btn" onClick={() => setWithdrawOpen((current) => !current)} disabled={walletLoading || Number(form.balance) <= 0}>
                                 {withdrawOpen ? "Yopish" : "Yechib olish"}
                             </button>
-                            <span>Hozircha test wallet ishlatilmoqda.</span>
+                            <span>Hozircha test wallet ishlatilmoqda. Yechib olishda qo‘shimcha komissiya olinmaydi.</span>
                         </div>
                         {withdrawOpen && (
                             <form className="profile-withdraw-box" onSubmit={submitWithdrawal}>
