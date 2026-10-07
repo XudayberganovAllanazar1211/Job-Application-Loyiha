@@ -195,7 +195,9 @@ class DB:
                 average_rating REAL DEFAULT 0.0,
                 role TEXT DEFAULT 'user',
                 avatar_url TEXT DEFAULT '',
-                token_version INTEGER NOT NULL DEFAULT 0
+                token_version INTEGER NOT NULL DEFAULT 0,
+                balance REAL DEFAULT 0,
+                last_seen_at TEXT DEFAULT ''
             )
         """)
 
@@ -222,7 +224,8 @@ class DB:
                 status TEXT,
                 created_at TEXT,
                 finished_at TEXT,
-                custom_service TEXT DEFAULT ''
+                custom_service TEXT DEFAULT '',
+                agreed_price REAL
             )
         """)
 
@@ -286,7 +289,8 @@ class DB:
                 receiver_id INTEGER,
                 job_id INTEGER,
                 message TEXT,
-                sent_at TEXT
+                sent_at TEXT,
+                read_at TEXT
             )
         """)
 
@@ -350,6 +354,11 @@ class DB:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_worker_status ON jobs(worker_id, status);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_service ON jobs(service_id);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_job ON messages(job_id, sent_at);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_receiver_read ON messages(receiver_id, read_at, sent_at);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_proposals_job_status ON job_proposals(job_id, status, created_at);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_proposals_worker_status ON job_proposals(worker_id, status, created_at);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_favorites_user_target ON favorites(user_id, target_type, target_id);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_portfolio_user_created ON portfolio_items(user_id, created_at);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_payments_payer_status ON payments(payer_id,status,created_at);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_payments_payee_status ON payments(payee_id,status,created_at);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_payments_job_status ON payments(job_id,status);")
@@ -370,6 +379,8 @@ class DB:
             ("role", "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'"),
             ("avatar_url", "ALTER TABLE users ADD COLUMN avatar_url TEXT DEFAULT ''"),
             ("token_version", "ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0"),
+            ("balance", "ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0"),
+            ("last_seen_at", "ALTER TABLE users ADD COLUMN last_seen_at TEXT DEFAULT ''"),
             ("balance", "ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0"),
         ]
         for col_name, sql in migrations:
@@ -393,6 +404,12 @@ class DB:
             except Exception:
                 pass
 
+        if "agreed_price" not in existing_job_cols:
+            try:
+                cursor.execute("ALTER TABLE jobs ADD COLUMN agreed_price REAL")
+            except Exception:
+                pass
+
         if "finished_at" not in existing_job_cols:
             try:
                 cursor.execute("ALTER TABLE jobs ADD COLUMN finished_at TEXT")
@@ -410,6 +427,14 @@ class DB:
 
         cursor.execute("PRAGMA table_info(ratings)")
         existing_rating_cols = [row[1] for row in cursor.fetchall()]
+        cursor.execute("PRAGMA table_info(messages)")
+        existing_message_cols = [row[1] for row in cursor.fetchall()]
+        if "read_at" not in existing_message_cols:
+            try:
+                cursor.execute("ALTER TABLE messages ADD COLUMN read_at TEXT")
+            except Exception:
+                pass
+
         if "created_at" not in existing_rating_cols:
             try:
                 cursor.execute("ALTER TABLE ratings ADD COLUMN created_at TEXT")
