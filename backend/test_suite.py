@@ -733,6 +733,97 @@ class JobPlatformTestCase(unittest.TestCase):
         )
         self.assertEqual(deleted.status_code, 200)
 
+    def test_10d_chat_v2_flow(self):
+        owner_login = self.client.post(
+            "/login",
+            json={"username": "tester_creator", "password": "Password123!"}
+        )
+        worker_login = self.client.post(
+            "/login",
+            json={"username": "tester_worker", "password": "Password123!"}
+        )
+        self.assertEqual(owner_login.status_code, 200)
+        self.assertEqual(worker_login.status_code, 200)
+        owner_token = owner_login.get_json()["token"]
+        worker_token = worker_login.get_json()["token"]
+
+        job_id = main.db.q(
+            "SELECT id FROM jobs WHERE title='Build Web App' ORDER BY id DESC LIMIT 1"
+        ).fetchone()[0]
+
+        sent = self.client.post(
+            "/message",
+            headers={"Authorization": f"Bearer {owner_token}"},
+            json={"job_id": job_id, "message": "Chat v2 unread test"}
+        )
+        self.assertEqual(sent.status_code, 200)
+
+        unread = self.client.get(
+            "/messages/unread-count",
+            headers={"Authorization": f"Bearer {worker_token}"}
+        )
+        self.assertEqual(unread.status_code, 200)
+        self.assertGreaterEqual(unread.get_json()["unread"], 1)
+
+        conversations = self.client.get(
+            "/conversations",
+            headers={"Authorization": f"Bearer {worker_token}"}
+        )
+        self.assertEqual(conversations.status_code, 200)
+        self.assertTrue(any(item["job_id"] == job_id for item in conversations.get_json()))
+
+        messages = self.client.get(
+            f"/messages/{job_id}",
+            headers={"Authorization": f"Bearer {worker_token}"}
+        )
+        self.assertEqual(messages.status_code, 200)
+        self.assertTrue(any(item["message"] == "Chat v2 unread test" for item in messages.get_json()))
+
+        unread_after = self.client.get(
+            "/messages/unread-count",
+            headers={"Authorization": f"Bearer {worker_token}"}
+        )
+        self.assertEqual(unread_after.status_code, 200)
+        self.assertEqual(unread_after.get_json()["unread"], 0)
+
+        presence = self.client.post(
+            "/presence",
+            headers={"Authorization": f"Bearer {worker_token}"}
+        )
+        self.assertEqual(presence.status_code, 200)
+
+        worker_id = self.client.get(
+            "/profile",
+            headers={"Authorization": f"Bearer {worker_token}"}
+        ).get_json()["id"]
+        seen = self.client.get(
+            f"/presence/{worker_id}",
+            headers={"Authorization": f"Bearer {owner_token}"}
+        )
+        self.assertEqual(seen.status_code, 200)
+        self.assertTrue(seen.get_json()["online"])
+
+        typing_on = self.client.post(
+            f"/typing/{job_id}",
+            headers={"Authorization": f"Bearer {worker_token}"},
+            json={"typing": True}
+        )
+        self.assertEqual(typing_on.status_code, 200)
+
+        typing_seen = self.client.get(
+            f"/typing/{job_id}",
+            headers={"Authorization": f"Bearer {owner_token}"}
+        )
+        self.assertEqual(typing_seen.status_code, 200)
+        self.assertTrue(typing_seen.get_json()["typing"])
+
+        typing_off = self.client.post(
+            f"/typing/{job_id}",
+            headers={"Authorization": f"Bearer {worker_token}"},
+            json={"typing": False}
+        )
+        self.assertEqual(typing_off.status_code, 200)
+
     def test_10_logout_invalidates_token(self):
         res = self.client.post(
             "/login",
