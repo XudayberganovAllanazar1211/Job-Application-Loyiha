@@ -1869,7 +1869,7 @@ def get_leaderboard():
            LIMIT 10"""
     ).fetchall()
     creators = [
-        {"id": i[0], "name": f"{i[1]} {i[2]}".strip() if (i[1] or i[2]) else i[3], "count": i[4]}
+        {"id": i[0], "name": f"{i[1]} {i[2]}".strip() if (i[1] or i[2]) else i[3], "username": i[3], "count": i[4]}
         for i in creators_raw
     ]
 
@@ -1883,7 +1883,7 @@ def get_leaderboard():
            LIMIT 10"""
     ).fetchall()
     workers = [
-        {"id": i[0], "name": f"{i[1]} {i[2]}".strip() if (i[1] or i[2]) else i[3], "count": i[4]}
+        {"id": i[0], "name": f"{i[1]} {i[2]}".strip() if (i[1] or i[2]) else i[3], "username": i[3], "count": i[4]}
         for i in workers_raw
     ]
 
