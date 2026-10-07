@@ -16,7 +16,7 @@ CLICK_RETURN_URL = os.environ.get("CLICK_RETURN_URL", "http://localhost:5173/job
 CLICK_CHECKOUT_URL = "https://my.click.uz/services/pay"
 
 
-def register_payment_routes(app, db, auth, admin_required, create_notification, admin_audit=None):
+def register_payment_routes(app, db, auth, admin_required, create_notification, admin_audit=None, enforce_block=None):
     def click_signature(click_trans_id, service_id, secret_key, merchant_trans_id, amount, action, sign_time):
         raw = f"{click_trans_id}{service_id}{secret_key}{merchant_trans_id}{amount}{action}{sign_time}"
         return hashlib.md5(raw.encode("utf-8")).hexdigest()
@@ -539,6 +539,14 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
     @app.route("/wallet")
     @auth
     def get_wallet():
+        if enforce_block:
+            block_response=enforce_block("full" if "def get_wallet():" != "def withdraw_wallet():
+        if enforce_block:
+            block_response=enforce_block("full" if "def withdraw_wallet():" != "def withdraw_wallet():" else "withdrawal")
+            if block_response: return block_response
+" else "withdrawal")
+            if block_response: return block_response
+
         user = db.q("SELECT COALESCE(balance,0) FROM users WHERE id=?", (request.uid,)).fetchone()
         transactions = db.q(
             """SELECT type,amount,balance_after,job_id,description,created_at
