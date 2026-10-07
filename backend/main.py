@@ -1567,14 +1567,14 @@ def cancel_worker():
     if job[1] is None:
         return jsonify({"msg": "Bu ishda hozir biriktirilgan bajaruvchi yo‘q"}), 400
 
-    if job[2] != "accepted":
-        return jsonify({"msg": "Bajaruvchini almashtirish faqat qabul qilingan ishda mumkin"}), 400
+    if job[2] not in ("payment_pending", "accepted"):
+        return jsonify({"msg": "Bajaruvchini almashtirish faqat to‘lovdan oldin yoki qabul qilingan ishda mumkin"}), 400
 
     conn = db.get_connection()
     cursor = conn.cursor()
     try:
         cursor.execute(
-            "UPDATE jobs SET worker_id=NULL, status='active', finished_at=NULL WHERE id=? AND user_id=? AND status='accepted'",
+            "UPDATE jobs SET worker_id=NULL, status='active', finished_at=NULL WHERE id=? AND user_id=? AND status IN ('payment_pending','accepted')",
             (job_id, request.uid),
         )
         if cursor.rowcount != 1:
@@ -1582,6 +1582,7 @@ def cancel_worker():
             return jsonify({"msg": "Ish holati o‘zgardi. Qayta urinib ko‘ring"}), 409
 
         cursor.execute("DELETE FROM messages WHERE job_id=?", (job_id,))
+        cursor.execute("DELETE FROM payments WHERE job_id=? AND status!='paid'", (job_id,))
         conn.commit()
     except Exception:
         conn.rollback()
