@@ -7,6 +7,7 @@ export default function Admin() {
     const token = localStorage.getItem("token")
     const user = JSON.parse(localStorage.getItem("user") || "null")
     const [data, setData] = useState(null)
+    const [walletSummary, setWalletSummary] = useState(null)
     const [notice, setNotice] = useState("")
     const [noticeType, setNoticeType] = useState("ok")
     const [tab, setTab] = useState("users")
@@ -17,8 +18,10 @@ export default function Admin() {
 
     const load = async () => {
         const result = await api("/admin/overview", { token })
+        const wallet = await api("/admin/wallet/summary", { token })
         if (result?.ok) {
             setData(result)
+            if (wallet?.ok) setWalletSummary(wallet)
             setNotice("")
         } else {
             setNoticeType("warn")
@@ -185,6 +188,8 @@ export default function Admin() {
                 <div className="card admin-stat"><span>Yakunlangan</span><strong>{stats.finished_jobs ?? 0}</strong></div>
                 <div className="card admin-stat"><span>Xizmatlar</span><strong>{stats.services ?? 0}</strong></div>
                 <div className="card admin-stat"><span>Baholar</span><strong>{stats.ratings ?? 0}</strong></div>
+                <div className="card admin-stat"><span>Waiting escrow</span><strong>{Number(walletSummary?.escrow_balance || 0).toLocaleString("uz-UZ")} UZS</strong></div>
+                <div className="card admin-stat"><span>FinJob daromadi</span><strong>{Number(walletSummary?.platform_balance || 0).toLocaleString("uz-UZ")} UZS</strong></div>
             </div>
 
             <div className="card admin-panel">
