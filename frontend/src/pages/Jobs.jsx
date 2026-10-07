@@ -560,7 +560,15 @@ export default function Jobs() {
 
                                 {isMyJob && (
                                     <span className="chip job-worker-chip">
-                                        👤 Bajaruvchi: {job.worker_id ? workerName : "Hali qabul qilinmagan"}
+                                        👤 Bajaruvchi: {job.worker_id ? (
+                                            <button
+                                                type="button"
+                                                className="profile-link-button"
+                                                onClick={() => navigate(`/profiles/${job.worker_username}`)}
+                                            >
+                                                {workerName}
+                                            </button>
+                                        ) : "Hali qabul qilinmagan"}
                                     </span>
                                 )}
                             </div>
