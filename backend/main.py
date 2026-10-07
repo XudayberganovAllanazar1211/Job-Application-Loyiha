@@ -1057,7 +1057,7 @@ def notify_matching_users(job_id, job_title, creator_id):
             create_notification(user_id, "matching_job", "Sizga mos yangi ish", f"Sizning sohalaringizga mos yangi ish yaratildi: {job_title}", "/jobs")
 
 
-register_payment_routes(app, db, auth, admin_required, create_notification, admin_audit)
+register_payment_routes(app, db, auth, admin_required, create_notification, admin_audit, enforce_block)
 
 @app.route("/notifications")
 @auth
@@ -2204,7 +2204,8 @@ def reverse_geocode():
 # -------- JOBS --------
 @app.route("/job", methods=["POST"])
 @auth
-def add_job():    block_response=enforce_block("job_creation")
+def add_job():
+    block_response=enforce_block("job_creation")
     if block_response: return block_response
 
     
@@ -2337,7 +2338,8 @@ def add_job():    block_response=enforce_block("job_creation")
 
 @app.route("/jobs")
 @auth
-def get_jobs():    block_response=enforce_block("full")
+def get_jobs():
+    block_response=enforce_block("full")
     if block_response: return block_response
 
     
@@ -2664,7 +2666,8 @@ def update_proposal(proposal_id):
 
 @app.route("/accept_job", methods=["POST"])
 @auth
-def accept():    block_response=enforce_block("job_accept")
+def accept():
+    block_response=enforce_block("job_accept")
     if block_response: return block_response
 
     
@@ -2893,7 +2896,8 @@ def _chat_participant(job_id, user_id):
 
 @app.route("/message", methods=["POST"])
 @auth
-def send_message():    block_response=enforce_block("chat")
+def send_message():
+    block_response=enforce_block("chat")
     if block_response: return block_response
 
     
@@ -3319,7 +3323,8 @@ def unread_message_count():
 
 @app.route("/conversations")
 @auth
-def conversations():    block_response=enforce_block("chat")
+def conversations():
+    block_response=enforce_block("chat")
     if block_response: return block_response
 
     
@@ -3412,7 +3417,8 @@ def typing(job_id):    block_response=enforce_block("chat")
 # -------- RATINGS --------
 @app.route("/rating", methods=["POST"])
 @auth
-def add_rating():    block_response=enforce_block("rating")
+def add_rating():
+    block_response=enforce_block("rating")
     if block_response: return block_response
 
     
