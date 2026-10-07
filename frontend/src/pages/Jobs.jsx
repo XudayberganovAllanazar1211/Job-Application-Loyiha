@@ -59,7 +59,9 @@ export default function Jobs() {
     const [reportDetails, setReportDetails] = useState("")
     const [pageSize, setPageSize] = useState(10)
     const [currentPage, setCurrentPage] = useState(1)
-    const [selectedJob, setSelectedJob] = useState(null)
+    const [activeJobDetails, setSelectedJob] = useState(null)
+    const [jobDetails, setJobDetails] = useState(null)
+    const [jobDetailsLoading, setJobDetailsLoading] = useState(false)
 
     const serviceMap = useMemo(
         () => Object.fromEntries(services.map((service) => [String(service.id), service.name])),
@@ -213,21 +215,25 @@ export default function Jobs() {
 
     const selectJob = (job) => {
         setSelectedJob(job)
+        setJobDetails(null)
     }
 
     useEffect(() => {
         if (!selectedJob?.id) return
 
         let cancelled = false
+        setJobDetailsLoading(true)
 
         const loadSelectedJobDetails = async () => {
             try {
                 const result = await api(`/jobs/${selectedJob.id}`, { token })
                 if (!cancelled && result?.id) {
-                    setSelectedJob((current) => current?.id === result.id ? { ...current, ...result } : current)
+                    setJobDetails(result)
                 }
             } catch {
-                // Ro‘yxatdagi ma’lumotlar panelni ko‘rsatishda davom etadi.
+                if (!cancelled) setJobDetails(null)
+            } finally {
+                if (!cancelled) setJobDetailsLoading(false)
             }
         }
 
@@ -237,6 +243,8 @@ export default function Jobs() {
             cancelled = true
         }
     }, [selectedJob?.id, token])
+
+    const activeJobDetails = jobDetails || activeJobDetails
 
     const addServiceFilter = (service) => {
         setSelectedServices([...selectedServices, service])
@@ -788,17 +796,17 @@ export default function Jobs() {
                         </div>
                     </div>
 
-                    {selectedJob ? (() => {
-                        const selectedStatus = String(selectedJob.status || "").trim().toLowerCase()
-                        const selectedIsMyJob = String(selectedJob.user_id) === String(user?.id)
-                        const selectedIsWorker = String(selectedJob.worker_id) === String(user?.id)
+                    {activeJobDetails ? (() => {
+                        const selectedStatus = String(activeJobDetails.status || "").trim().toLowerCase()
+                        const selectedIsMyJob = String(activeJobDetails.user_id) === String(user?.id)
+                        const selectedIsWorker = String(activeJobDetails.worker_id) === String(user?.id)
                         const selectedParticipant = selectedIsMyJob || selectedIsWorker
-                        const selectedCanAccept = selectedStatus === "active" && !selectedIsMyJob && selectedJob.worker_id == null
+                        const selectedCanAccept = selectedStatus === "active" && !selectedIsMyJob && activeJobDetails.worker_id == null
                         const selectedCanFinish = selectedStatus === "accepted" && (
-                            (selectedIsMyJob && !selectedJob.owner_finished) ||
-                            (selectedIsWorker && !selectedJob.worker_finished)
+                            (selectedIsMyJob && !activeJobDetails.owner_finished) ||
+                            (selectedIsWorker && !activeJobDetails.worker_finished)
                         )
-                        const selectedCanReport = selectedParticipant && selectedJob.worker_id != null && ["accepted", "pending_finish", "finished"].includes(selectedStatus)
+                        const selectedCanReport = selectedParticipant && activeJobDetails.worker_id != null && ["accepted", "pending_finish", "finished"].includes(selectedStatus)
                         const selectedStatusLabel = {
                             active: "Faol",
                             payment_pending: "To‘lov kutilmoqda",
@@ -811,30 +819,30 @@ export default function Jobs() {
                             <div className="dashboard-job-detail-body">
                                 <div>
                                     <span className="helper">ISH NOMI</span>
-                                    <h2 className="dashboard-job-detail-title">{selectedJob.title}</h2>
+                                    <h2 className="dashboard-job-detail-title">{activeJobDetails.title}</h2>
                                 </div>
 
                                 <div className="dashboard-job-detail-section">
                                     <span className="helper">TAVSIF</span>
-                                    <p>{selectedJob.description || "Tavsif kiritilmagan."}</p>
+                                    <p>{activeJobDetails.description || "Tavsif kiritilmagan."}</p>
                                 </div>
 
                                 <div className="dashboard-job-detail-facts">
                                     <div>
                                         <span>Narx</span>
-                                        <strong>{selectedJob.price ?? "-"} {selectedJob.currency || "UZS"}</strong>
+                                        <strong>{activeJobDetails.price ?? "-"} {activeJobDetails.currency || "UZS"}</strong>
                                     </div>
                                     <div>
                                         <span>Joylashuv</span>
-                                        <strong>{selectedJob.location || "—"}</strong>
+                                        <strong>{activeJobDetails.location || "—"}</strong>
                                     </div>
                                     <div>
                                         <span>Soha</span>
-                                        <strong>{selectedJob.service_name || serviceMap[String(selectedJob.service_id)] || "Noma’lum"}</strong>
+                                        <strong>{activeJobDetails.service_name || serviceMap[String(activeJobDetails.service_id)] || "Noma’lum"}</strong>
                                     </div>
                                     <div>
                                         <span>Yaratilgan</span>
-                                        <strong>{selectedJob.created_at || "—"}</strong>
+                                        <strong>{activeJobDetails.created_at || "—"}</strong>
                                     </div>
                                     <div>
                                         <span>Holat</span>
@@ -846,22 +854,22 @@ export default function Jobs() {
                                             <button
                                                 type="button"
                                                 className="profile-link-button"
-                                                onClick={() => navigate(`/profiles/${selectedJob.creator_username}`)}
+                                                onClick={() => navigate(`/profiles/${activeJobDetails.creator_username}`)}
                                             >
-                                                {(`${selectedJob.creator_first || ""} ${selectedJob.creator_last || ""}`).trim() || selectedJob.creator_username || "Noma’lum"}
+                                                {(`${activeJobDetails.creator_first || ""} ${activeJobDetails.creator_last || ""}`).trim() || activeJobDetails.creator_username || "Noma’lum"}
                                             </button>
                                         </strong>
                                     </div>
                                     <div>
                                         <span>Bajaruvchi</span>
                                         <strong>
-                                            {selectedJob.worker_id ? (
+                                            {activeJobDetails.worker_id ? (
                                                 <button
                                                     type="button"
                                                     className="profile-link-button"
-                                                    onClick={() => navigate(`/profiles/${selectedJob.worker_username}`)}
+                                                    onClick={() => navigate(`/profiles/${activeJobDetails.worker_username}`)}
                                                 >
-                                                    {(`${selectedJob.worker_first || ""} ${selectedJob.worker_last || ""}`).trim() || selectedJob.worker_username || "Noma’lum"}
+                                                    {(`${activeJobDetails.worker_first || ""} ${activeJobDetails.worker_last || ""}`).trim() || activeJobDetails.worker_username || "Noma’lum"}
                                                 </button>
                                             ) : "Hali qabul qilinmagan"}
                                         </strong>
@@ -870,11 +878,11 @@ export default function Jobs() {
                                         <>
                                             <div>
                                                 <span>Yaratuvchi yakunladi</span>
-                                                <strong>{selectedJob.owner_finished ? "Ha" : "Yo‘q"}</strong>
+                                                <strong>{activeJobDetails.owner_finished ? "Ha" : "Yo‘q"}</strong>
                                             </div>
                                             <div>
                                                 <span>Bajaruvchi yakunladi</span>
-                                                <strong>{selectedJob.worker_finished ? "Ha" : "Yo‘q"}</strong>
+                                                <strong>{activeJobDetails.worker_finished ? "Ha" : "Yo‘q"}</strong>
                                             </div>
                                         </>
                                     )}
@@ -886,7 +894,7 @@ export default function Jobs() {
                                         {selectedParticipant && (
                                             <button
                                                 className="btn btn-secondary"
-                                                onClick={() => navigate(`/chat/${selectedJob.id}`, { state: { job: selectedJob } })}
+                                                onClick={() => navigate(`/chat/${activeJobDetails.id}`, { state: { job: activeJobDetails } })}
                                             >
                                                 Suhbat
                                             </button>
@@ -895,7 +903,7 @@ export default function Jobs() {
                                         {selectedParticipant && selectedStatus === "finished" && (
                                             <button
                                                 className="btn btn-secondary"
-                                                onClick={() => navigate(`/rating/${selectedJob.id}`, { state: { job: selectedJob } })}
+                                                onClick={() => navigate(`/rating/${activeJobDetails.id}`, { state: { job: activeJobDetails } })}
                                             >
                                                 Baho
                                             </button>
@@ -904,17 +912,17 @@ export default function Jobs() {
                                         {selectedCanAccept && (
                                             <button
                                                 className="btn btn-primary"
-                                                disabled={actionJobId === selectedJob.id}
-                                                onClick={() => acceptJob(selectedJob)}
+                                                disabled={actionJobId === activeJobDetails.id}
+                                                onClick={() => acceptJob(activeJobDetails)}
                                             >
-                                                {actionJobId === selectedJob.id ? "Qabul qilinmoqda..." : "Ishni qabul qilish"}
+                                                {actionJobId === activeJobDetails.id ? "Qabul qilinmoqda..." : "Ishni qabul qilish"}
                                             </button>
                                         )}
 
                                         {selectedIsMyJob && selectedStatus === "payment_pending" && (
                                             <button
                                                 className="btn btn-primary"
-                                                onClick={() => navigate(`/payments/job/${selectedJob.id}`)}
+                                                onClick={() => navigate(`/payments/job/${activeJobDetails.id}`)}
                                             >
                                                 💳 To‘lovni amalga oshirish
                                             </button>
@@ -923,7 +931,7 @@ export default function Jobs() {
                                         {selectedCanReport && (
                                             <button
                                                 className="btn btn-secondary"
-                                                onClick={() => setReportJobId(reportJobId === selectedJob.id ? null : selectedJob.id)}
+                                                onClick={() => setReportJobId(reportJobId === activeJobDetails.id ? null : activeJobDetails.id)}
                                             >
                                                 ⚑ Shikoyat
                                             </button>
@@ -932,7 +940,7 @@ export default function Jobs() {
                                         {selectedIsMyJob && selectedCanFinish && (
                                             <button
                                                 className="btn btn-warn"
-                                                onClick={() => cancelWorker(selectedJob)}
+                                                onClick={() => cancelWorker(activeJobDetails)}
                                             >
                                                 Ishchini almashtirish
                                             </button>
@@ -941,10 +949,10 @@ export default function Jobs() {
                                         {(selectedIsMyJob || selectedIsWorker) && selectedCanFinish && (
                                             <button
                                                 className="btn btn-success"
-                                                disabled={actionJobId === selectedJob.id}
-                                                onClick={() => selectedIsWorker ? finishJobWorker(selectedJob.id) : finishJobSeeker(selectedJob)}
+                                                disabled={actionJobId === activeJobDetails.id}
+                                                onClick={() => selectedIsWorker ? finishJobWorker(activeJobDetails.id) : finishJobSeeker(activeJobDetails)}
                                             >
-                                                {actionJobId === selectedJob.id ? "Yuborilmoqda..." : "Yakunlash"}
+                                                {actionJobId === activeJobDetails.id ? "Yuborilmoqda..." : "Yakunlash"}
                                             </button>
                                         )}
 
@@ -960,14 +968,14 @@ export default function Jobs() {
                                             </span>
                                         )}
 
-                                        {selectedParticipant && selectedStatus === "accepted" && (selectedJob.owner_finished || selectedJob.worker_finished) && (
+                                        {selectedParticipant && selectedStatus === "accepted" && (activeJobDetails.owner_finished || activeJobDetails.worker_finished) && (
                                             <span className="chip">
                                                 ⏳ Ikkinchi tomonning yakunlashini kutmoqda
                                             </span>
                                         )}
                                     </div>
 
-                                    {reportJobId === selectedJob.id && selectedCanReport && (
+                                    {reportJobId === activeJobDetails.id && selectedCanReport && (
                                         <div className="report-panel" style={{ marginTop: 12 }}>
                                             <strong>{selectedIsMyJob ? "Bajaruvchi haqida shikoyat" : "Ish egasi haqida shikoyat"}</strong>
                                             <select
@@ -994,7 +1002,7 @@ export default function Jobs() {
                                                     type="button"
                                                     className="btn btn-danger"
                                                     disabled={!reportReason}
-                                                    onClick={() => submitReport(selectedJob)}
+                                                    onClick={() => submitReport(activeJobDetails)}
                                                 >
                                                     Yuborish
                                                 </button>
