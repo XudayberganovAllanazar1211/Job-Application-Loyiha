@@ -428,7 +428,7 @@ export default function Jobs() {
     const detailIsParticipant = detailIsMyJob || detailIsWorker
     const detailCanAccept = detailStatus === "active" && !detailIsMyJob && activeJobDetails?.worker_id == null
     const detailCanFinish = detailStatus === "accepted" && ((detailIsMyJob && !activeJobDetails?.owner_finished) || (detailIsWorker && !activeJobDetails?.worker_finished))
-    const detailCanReport = detailIsParticipant && activeJobDetails?.worker_id != null && ["accepted", "pending_finish", "finished"].includes(detailStatus)
+    const detailCanReport = detailIsParticipant && activeJobDetails?.worker_id != null && ["accepted", "pending_finish"].includes(detailStatus)
     const detailStatusLabel = {
         active: "Faol",
         payment_pending: "To‘lov kutilmoqda",
