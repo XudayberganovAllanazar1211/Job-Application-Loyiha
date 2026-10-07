@@ -8,6 +8,9 @@ on:
     branches:
       - finjob-ui-redesign
 
+permissions:
+  contents: read
+
 jobs:
   backend:
     name: Backend tests
