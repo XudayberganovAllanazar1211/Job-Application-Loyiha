@@ -479,6 +479,14 @@ class DB:
             except Exception:
                 pass
 
+        cursor.execute("PRAGMA table_info(reports)")
+        existing_report_cols = [row[1] for row in cursor.fetchall()]
+        if "message_id" not in existing_report_cols:
+            try:
+                cursor.execute("ALTER TABLE reports ADD COLUMN message_id INTEGER")
+            except Exception:
+                pass
+
         if "created_at" not in existing_rating_cols:
             try:
                 cursor.execute("ALTER TABLE ratings ADD COLUMN created_at TEXT")
@@ -949,6 +957,7 @@ def create_report():
     try:
         job_id=int(d["job_id"]) if d.get("job_id") else None
         reported_user_id=int(d["reported_user_id"]) if d.get("reported_user_id") else None
+        message_id=int(d["message_id"]) if d.get("message_id") else None
     except (TypeError,ValueError):
         return jsonify({"msg":"Identifikator noto‘g‘ri"}),400
     if not reason or len(reason)>120:
@@ -957,29 +966,55 @@ def create_report():
         return jsonify({"msg":"Izoh 2000 belgidan oshmasligi kerak"}),400
     if reported_user_id == request.uid:
         return jsonify({"msg":"O‘zingiz ustingizdan shikoyat qila olmaysiz"}),400
-    if not job_id or not reported_user_id:
-        return jsonify({"msg":"Ish va shikoyat qilinadigan foydalanuvchini ko‘rsating"}),400
 
-    job = db.q(
-        "SELECT user_id, worker_id, status FROM jobs WHERE id=?",
-        (job_id,),
-    ).fetchone()
-    if not job:
-        return jsonify({"msg":"Ish topilmadi"}),404
+    if message_id:
+        message = db.q(
+            """SELECT m.sender_id,m.receiver_id,m.job_id
+               FROM messages m
+               JOIN jobs j ON j.id=m.job_id
+               WHERE m.id=? AND j.id=? AND (j.user_id=? OR j.worker_id=?)
+               LIMIT 1""",
+            (message_id, job_id, request.uid, request.uid),
+        ).fetchone()
+        if not message:
+            return jsonify({"msg":"Bu xabar topilmadi yoki unga ruxsatingiz yo‘q"}),404
+        sender_id, receiver_id, message_job_id = message
+        if request.uid not in (sender_id, receiver_id):
+            return jsonify({"msg":"Faqat chat ishtirokchilari xabarni shikoyat qila oladi"}),403
+        target_user_id = sender_id if request.uid == receiver_id else receiver_id
+        if reported_user_id != target_user_id:
+            return jsonify({"msg":"Faqat shu xabarni yuborgan foydalanuvchi haqida shikoyat qilish mumkin"}),403
+        job_status = db.q("SELECT status FROM jobs WHERE id=?", (message_job_id,)).fetchone()
+        if not job_status or job_status[0] not in ("accepted", "pending_finish"):
+            return jsonify({"msg":"Bu chat xabarini hozircha shikoyat qilib bo‘lmaydi"}),400
+        now_time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        db.q(
+            "INSERT INTO reports(reporter_id,reported_user_id,job_id,message_id,reason,details,created_at) VALUES(?,?,?,?,?,?,?)",
+            (request.uid,reported_user_id,message_job_id,message_id,reason,details,now_time)
+        ).close()
+    else:
+        if not job_id or not reported_user_id:
+            return jsonify({"msg":"Ish va shikoyat qilinadigan foydalanuvchini ko‘rsating"}),400
+        job = db.q(
+            "SELECT user_id, worker_id, status FROM jobs WHERE id=?",
+            (job_id,),
+        ).fetchone()
+        if not job:
+            return jsonify({"msg":"Ish topilmadi"}),404
+        owner_id, worker_id, job_status = job
+        if not worker_id or request.uid not in (owner_id, worker_id):
+            return jsonify({"msg":"Faqat ish egasi yoki ishchi bir-biridan shikoyat qila oladi"}),403
+        if job_status not in ("accepted", "pending_finish"):
+            return jsonify({"msg":"Bu ish bo‘yicha hozircha shikoyat qilish mumkin emas"}),400
+        target_user_id = worker_id if request.uid == owner_id else owner_id
+        if reported_user_id != target_user_id:
+            return jsonify({"msg":"Faqat shu ishdagi boshqa ishtirokchi haqida shikoyat qilish mumkin"}),403
+        now_time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        db.q(
+            "INSERT INTO reports(reporter_id,reported_user_id,job_id,message_id,reason,details,created_at) VALUES(?,?,?,?,?,?,?)",
+            (request.uid,reported_user_id,job_id,None,reason,details,now_time)
+        ).close()
 
-    owner_id, worker_id, job_status = job
-    if not worker_id or request.uid not in (owner_id, worker_id):
-        return jsonify({"msg":"Faqat ish egasi yoki ishchi bir-biridan shikoyat qila oladi"}),403
-
-    if job_status not in ("accepted", "pending_finish"):
-        return jsonify({"msg":"Bu ish bo‘yicha hozircha shikoyat qilish mumkin emas"}),400
-
-    target_user_id = worker_id if request.uid == owner_id else owner_id
-    if reported_user_id != target_user_id:
-        return jsonify({"msg":"Faqat shu ishdagi boshqa ishtirokchi haqida shikoyat qilish mumkin"}),403
-
-    now_time=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    db.q("INSERT INTO reports(reporter_id,reported_user_id,job_id,reason,details,created_at) VALUES(?,?,?,?,?,?)",(request.uid,reported_user_id,job_id,reason,details,now_time)).close()
     for admin in db.q("SELECT id FROM users WHERE role='admin'").fetchall():
         create_notification(admin[0],"report","Yangi shikoyat",reason,"/admin")
     return jsonify({"msg":"Shikoyatingiz qabul qilindi."}),201
@@ -993,13 +1028,13 @@ def update_report(report_id):
         return jsonify({"msg":"Report holati noto‘g‘ri"}),400
 
     report=db.q(
-        "SELECT reporter_id, reported_user_id, job_id, status FROM reports WHERE id=?",
+        "SELECT reporter_id, reported_user_id, job_id, message_id, status FROM reports WHERE id=?",
         (report_id,)
     ).fetchone()
     if not report:
         return jsonify({"msg":"Shikoyat topilmadi"}),404
 
-    reporter_id, reported_user_id, job_id, old_status = report
+    reporter_id, reported_user_id, job_id, message_id, old_status = report
     result=db.q("UPDATE reports SET status=? WHERE id=?",(status,report_id))
     if result.rowcount!=1:
         result.close()
@@ -1008,7 +1043,7 @@ def update_report(report_id):
 
     if status in ("resolved", "rejected") and old_status != status:
         if status == "resolved":
-            if job_id:
+            if job_id and not message_id:
                 refund_payment = app.config.get("FINJOB_REFUND_PAYMENT")
                 if refund_payment:
                     refund_ok, refund_message, refund_data = refund_payment(job_id)
@@ -1089,7 +1124,7 @@ def admin_overview():
     ).fetchall()
 
     reports = db.q(
-        """SELECT r.id, r.reason, r.details, r.status, r.created_at,
+        """SELECT r.id, r.job_id, r.message_id, r.reason, r.details, r.status, r.created_at,
                   f.username AS reporter_username, t.username AS reported_username
            FROM reports r
            LEFT JOIN users f ON f.id = r.reporter_id
