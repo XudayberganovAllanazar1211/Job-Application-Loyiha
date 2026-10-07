@@ -872,7 +872,7 @@ export default function Profile() {
                             <h3 className="section-title">Ish namunalari</h3>
                             <p className="muted">Bajargan loyihalaringizni qisqacha ko‘rsating.</p>
                         </div>
-                        <span className="profile-count">{portfolio.length}</span>
+                        <span className="profile-count">{portfolio.length}/3</span>
                     </div>
 
                     {portfolio.length > 0 ? (
@@ -929,11 +929,21 @@ export default function Profile() {
                         </div>
                     )}
 
+                    {portfolio.length >= 3 && (
+                        <div className="notice" style={{ marginTop: 12 }}>
+                            Portfolio limiti to‘ldi: <strong>{portfolio.length}/3</strong>. Yangi portfolio qo‘shish uchun avval mavjud portfolioingizdan birini o‘chiring.
+                        </div>
+                    )}
+
                     <form
                         className="form"
                         style={{ marginTop: 16 }}
                         onSubmit={async (event) => {
                             event.preventDefault()
+                            if (portfolio.length >= 3) {
+                                setNotice("Siz maksimal 3 ta portfolio qo‘sha olasiz. Yangi portfolio qo‘shish uchun avval bittasini o‘chiring.")
+                                return
+                            }
                             if (!portfolioFile && !portfolioForm.title.trim()) {
                                 setNotice("Portfolio nomini kiriting yoki fayl tanlang.")
                                 return
