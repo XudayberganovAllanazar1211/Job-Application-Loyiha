@@ -362,13 +362,14 @@ export default function Admin() {
                 {data && tab === "reports" && (
                     <div className="admin-table-wrap">
                         <table className="admin-table">
-                            <thead><tr><th>ID</th><th>Yuboruvchi</th><th>Foydalanuvchi</th><th>Sabab</th><th>Tafsilot</th><th>Sana</th><th>Holat</th></tr></thead>
+                            <thead><tr><th>ID</th><th>Yuboruvchi</th><th>Foydalanuvchi</th><th>Manba</th><th>Sabab</th><th>Tafsilot</th><th>Sana</th><th>Holat</th></tr></thead>
                             <tbody>
                                 {(data.reports || []).map((item) => (
                                     <tr key={item.id}>
                                         <td>#{item.id}</td>
                                         <td>@{item.reporter_username || "—"}</td>
                                         <td>@{item.reported_username || "—"}</td>
+                                        <td>{item.message_id ? "Xabar #"+item.message_id : "Ish"}</td>
                                         <td><strong>{item.reason}</strong></td>
                                         <td>{item.details || "—"}</td>
                                         <td>{item.created_at || "—"}</td>
