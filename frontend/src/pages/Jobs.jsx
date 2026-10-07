@@ -591,7 +591,7 @@ export default function Jobs() {
                 </section>
             )}
 
-            <div className="jobs-workspace">
+            <div className="jobs-split-layout">
                 <div className="jobs-list-panel">
             <div className="jobs-results-heading">
                 <div>
