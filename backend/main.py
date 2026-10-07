@@ -2744,6 +2744,10 @@ def public_profile(username):
     ).fetchone()[0]
     rating_res = db.q("SELECT AVG(score) FROM ratings WHERE to_user=?", (u[0],)).fetchone()[0]
     avg_rating = round(float(rating_res), 1) if rating_res is not None else 0.0
+    reviews_count = db.q("SELECT COUNT(*) FROM ratings WHERE to_user=?", (u[0],)).fetchone()[0]
+    worker_jobs = db.q("SELECT COUNT(*) FROM jobs WHERE worker_id=?", (u[0],)).fetchone()[0]
+    successful_worker_jobs = db.q("SELECT COUNT(*) FROM jobs WHERE worker_id=? AND status='finished'", (u[0],)).fetchone()[0]
+    success_rate = round((successful_worker_jobs / worker_jobs) * 100, 1) if worker_jobs else 0.0
 
     return jsonify({
         "id": u[0],
@@ -2759,6 +2763,8 @@ def public_profile(username):
         "avatar_url": u[11] or "",
         "created_jobs_count": created_jobs_count,
         "completed_jobs_count": completed_jobs_count,
+        "reviews_count": reviews_count,
+        "success_rate": success_rate,
     })
 
 
