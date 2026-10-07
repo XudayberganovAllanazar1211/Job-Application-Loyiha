@@ -85,6 +85,13 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
             balance REAL NOT NULL DEFAULT 0,
             escrow_balance REAL NOT NULL DEFAULT 0
         )""")
+        conn.execute("""CREATE TABLE IF NOT EXISTS platform_settings(
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )""")
+        conn.execute(
+            "INSERT OR IGNORE INTO platform_settings(key,value) VALUES('commission_percent','10')"
+        )
         platform_columns = [row[1] for row in conn.execute("PRAGMA table_info(platform_wallet)").fetchall()]
         if "escrow_balance" not in platform_columns:
             conn.execute("ALTER TABLE platform_wallet ADD COLUMN escrow_balance REAL NOT NULL DEFAULT 0")
@@ -283,7 +290,8 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
 
     def _commission_percent():
         try:
-            value = float(os.environ.get("FINJOB_COMMISSION_PERCENT", "10"))
+            row = db.q("SELECT value FROM platform_settings WHERE key='commission_percent'").fetchone()
+            value = float(row[0]) if row else 10
         except (TypeError, ValueError):
             value = 10
         return max(0, min(100, value))
