@@ -21,6 +21,8 @@ export default function Chat() {
     const [otherTyping, setOtherTyping] = useState(false)
     const [otherName, setOtherName] = useState("Foydalanuvchi")
     const [otherUsername, setOtherUsername] = useState("")
+    const [file, setFile] = useState(null)
+    const fileInputRef = useRef(null)
     const bottomRef = useRef(null)
     const typingTimerRef = useRef(null)
 
@@ -146,20 +148,24 @@ export default function Chat() {
 
     const send = async (e) => {
         e.preventDefault()
-        if (!text.trim()) return
+        if (!text.trim() && !file) return
+
+        const body = new FormData()
+        body.append("receiver_id", String(Number(receiverId) || ""))
+        body.append("job_id", String(Number(jobId)))
+        body.append("message", text)
+        if (file) body.append("file", file)
 
         const result = await api("/message", {
             method: "POST",
-            body: {
-                receiver_id: Number(receiverId) || undefined,
-                job_id: Number(jobId),
-                message: text
-            },
+            body,
             token
         })
 
         if (result?.msg === "ok" || result?.msg === "sent") {
             setText("")
+            setFile(null)
+            if (fileInputRef.current) fileInputRef.current.value = ""
             clearTimeout(typingTimerRef.current)
             await sendTypingState(false)
             const res = await api(`/messages/${jobId}`, { token })
@@ -225,7 +231,20 @@ export default function Chat() {
                                     <div className="message-meta">
                                         {mine ? "Siz" : (message.sender_name || "Foydalanuvchi")} • {message.sent_at}
                                     </div>
-                                    <div>{message.message}</div>
+                                    {message.message && <div>{message.message}</div>}
+                                    {message.attachment_url && (
+                                        <div style={{ marginTop: message.message ? 8 : 0 }}>
+                                            {message.attachment_type === "image" ? (
+                                                <a href={message.attachment_url} target="_blank" rel="noreferrer">
+                                                    <img src={message.attachment_url} alt={message.attachment_name || "Fayl"} style={{ maxWidth: "260px", maxHeight: "260px", borderRadius: 10, display: "block" }} />
+                                                </a>
+                                            ) : (
+                                                <a href={message.attachment_url} target="_blank" rel="noreferrer" className="btn btn-secondary">
+                                                    📎 {message.attachment_name || "Faylni ochish"}
+                                                </a>
+                                            )}
+                                        </div>
+                                    )}
                                     {mine && <small className="muted" style={{ display: "block", marginTop: 4 }}>{message.read_at ? "✓✓ Ko‘rildi" : "✓ Yuborildi"}</small>}
                                 </div>
                             )
@@ -234,7 +253,18 @@ export default function Chat() {
                         {!messages.length && <div className="empty-state">Hozircha xabar yo‘q.</div>}
                     </div>
 
+                    {file && <div className="notice" style={{ marginTop: 14 }}>Tanlangan fayl: {file.name}</div>}
                     <form onSubmit={send} className="actions" style={{ marginTop: 14 }}>
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            style={{ display: "none" }}
+                            accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
+                            onChange={(e) => setFile(e.target.files?.[0] || null)}
+                        />
+                        <button type="button" className="btn btn-secondary" onClick={() => fileInputRef.current?.click()}>
+                            Fayl
+                        </button>
                         <input
                             className="input"
                             style={{ flex: 1 }}
