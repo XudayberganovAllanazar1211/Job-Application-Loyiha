@@ -1545,3 +1545,23 @@ html[data-theme="dark"] .profile-wallet-empty{border-color:#334155;background:rg
 .jobs-page-number{width:64px!important;min-width:64px!important;padding:9px 8px!important;text-align:center}
 .jobs-page-total{min-width:36px;text-align:center;color:var(--muted,#64748b);font-weight:800}
 .jobs-page-number::-webkit-inner-spin-button,.jobs-page-number::-webkit-outer-spin-button{opacity:1}
+
+.dashboard-workspace{display:grid;grid-template-columns:minmax(320px,1.2fr) minmax(280px,.9fr) minmax(280px,.9fr);gap:14px;align-items:start}
+.dashboard-job-grid{grid-template-columns:1fr!important}
+.dashboard-job-grid .job-card{width:100%}
+.dashboard-job-details{display:grid;gap:14px;position:sticky;top:18px;max-height:calc(100vh - 36px);overflow:auto}
+.dashboard-panel-head h2{margin:3px 0 4px;font:800 21px Manrope,sans-serif}
+.dashboard-panel-head p{margin:0;color:var(--muted,#64748b);font-size:13px;line-height:1.5}
+.dashboard-job-detail-body{display:grid;gap:16px}
+.dashboard-job-detail-section{padding:14px;border-radius:14px;background:var(--surface-muted,#f8fafc);border:1px solid var(--border,#e2e8f0)}
+.dashboard-job-detail-section p{margin:7px 0 0;color:var(--text,#334155);line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere}
+.dashboard-job-detail-facts{display:grid;gap:9px}
+.dashboard-job-detail-facts>div{display:grid;gap:3px;padding:10px 12px;border-radius:12px;border:1px solid var(--border,#e2e8f0)}
+.dashboard-job-detail-facts span{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted,#94a3b8);font-weight:800}
+.dashboard-job-detail-facts strong{font-size:13px;color:var(--text,#172033);overflow-wrap:anywhere}
+html[data-theme="dark"] .dashboard-job-detail-section{background:#0f172a;border-color:#334155}
+html[data-theme="dark"] .dashboard-job-detail-section p{color:#cbd5e1}
+html[data-theme="dark"] .dashboard-job-detail-facts>div{border-color:#334155}
+html[data-theme="dark"] .dashboard-job-detail-facts strong{color:#e2e8f0}
+@media(max-width:1100px){.dashboard-workspace{grid-template-columns:minmax(300px,1fr) minmax(280px,.9fr)}.dashboard-workspace>.chat-wrap{grid-column:1/-1;position:static;max-height:none}}
+@media(max-width:700px){.dashboard-workspace{grid-template-columns:1fr}.dashboard-job-details{position:static;max-height:none}.dashboard-workspace>.chat-wrap{grid-column:auto}}
