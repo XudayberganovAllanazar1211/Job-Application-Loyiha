@@ -145,7 +145,7 @@ export default function Payments() {
                                 <div><span>Test balansingiz</span><strong>{Number(wallet.balance || 0).toLocaleString("uz-UZ")} UZS</strong></div>
                                 <div><span>Holat</span><strong>{statusLabel(payment?.status || "pending")}</strong></div>
                                 <div><span>Summa</span><strong>{payment?.amount ? Number(payment.amount).toLocaleString("uz-UZ") : "—"} {payment?.currency || "UZS"}</strong></div>
-                                <div><span>Provayder</span><strong>Click</strong></div>
+                                <div><span>To‘lov turi</span><strong>{payment?.provider === "dummy" ? "Test" : "Click"}</strong></div>
                             </div>
 
                             <div className="notice" style={{ marginBottom: 16 }}>
