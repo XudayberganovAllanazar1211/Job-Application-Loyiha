@@ -1337,7 +1337,7 @@ html[data-theme="dark"] .notification-head>div>span{
     padding: 16px;
     border: 1px solid var(--border);
     border-radius: 14px;
-    background: var(--surface-soft);
+    background: #f8fafc;
 }
 .payment-summary span {
     display: block;
