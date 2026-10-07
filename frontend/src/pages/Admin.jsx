@@ -110,6 +110,24 @@ export default function Admin() {
         }
     }
 
+    const openReportAttachment = async (report) => {
+        if (!report?.id || !report.attachment_url) return
+        try {
+            const apiBase = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/$/, "")
+            const response = await fetch(apiBase + "/admin/report/" + report.id + "/attachment", {
+                headers: { Authorization: "Bearer " + token }
+            })
+            if (!response.ok) throw new Error("Biriktirilgan faylni ochib bo‘lmadi")
+            const blob = await response.blob()
+            const objectUrl = URL.createObjectURL(blob)
+            window.open(objectUrl, "_blank", "noopener,noreferrer")
+            setTimeout(() => URL.revokeObjectURL(objectUrl), 60000)
+        } catch (error) {
+            setNoticeType("warn")
+            setNotice(error.message || "Faylni ochib bo‘lmadi.")
+        }
+    }
+
     const addTestBalance = async (item) => {
         const value = window.prompt("@" + item.username + " hisobiga qancha test UZS qo‘shilsin?")
         if (value === null) return
@@ -362,7 +380,7 @@ export default function Admin() {
                 {data && tab === "reports" && (
                     <div className="admin-table-wrap">
                         <table className="admin-table">
-                            <thead><tr><th>ID</th><th>Yuboruvchi</th><th>Foydalanuvchi</th><th>Manba</th><th>Sabab</th><th>Tafsilot</th><th>Sana</th><th>Holat</th></tr></thead>
+                            <thead><tr><th>ID</th><th>Yuboruvchi</th><th>Foydalanuvchi</th><th>Manba</th><th>Sabab</th><th>Tafsilot</th><th>Fayl</th><th>Sana</th><th>Holat</th></tr></thead>
                             <tbody>
                                 {(data.reports || []).map((item) => (
                                     <tr key={item.id}>
@@ -372,6 +390,13 @@ export default function Admin() {
                                         <td>{item.message_id ? "Xabar #"+item.message_id : "Ish"}</td>
                                         <td><strong>{item.reason}</strong></td>
                                         <td>{item.details || "—"}</td>
+                                        <td>
+                                            {item.attachment_url ? (
+                                                <button className="btn btn-secondary admin-small-btn" onClick={() => openReportAttachment(item)}>
+                                                    {item.attachment_name || "Faylni ochish"}
+                                                </button>
+                                            ) : "—"}
+                                        </td>
                                         <td>{item.created_at || "—"}</td>
                                         <td>
                                             <select className="admin-action-select" value={item.status} onChange={async (event) => {
