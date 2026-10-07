@@ -30,6 +30,11 @@ class JobPlatformTestCase(unittest.TestCase):
             except Exception:
                 pass
 
+    def setUp(self):
+        # Testlar bir-birining rate-limit holatiga ta’sir qilmasin.
+        with main._rate_lock:
+            main._rate_buckets.clear()
+
     def test_01_registration_flow(self):
         # 1. Send code
         payload = {
