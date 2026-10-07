@@ -269,7 +269,8 @@ export default function Jobs() {
 
     // Tasdiqlash natijasini yuborish (Ha yoki Yo'q)
     const submitReport = async (job) => {
-        const result = await api("/report", { method: "POST", body: { job_id: job.id, reported_user_id: job.worker_id || job.user_id, reason: reportReason, details: reportDetails }, token })
+        const reportedUserId = String(job.user_id) === String(user?.id) ? job.worker_id : job.user_id
+        const result = await api("/report", { method: "POST", body: { job_id: job.id, reported_user_id: reportedUserId, reason: reportReason, details: reportDetails }, token })
         if (result?.status === 201) {
             setNoticeType("ok")
             setNotice("Shikoyatingiz qabul qilindi. Administratorlar ko‘rib chiqadi.")
