@@ -18,6 +18,7 @@ from functools import wraps
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 from PIL import Image, ImageOps, UnidentifiedImageError
 from payments import register_payment_routes
 import jwt
@@ -328,6 +329,8 @@ class DB:
                 description TEXT DEFAULT '',
                 url TEXT DEFAULT '',
                 image_url TEXT DEFAULT '',
+                file_url TEXT DEFAULT '',
+                file_name TEXT DEFAULT '',
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )
@@ -466,6 +469,19 @@ class DB:
                 cursor.execute("ALTER TABLE ratings ADD COLUMN created_at TEXT")
             except Exception:
                 pass
+
+        cursor.execute("PRAGMA table_info(portfolio_items)")
+        existing_portfolio_cols = [row[1] for row in cursor.fetchall()]
+        portfolio_migrations = [
+            ("file_url", "ALTER TABLE portfolio_items ADD COLUMN file_url TEXT DEFAULT ''"),
+            ("file_name", "ALTER TABLE portfolio_items ADD COLUMN file_name TEXT DEFAULT ''"),
+        ]
+        for col_name, sql in portfolio_migrations:
+            if col_name not in existing_portfolio_cols:
+                try:
+                    cursor.execute(sql)
+                except Exception:
+                    pass
 
         # Database Indexes
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);")
@@ -2403,13 +2419,13 @@ def portfolio():
                 return jsonify({"msg": "Foydalanuvchi topilmadi"}), 404
             owner_id = owner[0]
         items = db.q(
-            """SELECT id,title,description,url,image_url,created_at,updated_at
+            """SELECT id,title,description,url,image_url,file_url,file_name,created_at,updated_at
                FROM portfolio_items WHERE user_id=? ORDER BY id DESC LIMIT 50""",
             (owner_id,),
         ).fetchall()
         return jsonify([
             {"id": x[0],"title": x[1],"description": x[2],"url": x[3],"image_url": x[4],
-             "created_at": x[5],"updated_at": x[6]}
+             "file_url": x[5],"file_name": x[6],"created_at": x[7],"updated_at": x[8]}
             for x in items
         ])
 
@@ -2433,6 +2449,98 @@ def portfolio():
     item_id = result.lastrowid
     result.close()
     return jsonify({"msg": "Portfolio qo‘shildi.", "id": item_id}), 201
+
+
+
+    
+PORTFOLIO_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads", "portfolio")
+os.makedirs(PORTFOLIO_UPLOAD_DIR, exist_ok=True)
+PORTFOLIO_ALLOWED_EXTENSIONS = {"pdf", "png", "jpg", "jpeg", "webp"}
+PORTFOLIO_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
+MAX_PORTFOLIO_FILE_SIZE = 10 * 1024 * 1024
+
+
+@app.route("/portfolio/upload", methods=["POST"])
+@auth
+def upload_portfolio_file():
+    upload = request.files.get("file")
+    title = str(request.form.get("title", "")).strip()
+    description = str(request.form.get("description", "")).strip()
+    url = str(request.form.get("url", "")).strip()
+
+    if not upload or not upload.filename:
+        return jsonify({"msg": "Portfolio fayli tanlanmadi"}), 400
+    if not title or len(title) > 120:
+        return jsonify({"msg": "Portfolio nomi 1–120 belgidan iborat bo‘lishi kerak"}), 400
+    if len(description) > 2000 or len(url) > 1000:
+        return jsonify({"msg": "Portfolio maydonlaridan biri juda uzun"}), 400
+    if url and not re.fullmatch(r"https?://\S+", url):
+        return jsonify({"msg": "Portfolio havolasi noto‘g‘ri"}), 400
+
+    original_name = secure_filename(upload.filename)
+    extension = original_name.rsplit(".", 1)[-1].lower() if "." in original_name else ""
+    if extension not in PORTFOLIO_ALLOWED_EXTENSIONS:
+        return jsonify({"msg": "Faqat PDF, PNG, JPG, JPEG yoki WEBP fayl yuklash mumkin"}), 400
+
+    upload.seek(0, os.SEEK_END)
+    size = upload.tell()
+    upload.seek(0)
+    if size > MAX_PORTFOLIO_FILE_SIZE:
+        return jsonify({"msg": "Portfolio fayli 10 MB dan oshmasligi kerak"}), 400
+
+    try:
+        stored_extension = extension
+        if extension in PORTFOLIO_IMAGE_EXTENSIONS:
+            Image.MAX_IMAGE_PIXELS = 20_000_000
+            source = Image.open(upload.stream)
+            source.verify()
+            upload.stream.seek(0)
+            image = Image.open(upload.stream)
+            image = ImageOps.exif_transpose(image)
+            if image.width * image.height > 20_000_000:
+                return jsonify({"msg": "Rasm o‘lchami juda katta"}), 400
+            if image.mode not in ("RGB", "RGBA"):
+                image = image.convert("RGBA" if "A" in image.getbands() else "RGB")
+            stored_extension = "webp"
+            stored_name = f"{uuid.uuid4().hex}.{stored_extension}"
+            filepath = os.path.join(PORTFOLIO_UPLOAD_DIR, stored_name)
+            image.save(filepath, "WEBP", quality=86, method=6)
+            image.close()
+            source.close()
+        else:
+            header = upload.stream.read(5)
+            upload.stream.seek(0)
+            if header != b"%PDF-":
+                return jsonify({"msg": "Yuklangan PDF fayli haqiqiy emas"}), 400
+            stored_name = f"{uuid.uuid4().hex}.{stored_extension}"
+            filepath = os.path.join(PORTFOLIO_UPLOAD_DIR, stored_name)
+            upload.save(filepath)
+    except (UnidentifiedImageError, OSError, ValueError):
+        return jsonify({"msg": "Yuklangan faylni tekshirishda xatolik yuz berdi"}), 400
+
+    file_url = f"/uploads/portfolio/{stored_name}"
+    image_url = file_url if extension in PORTFOLIO_IMAGE_EXTENSIONS else ""
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    result = db.q(
+        """INSERT INTO portfolio_items(
+               user_id,title,description,url,image_url,file_url,file_name,created_at,updated_at
+           ) VALUES(?,?,?,?,?,?,?,?,?)""",
+        (request.uid,title,description,url,image_url,file_url,original_name or stored_name,now,now),
+    )
+    item_id = result.lastrowid
+    result.close()
+    return jsonify({
+        "msg": "Portfolio qo‘shildi.",
+        "id": item_id,
+        "file_url": file_url,
+        "file_name": original_name or stored_name,
+        "image_url": image_url,
+    }), 201
+
+
+@app.route("/uploads/portfolio/<path:filename>")
+def portfolio_upload(filename):
+    return send_from_directory(PORTFOLIO_UPLOAD_DIR, filename)
 
 
 @app.route("/portfolio/<int:item_id>", methods=["PATCH", "DELETE"])
@@ -2771,7 +2879,7 @@ def public_profile(username):
         "success_rate": success_rate,
         "portfolio": [
             {"id": x[0], "title": x[1], "description": x[2], "url": x[3], "image_url": x[4],
-             "created_at": x[5], "updated_at": x[6]}
+             "file_url": x[5], "file_name": x[6], "created_at": x[7], "updated_at": x[8]}
             for x in portfolio_rows
         ],
     })
@@ -2800,7 +2908,7 @@ def profile():
         avatar_url = u[11] if len(u) > 11 and u[11] else ""
         balance = float(u[12] or 0)
         portfolio_rows = db.q(
-            """SELECT id,title,description,url,image_url,created_at,updated_at
+            """SELECT id,title,description,url,image_url,file_url,file_name,created_at,updated_at
                FROM portfolio_items WHERE user_id=? ORDER BY id DESC LIMIT 50""",
             (request.uid,),
         ).fetchall()
