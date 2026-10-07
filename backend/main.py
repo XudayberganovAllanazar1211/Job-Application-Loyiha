@@ -2748,6 +2748,11 @@ def public_profile(username):
     worker_jobs = db.q("SELECT COUNT(*) FROM jobs WHERE worker_id=?", (u[0],)).fetchone()[0]
     successful_worker_jobs = db.q("SELECT COUNT(*) FROM jobs WHERE worker_id=? AND status='finished'", (u[0],)).fetchone()[0]
     success_rate = round((successful_worker_jobs / worker_jobs) * 100, 1) if worker_jobs else 0.0
+    portfolio_rows = db.q(
+        """SELECT id,title,description,url,image_url,created_at,updated_at
+           FROM portfolio_items WHERE user_id=? ORDER BY id DESC LIMIT 50""",
+        (u[0],),
+    ).fetchall()
 
     return jsonify({
         "id": u[0],
@@ -2765,6 +2770,11 @@ def public_profile(username):
         "completed_jobs_count": completed_jobs_count,
         "reviews_count": reviews_count,
         "success_rate": success_rate,
+        "portfolio": [
+            {"id": x[0], "title": x[1], "description": x[2], "url": x[3], "image_url": x[4],
+             "created_at": x[5], "updated_at": x[6]}
+            for x in portfolio_rows
+        ],
     })
 
 
@@ -2790,6 +2800,11 @@ def profile():
         user_role = u[10] if len(u) > 10 and u[10] else "user"
         avatar_url = u[11] if len(u) > 11 and u[11] else ""
         balance = float(u[12] or 0)
+        portfolio_rows = db.q(
+            """SELECT id,title,description,url,image_url,created_at,updated_at
+               FROM portfolio_items WHERE user_id=? ORDER BY id DESC LIMIT 50""",
+            (request.uid,),
+        ).fetchall()
 
         return jsonify({
             "id": u[0],
@@ -2808,6 +2823,11 @@ def profile():
             "avg_rating": avg_rating,
             "avatar_url": avatar_url,
             "balance": balance,
+            "portfolio": [
+                {"id": x[0], "title": x[1], "description": x[2], "url": x[3], "image_url": x[4],
+                 "created_at": x[5], "updated_at": x[6]}
+                for x in portfolio_rows
+            ],
         })
 
     elif request.method == "PUT":
