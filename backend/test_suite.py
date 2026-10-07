@@ -772,6 +772,36 @@ class JobPlatformTestCase(unittest.TestCase):
         self.assertEqual(file_response.status_code, 200)
         self.assertEqual(file_response.data[:5], b"%PDF-")
 
+        docx_data = b"PK\x03\x04" + b"FinJob Word test"
+        uploaded_docx = self.client.post(
+            "/portfolio/upload",
+            headers={"Authorization": f"Bearer {token}"},
+            data={
+                "title": "Word Portfolio",
+                "file": (BytesIO(docx_data), "portfolio.docx"),
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(uploaded_docx.status_code, 201)
+        docx_json = uploaded_docx.get_json()
+        self.assertEqual(docx_json.get("file_name"), "portfolio.docx")
+        docx_response = self.client.get(docx_json["file_url"])
+        self.assertEqual(docx_response.status_code, 200)
+        self.assertTrue(docx_response.data.startswith(b"PK\x03\x04"))
+
+        doc_data = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"FinJob legacy Word test"
+        uploaded_doc = self.client.post(
+            "/portfolio/upload",
+            headers={"Authorization": f"Bearer {token}"},
+            data={
+                "title": "Legacy Word Portfolio",
+                "file": (BytesIO(doc_data), "portfolio.doc"),
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(uploaded_doc.status_code, 201)
+        self.assertEqual(uploaded_doc.get_json().get("file_name"), "portfolio.doc")
+
         bad = self.client.post(
             "/portfolio/upload",
             headers={"Authorization": f"Bearer {token}"},
