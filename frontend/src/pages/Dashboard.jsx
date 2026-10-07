@@ -3,6 +3,34 @@ import { useNavigate } from "react-router-dom"
 import AppLayout from "../components/AppLayout"
 import { api } from "../api"
 
+function formatTimeAgo(dateString) {
+    if (!dateString) return "Vaqt noma'lum"
+
+    const created = new Date(String(dateString).replace(" ", "T"))
+    if (Number.isNaN(created.getTime())) return "Vaqt noma'lum"
+
+    const seconds = Math.max(0, Math.floor((Date.now() - created.getTime()) / 1000))
+    if (seconds < 60) return "Hozirgina"
+
+    const minutes = Math.floor(seconds / 60)
+    if (minutes < 60) return `${minutes} daqiqa oldin`
+
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return `${hours} soat oldin`
+
+    const days = Math.floor(hours / 24)
+    if (days < 7) return `${days} kun oldin`
+
+    const weeks = Math.floor(days / 7)
+    if (days < 30) return `${weeks} hafta oldin`
+
+    const months = Math.floor(days / 30)
+    if (days < 365) return `${months} oy oldin`
+
+    const years = Math.floor(days / 365)
+    return `${years} yil oldin`
+}
+
 export default function Dashboard() {
     const [jobs, setJobs] = useState([])
     const [services, setServices] = useState([])
@@ -10,12 +38,23 @@ export default function Dashboard() {
     const [selectedJob, setSelectedJob] = useState(null)
     const [search, setSearch] = useState("")
     const [notice, setNotice] = useState("")
+    const [noticeType, setNoticeType] = useState("ok")
+    const [pageSize, setPageSize] = useState(10)
+    const [currentPage, setCurrentPage] = useState(1)
+    const [reportJobId, setReportJobId] = useState(null)
+    const [reportReason, setReportReason] = useState("")
+    const [reportDetails, setReportDetails] = useState("")
+    const [proposalModalJob, setProposalModalJob] = useState(null)
+    const [proposalModalExisting, setProposalModalExisting] = useState(null)
+    const [proposalPrice, setProposalPrice] = useState("")
+    const [proposalDeadline, setProposalDeadline] = useState("")
+    const [proposalMessage, setProposalMessage] = useState("")
+    const [proposalSubmitting, setProposalSubmitting] = useState(false)
+    const [proposalModalLoading, setProposalModalLoading] = useState(false)
     const token = localStorage.getItem("token") || ""
-    const user = JSON.parse(localStorage.getItem("user") || "null")
+    const user = JSON.parse(localStorage.getItem("user") || localStorage.getItem("foydalanuvchi") || "null")
     const navigate = useNavigate()
 
-    const [activeConfirmJobId, setActiveConfirmJobId] = useState(null)
-    const [adminContactJobId, setAdminContactJobId] = useState(null)
 
     const serviceMap = useMemo(
         () => Object.fromEntries(services.map((service) => [String(service.id), service.name])),
@@ -32,22 +71,38 @@ export default function Dashboard() {
         if (Array.isArray(jobResult)) {
             setJobs(jobResult)
             if (!selectedJob && jobResult[0]) {
-                setSelectedJob(jobResult[0])
-                loadMessages(jobResult[0])
+                const firstJob = jobResult[0]
+                setSelectedJob(firstJob)
+                const participant =
+                    String(firstJob.user_id) === String(user?.id) ||
+                    String(firstJob.worker_id) === String(user?.id)
+                if (participant) {
+                    loadMessages(firstJob)
+                }
             }
         }
 
         if (Array.isArray(serviceResult)) setServices(serviceResult)
 
         if (profileResult?.id) {
-            localStorage.setItem("user", JSON.stringify(profileResult))
+            localStorage.setItem("foydalanuvchi", JSON.stringify(profileResult))
         }
     }
 
     const loadMessages = async (job) => {
         if (!job) return
+
+        const participant =
+            String(job.user_id) === String(user?.id) ||
+            String(job.worker_id) === String(user?.id)
+
+        if (!participant) {
+            setMessages([])
+            return
+        }
+
         const result = await api(`/messages/${job.id}`, { token })
-        if (Array.isArray(result)) setMessages(result)
+        setMessages(Array.isArray(result) ? result : [])
     }
 
     useEffect(() => {
@@ -59,13 +114,82 @@ export default function Dashboard() {
         await loadMessages(job)
     }
 
+    const openProposalModal = async (job) => {
+        if (!job?.id || String(job.user_id) === String(user?.id) || job.worker_id != null || String(job.status).toLowerCase() !== "active") return
+        setProposalModalJob(job)
+        setProposalModalExisting(null)
+        setProposalPrice(String(job.price ?? ""))
+        setProposalDeadline("")
+        setProposalMessage("")
+        setProposalModalLoading(true)
+
+        const result = await api(`/jobs/${job.id}/proposals`, { token })
+        const ownProposal = Array.isArray(result)
+            ? result.find((item) => String(item.worker_id) === String(user?.id) && item.status === "pending")
+            : null
+        if (ownProposal) {
+            setProposalModalExisting(ownProposal)
+            setProposalPrice(String(ownProposal.price ?? job.price ?? ""))
+            setProposalDeadline(ownProposal.deadline || "")
+            setProposalMessage(ownProposal.message || "")
+        }
+        setProposalModalLoading(false)
+    }
+
+    const submitProposal = async (event) => {
+        event.preventDefault()
+        if (!proposalModalJob || proposalSubmitting) return
+
+        const price = Number(proposalPrice)
+        if (!Number.isFinite(price) || price <= 0) {
+            setNoticeType("warn")
+            setNotice("Taklif narxini to‘g‘ri kiriting.")
+            return
+        }
+        if (!proposalDeadline.trim()) {
+            setNoticeType("warn")
+            setNotice("Taklif muddatini kiriting.")
+            return
+        }
+
+        setProposalSubmitting(true)
+        try {
+            const result = proposalModalExisting
+                ? await api(`/proposals/${proposalModalExisting.id}`, {
+                    method: "PATCH",
+                    token,
+                    body: { action: "edit", price, deadline: proposalDeadline.trim(), message: proposalMessage.trim() }
+                })
+                : await api(`/jobs/${proposalModalJob.id}/proposals`, {
+                    method: "POST",
+                    token,
+                    body: { price, deadline: proposalDeadline.trim(), message: proposalMessage.trim() }
+                })
+
+            if (result?.ok) {
+                setNoticeType("ok")
+                setNotice(proposalModalExisting ? "Taklif yangilandi." : "Taklif muvaffaqiyatli yuborildi.")
+                setProposalModalJob(null)
+                setProposalModalExisting(null)
+                await load()
+            } else {
+                setNoticeType("warn")
+                setNotice(result?.msg || "Taklif yuborilmadi.")
+            }
+        } finally {
+            setProposalSubmitting(false)
+        }
+    }
+
     const acceptJob = async (job) => {
         const result = await api("/accept_job", {
             method: "POST",
             body: { job_id: job.id },
             token
         })
-        setNotice(result?.msg === "ok" ? "Job qabul qilindi ✅" : (result?.msg || "Xato"))
+        const accepted = result?.msg === "ok"
+        setNoticeType(accepted ? "ok" : "warn")
+        setNotice(accepted ? "Ish qabul qilindi" : (result?.msg || "Xato"))
         load()
     }
 
@@ -76,33 +200,38 @@ export default function Dashboard() {
             body: { job_id: job.id },
             token
         })
-        setNotice(result?.msg === "ok" ? "Yakunlash so'rovi yuborildi. Bajaruvchi tasdiqlashi kutilmoqda." : (result?.msg || "Xato"))
+        const waiting = result?.msg === "waiting"
+        const completed = result?.msg === "ok"
+        setNoticeType((waiting || completed) ? "ok" : "warn")
+        setNotice(
+            completed
+                ? "Ish yakunlandi. To‘lov bajaruvchiga o‘tkazildi."
+                : waiting
+                    ? "Siz ishni yakunladingiz. Ikkinchi tomonning ham «Yakunlash» tugmasini bosishini kuting."
+                    : (result?.msg || "Xato")
+        )
         load()
     }
 
-    // Ish bajaruvchi uchun panelni ochish
-    const openConfirmPanel = (jobId) => {
-        setActiveConfirmJobId(jobId)
-    }
+    const cancelWorker = async (job) => {
+        const workerName = ((job.worker_first || "") + " " + (job.worker_last || "")).trim() || job.worker_username || "bajaruvchi"
+        const confirmed = window.confirm(
+            '"' + job.title + '" ishidan "' + workerName + '"ni olib tashlamoqchimisiz? Ish yana barcha foydalanuvchilar uchun ochiladi.'
+        )
+        if (!confirmed) return
 
-    const handleConfirmFinish = async (jobId, choice) => {
-        const result = await api("/confirm_finish", {
+        const result = await api("/cancel_worker", {
             method: "POST",
-            body: { job_id: jobId, choice },
+            body: { job_id: job.id },
             token
         })
-
-        if (result?.msg === "ok") {
-            setNotice("Ish muvaffaqiyatli yakunlandi va yopildi ✅")
-            setAdminContactJobId(null)
-            setActiveConfirmJobId(null)
-        } else if (result?.msg === "rejected") {
-            setNotice("Siz rad etdingiz. Ish o'z joyida faol holatda qoldi.")
-            setAdminContactJobId(jobId)
-            setActiveConfirmJobId(null)
-        } else {
-            setNotice(result?.msg || "Xatolik yuz berdi")
-        }
+        const cancelled = result?.msg === "ok"
+        setNoticeType(cancelled ? "ok" : "warn")
+        setNotice(
+            cancelled
+                ? "Bajaruvchi bekor qilindi. Ish yana barcha uchun ochiq."
+                : (result?.msg || "Xatolik yuz berdi")
+        )
         load()
     }
 
@@ -113,155 +242,239 @@ export default function Dashboard() {
         })
     }, [jobs, search])
 
+    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
+    const pagedJobs = useMemo(() => {
+        const start = (currentPage - 1) * pageSize
+        return filtered.slice(start, start + pageSize)
+    }, [filtered, currentPage, pageSize])
+
+    useEffect(() => {
+        setCurrentPage(1)
+    }, [search, pageSize])
+
+    useEffect(() => {
+        if (currentPage > totalPages) setCurrentPage(totalPages)
+    }, [currentPage, totalPages])
+
+    const submitReport = async (job) => {
+        const reportedUserId = String(job.user_id) === String(user?.id) ? job.worker_id : job.user_id
+        if (!reportedUserId) {
+            setNoticeType("warn")
+            setNotice("Shikoyat qilish uchun ishda boshqa ishtirokchi bo‘lishi kerak.")
+            return
+        }
+        if (!reportReason) {
+            setNoticeType("warn")
+            setNotice("Shikoyat sababini tanlang.")
+            return
+        }
+        const result = await api("/report", {
+            method: "POST",
+            body: { job_id: job.id, reported_user_id: Number(reportedUserId), reason: reportReason, details: reportDetails.trim() },
+            token
+        })
+        if (result?.msg === "Shikoyatingiz qabul qilindi.") {
+            setNoticeType("ok")
+            setNotice("Shikoyatingiz yuborildi.")
+            setReportJobId(null)
+            setReportReason("")
+            setReportDetails("")
+        } else {
+            setNoticeType("warn")
+            setNotice(result?.msg || "Shikoyat yuborishda xatolik yuz berdi.")
+        }
+    }
+
+    
     return (
         <AppLayout
-            title="Dashboard"
-            subtitle={`Xush kelibsiz, ${user?.first_name || user?.username || "user"}!`}
+            title="Boshqaruv paneli"
+            subtitle={`Xush kelibsiz, ${user?.first_name || user?.username || "foydalanuvchi"}!`}
         >
-            {notice && <div className="notice ok" style={{ marginBottom: 16 }}>{notice}</div>}
+            {notice && <div className={`notice ${noticeType === "ok" ? "ok" : "warn"}`} style={{ marginBottom: 16 }}>{notice}</div>}
 
             <div className="stat-grid" style={{ marginBottom: 18 }}>
                 <div className="stat-card">
-                    <div className="stat-label">Active jobs</div>
-                    <div className="stat-value">{jobs.length}</div>
+                    <div className="stat-card-icon">01</div>
+                    <div className="stat-card-kicker">Ish maydoni</div>
+                    <div className="stat-label">Faol ishlar</div>
+                    <div className="stat-value">{jobs.filter((job) => String(job.status || "").trim().toLowerCase() === "active").length}</div>
                 </div>
                 <div className="stat-card">
-                    <div className="stat-label">Services</div>
+                    <div className="stat-card-icon">02</div>
+                    <div className="stat-card-kicker">Katalog</div>
+                    <div className="stat-label">Xizmatlar</div>
                     <div className="stat-value">{services.length}</div>
                 </div>
                 <div className="stat-card">
-                    <div className="stat-label">System Mode</div>
+                    <div className="stat-card-icon">03</div>
+                    <div className="stat-card-kicker">Platform</div>
+                    <div className="stat-label">Tizim rejimi</div>
                     <div className="stat-value" style={{ fontSize: 22, color: "#10b981" }}>
-                        Multi-talent (All-in-One)
+                        Ko‘p yo‘nalishli bitta profil
                     </div>
                 </div>
             </div>
 
-            <div className="grid-2">
+            <div className="dashboard-workspace">
                 <section className="card">
-                    <div className="topbar" style={{ marginBottom: 16 }}>
+                    <div className="section-toolbar" style={{ marginBottom: 16 }}>
                         <div className="page-head">
-                            <h2 style={{ margin: 0 }}>My Workspace</h2>
+                            <h2 style={{ margin: 0 }}>Mening ish maydonim</h2>
                             <p className="muted" style={{ margin: 0 }}>
-                                Siz yaratgan yoki siz qabul qilgan barcha faol ishlar ro'yxati.
+                                Faol e’lonlar hamda siz yaratgan yoki qabul qilgan ishlar shu yerda ko‘rinadi.
                             </p>
                         </div>
                         <div className="actions">
                             <input
                                 className="input"
                                 style={{ minWidth: 220 }}
-                                placeholder="Search..."
+                                placeholder="Qidirish..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                             />
                             <button className="btn btn-primary" onClick={() => navigate("/create")}>
-                                Create Job
+                                Ish yaratish
                             </button>
                         </div>
                     </div>
 
-                    <div className="job-grid">
-                        {filtered.map((job) => {
-                            const workerName = `${job.worker_first || ""} ${job.worker_last || ""}`.trim() || job.worker_username;
-                            const isMyJob = job.user_id === user?.id;
-                            const isIAccepted = job.worker_id === user?.id;
+                    <div className="job-grid dashboard-job-grid">
+                        {pagedJobs.map((job) => {
+                            const status = String(job.status || "").trim().toLowerCase()
+                            const isMyJob = String(job.user_id) === String(user?.id)
+                            const isIAccepted = String(job.worker_id) === String(user?.id)
+                            const isParticipant = isMyJob || isIAccepted
+                            const canAccept = status === "active" && !isMyJob && job.worker_id == null
+                            const canBid = canAccept
+                            const canFinish = status === "accepted" && ((isMyJob && !job.owner_finished) || (isIAccepted && !job.worker_finished))
+                            const statusLabel = {
+                                active: "Faol",
+                                payment_pending: "To‘lov kutilmoqda",
+                                accepted: "Qabul qilingan",
+                                pending_finish: "Tasdiqlash kutilmoqda",
+                                finished: "Yakunlangan"
+                            }[status] || status
 
                             return (
                                 <article
                                     key={job.id}
-                                    className="card job-card"
-                                    style={{
-                                        cursor: "pointer",
-                                        outline: selectedJob?.id === job.id ? "2px solid rgba(96,165,250,.45)" : "none"
-                                    }}
+                                     className={`card job-card ${selectedJob?.id === job.id ? "selected" : ""}`}
+                                    style={{ cursor: "pointer" }}
                                     onClick={() => selectJob(job)}
                                 >
                                     <h3 className="job-title">{job.title}</h3>
-                                    <p className="job-desc">{job.description || "No description"}</p>
+                                    <p className="job-desc">{job.description || "Tavsif kiritilmagan"}</p>
                                     <div className="meta" style={{ marginBottom: 12 }}>
-                                        <span className="chip">💰 {job.price ?? "-"} UZS</span>
+                                        <span className="chip job-time-chip">🕒 {formatTimeAgo(job.created_at)}</span>
+                                        <span className="chip">💰 {job.price ?? "-"} {job.currency || "UZS"}</span>
                                         <span className="chip">📍 {job.location || "-"}</span>
-                                        <span className="chip">🧩 {serviceMap[String(job.service_id)] || job.service_name || job.service_id || "Unknown"}</span>
-                                        <span className="chip" style={{
-                                            background: job.status === "pending_finish" ? "rgba(245, 158, 11, 0.2)" : "rgba(255,255,255,0.05)",
-                                            color: job.status === "pending_finish" ? "#f59e0b" : "#fff"
-                                        }}>
-                                            Status: {job.status === "pending_finish" ? "Kutilmoqda" : job.status}
-                                        </span>
+                                        <span className="chip job-service-chip">🧩 {job.service_name || serviceMap[String(job.service_id)] || job.service_id || "Noma’lum"}</span>
+                                        <span className={`chip status-chip status-${status}`}><span className="status-dot" />{statusLabel}</span>
+                                        <span className="chip">📅 {job.created_at || "Sana noma’lum"}</span>
+                                        <span className="chip job-worker-chip">👤 Bajaruvchi: {job.worker_id ? (
+                                            <button type="button" className="profile-link-button" onClick={(e) => { e.stopPropagation(); navigate(`/profiles/${job.worker_username}`) }}>
+                                                {((job.worker_first || "") + " " + (job.worker_last || "")).trim() || job.worker_username}
+                                            </button>
+                                        ) : "Hali qabul qilinmagan"}</span>
                                     </div>
 
-                                    {/* --- IJROCHI TASDIQLASH SINOVI OYNASI --- */}
-                                    {isIAccepted && activeConfirmJobId === job.id && (
-                                        <div style={{
-                                            background: "rgba(245, 158, 11, 0.1)",
-                                            border: "1px solid rgba(245, 158, 11, 0.3)",
-                                            padding: "12px",
-                                            borderRadius: "8px",
-                                            marginBottom: "12px"
-                                        }} onClick={(e) => e.stopPropagation()}>
-                                            <strong style={{ color: "#f59e0b", display: "block", marginBottom: 6, fontSize: 13 }}>
-                                                Ishni tugatib, to'lovni qabul qildingizmi?
-                                            </strong>
-                                            <div style={{ display: "flex", gap: "8px" }}>
-                                                <button className="btn btn-success" style={{ padding: "2px 10px", fontSize: 12 }} onClick={() => handleConfirmFinish(job.id, "yes")}>
-                                                    Ha
-                                                </button>
-                                                <button className="btn btn-warn" style={{ padding: "2px 10px", fontSize: 12, background: "#ef4444" }} onClick={() => handleConfirmFinish(job.id, "no")}>
-                                                    Yo'q
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* --- ADMIN BILAN BOG'LANISH OGOHLANTIRISHI --- */}
-                                    {adminContactJobId === job.id && (
-                                        <div className="notice warn" style={{ marginBottom: 12, fontSize: 12 }} onClick={(e) => e.stopPropagation()}>
-                                            ⚠️ Muammo bormi? Admin bilan bog'laning: <strong>@admin_support</strong>
-                                        </div>
-                                    )}
-
                                     <div className="actions">
-                                        <button
-                                            className="btn btn-secondary"
-                                            onClick={(e) => {
-                                                e.stopPropagation()
-                                                navigate(`/chat/${job.id}`, { state: { job } })
-                                            }}
-                                        >
-                                            Chat
-                                        </button>
-                                        <button
-                                            className="btn btn-secondary"
-                                            onClick={(e) => {
-                                                e.stopPropagation()
-                                                navigate(`/rating/${job.id}`, { state: { job } })
-                                            }}
-                                        >
-                                            Rating
-                                        </button>
-
-                                        {/* --- ACCEPT TUGMASI (Mening ishim bo'lmaganda hamma uchun) --- */}
-                                        {!isMyJob && job.status === "active" && (
+                                        {isParticipant && (
                                             <button
-                                                className="btn btn-primary"
+                                                className="btn btn-secondary"
                                                 onClick={(e) => {
                                                     e.stopPropagation()
-                                                    acceptJob(job)
+                                                    navigate(`/chat/${job.id}`, { state: { job } })
                                                 }}
                                             >
-                                                Accept
+                                                Suhbat
+                                            </button>
+                                        )}
+                                        {isParticipant && status === "finished" && (
+                                            <button
+                                                className="btn btn-secondary"
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    navigate(`/rating/${job.id}`, { state: { job } })
+                                                }}
+                                            >
+                                                Baho
                                             </button>
                                         )}
 
+                                        {/* --- ACCEPT TUGMASI (Mening ishim bo'lmaganda hamma uchun) --- */}
+                                        {canBid && (
+                                            <>
+                                                <button
+                                                    className="btn btn-primary"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        openProposalModal(job)
+                                                    }}
+                                                >
+                                                    Taklif yuborish
+                                                </button>
+                                                {Number(job.proposal_count || 0) > 0 && <span className="muted" style={{ alignSelf: "center" }}>{job.proposal_count} ta taklif mavjud</span>}
+                                                <button
+                                                    className="btn btn-secondary"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        acceptJob(job)
+                                                    }}
+                                                >
+                                                    Tezkor qabul qilish
+                                                </button>
+                                            </>
+                                        )}
+
+                                        {isParticipant && job.worker_id != null && ["accepted", "pending_finish"].includes(status) && (
+                                            <button className="btn btn-secondary" onClick={(e) => { e.stopPropagation(); setReportJobId(reportJobId === job.id ? null : job.id) }}>⚑ Shikoyat</button>
+                                        )}
+                                        {isMyJob && status === "payment_pending" && (
+                                            <button className="btn btn-primary" onClick={(e) => { e.stopPropagation(); navigate(`/payments/job/${job.id}`) }}>💳 To‘lovni amalga oshirish</button>
+                                        )}
+
+                                        {reportJobId === job.id && (
+                                            <div className="report-panel">
+                                                <strong>{isMyJob ? "Ishchi haqida shikoyat" : "Ish egasi haqida shikoyat"}</strong>
+                                                <select className="select" value={reportReason} onChange={(e) => setReportReason(e.target.value)}>
+                                                    <option value="">Sababni tanlang</option>
+                                                    <option value="Firibgarlik yoki aldov">Firibgarlik yoki aldov</option>
+                                                    <option value="Noto‘g‘ri yoki yolg‘on e’lon">Noto‘g‘ri yoki yolg‘on e’lon</option>
+                                                    <option value="Haqorat yoki nomaqbul xatti-harakat">Haqorat yoki nomaqbul xatti-harakat</option>
+                                                    <option value="Spam">Spam</option>
+                                                    <option value="Boshqa">Boshqa</option>
+                                                </select>
+                                                <textarea className="textarea" maxLength={2000} placeholder="Qo‘shimcha tafsilot..." value={reportDetails} onChange={(e) => setReportDetails(e.target.value)} />
+                                                <div className="actions">
+                                                    <button type="button" className="btn btn-danger" disabled={!reportReason} onClick={(e) => { e.stopPropagation(); submitReport(job) }}>Yuborish</button>
+                                                    <button type="button" className="btn btn-secondary" onClick={(e) => { e.stopPropagation(); setReportJobId(null) }}>Bekor qilish</button>
+                                                </div>
+                                            </div>
+                                        )}
                                         {/* --- SIZ QABUL QILGANSIS CHIP --- */}
-                                        {isIAccepted && job.status === "accepted" && (
+                                        {isIAccepted && status === "accepted" && (
                                             <span className="chip" style={{ background: "rgba(34, 197, 94, 0.2)", color: "#4ade80" }}>
                                                 ✅ Qabul qilgansiz
                                             </span>
                                         )}
 
+                                        {/* --- ISHCHINI BEKOR QILISH (Ish beruvchi uchun) --- */}
+                                        {isMyJob && canFinish && (
+                                            <button
+                                                className="btn btn-warn"
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    cancelWorker(job)
+                                                }}
+                                            >
+                                                Ishchini almashtirish
+                                            </button>
+                                        )}
+
                                         {/* --- FINISH TUGMASI (Ish beruvchi uchun) --- */}
-                                        {isMyJob && job.status === "accepted" && (
+                                        {isMyJob && canFinish && (
                                             <button
                                                 className="btn btn-success"
                                                 onClick={(e) => {
@@ -269,38 +482,147 @@ export default function Dashboard() {
                                                     finishJobSeeker(job)
                                                 }}
                                             >
-                                                Finish
+                                                Yakunlash
                                             </button>
                                         )}
 
                                         {/* --- FINISH TUGMASI (Bajaruvchi uchun) --- */}
-                                        {isIAccepted && job.status === "pending_finish" && activeConfirmJobId !== job.id && (
+                                        {isIAccepted && canFinish && (
                                             <button
                                                 className="btn btn-success"
-                                                style={{ background: "#f59e0b" }}
                                                 onClick={(e) => {
                                                     e.stopPropagation()
-                                                    openConfirmPanel(job.id)
+                                                    finishJobSeeker(job)
                                                 }}
                                             >
-                                                Finish
+                                                Yakunlash
                                             </button>
+                                        )}
+
+                                        {isParticipant && status === "accepted" && (job.owner_finished || job.worker_finished) && (
+                                            <span className="chip">
+                                                ⏳ Ikkinchi tomonning yakunlashini kutmoqda
+                                            </span>
                                         )}
                                     </div>
                                 </article>
                             )
                         })}
 
-                        {!filtered.length && <div className="empty-state">Hozircha job yo‘q.</div>}
+                        {!filtered.length && <div className="empty-state">Hozircha ishlar yo‘q.</div>}
                     </div>
+
+                    {filtered.length > 0 && (
+                        <div className="jobs-pagination">
+                            <div className="jobs-page-size">
+                                <span>Bir sahifada</span>
+                                <select className="input" value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
+                                    <option value="5">5 ta</option>
+                                    <option value="10">10 ta</option>
+                                    <option value="20">20 ta</option>
+                                    <option value="50">50 ta</option>
+                                </select>
+                                <span>job</span>
+                            </div>
+                            <div className="jobs-page-controls">
+                                <button className="btn btn-secondary" disabled={currentPage === 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}>‹</button>
+                                <input
+                                    className="input jobs-page-number"
+                                    type="number"
+                                    min="1"
+                                    max={totalPages}
+                                    value={currentPage}
+                                    aria-label="Sahifa raqami"
+                                    onChange={(e) => {
+                                        const page = Number(e.target.value)
+                                        if (Number.isFinite(page)) setCurrentPage(Math.min(totalPages, Math.max(1, page)))
+                                    }}
+                                />
+                                <span className="jobs-page-total">/ {totalPages}</span>
+                                <button className="btn btn-secondary" disabled={currentPage === totalPages} onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}>›</button>
+                            </div>
+                        </div>
+                    )}
                 </section>
 
+                <aside className="card dashboard-job-details">
+                    <div className="dashboard-panel-head">
+                        <div>
+                            <span className="profile-eyebrow">ISH MA'LUMOTI</span>
+                            <h2>To‘liq ma’lumot</h2>
+                            <p>Tanlangan jobning barcha asosiy ma’lumotlari.</p>
+                        </div>
+                    </div>
+
+                    {selectedJob ? (
+                        <div className="dashboard-job-detail-body">
+                            <div>
+                                <span className="helper">NOMI</span>
+                                <h2 className="dashboard-job-detail-title">{selectedJob.title}</h2>
+                            </div>
+                            <div className="dashboard-job-detail-section">
+                                <span className="helper">TAVSIF</span>
+                                <p>{selectedJob.description || "Tavsif kiritilmagan."}</p>
+                            </div>
+                            <div className="dashboard-job-detail-facts">
+                                <div><span>Narx</span><strong>{selectedJob.price ?? "-"} {selectedJob.currency || "UZS"}</strong></div>
+                                <div><span>Joylashuv</span><strong>{selectedJob.location || "—"}</strong></div>
+                                <div><span>Soha</span><strong>{selectedJob.service_name || serviceMap[String(selectedJob.service_id)] || "Noma’lum"}</strong></div>
+                                <div><span>Yaratilgan</span><strong>{selectedJob.created_at || "—"}</strong></div>
+                                <div><span>Holat</span><strong>{({ active: "Faol", payment_pending: "To‘lov kutilmoqda", accepted: "Qabul qilingan", pending_finish: "Tasdiqlash kutilmoqda", finished: "Yakunlangan" }[String(selectedJob.status || "").toLowerCase()] || selectedJob.status || "—")}</strong></div>
+                                <div>
+                                    <span>Yaratuvchi</span>
+                                    <strong>
+                                        {selectedJob.creator_username ? (
+                                            <button
+                                                type="button"
+                                                className="profile-link-button"
+                                                onClick={() => navigate(`/profiles/${selectedJob.creator_username}`)}
+                                            >
+                                                {((selectedJob.creator_first || "") + " " + (selectedJob.creator_last || "")).trim() || selectedJob.creator_username}
+                                            </button>
+                                        ) : "Noma’lum"}
+                                    </strong>
+                                </div>
+                                <div>
+                                    <span>Bajaruvchi</span>
+                                    <strong>
+                                        {selectedJob.worker_id ? (
+                                            <button
+                                                type="button"
+                                                className="profile-link-button"
+                                                onClick={() => selectedJob.worker_username && navigate(`/profiles/${selectedJob.worker_username}`)}
+                                            >
+                                                {((selectedJob.worker_first || "") + " " + (selectedJob.worker_last || "")).trim() || selectedJob.worker_username}
+                                            </button>
+                                        ) : "Hali qabul qilinmagan"}
+                                    </strong>
+                                </div>
+                                {String(selectedJob.status || "").toLowerCase() === "accepted" && (
+                                    <>
+                                        <div>
+                                            <span>Yaratuvchi yakunladi</span>
+                                            <strong>{selectedJob.owner_finished ? "Ha" : "Yo‘q"}</strong>
+                                        </div>
+                                        <div>
+                                            <span>Bajaruvchi yakunladi</span>
+                                            <strong>{selectedJob.worker_finished ? "Ha" : "Yo‘q"}</strong>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="empty-state">To‘liq ma’lumotni ko‘rish uchun job tanlang.</div>
+                    )}
+                </aside>
+
                 <aside className="card chat-wrap">
-                    <div className="topbar" style={{ marginBottom: 0 }}>
+                    <div className="section-toolbar" style={{ marginBottom: 0 }}>
                         <div className="page-head">
-                            <h2 style={{ margin: 0 }}>Chat preview</h2>
+                            <h2 style={{ margin: 0 }}>Suhbat ko‘rinishi</h2>
                             <p className="muted" style={{ margin: 0 }}>
-                                Tanlangan job bo‘yicha oxirgi xabarlar.
+                                Tanlangan ish bo‘yicha oxirgi xabarlar.
                             </p>
                         </div>
                         <button
@@ -308,36 +630,82 @@ export default function Dashboard() {
                             disabled={!selectedJob}
                             onClick={() => selectedJob && navigate(`/chat/${selectedJob.id}`, { state: { job: selectedJob } })}
                         >
-                            Open chat
+                            Suhbatni ochish
                         </button>
                     </div>
 
                     {selectedJob ? (
                         <>
-                            <div className="card" style={{ padding: 16, background: "rgba(255,255,255,.03)" }}>
-                                <div className="helper">Selected job</div>
-                                <div style={{ fontWeight: 800, fontSize: 18, marginTop: 6 }}>{selectedJob.title}</div>
-                                <div className="meta" style={{ marginTop: 10 }}>
-                                    <span className="chip">💰 {selectedJob.price ?? "-"} UZS</span>
-                                    <span className="chip">📍 {selectedJob.location || "-"}</span>
-                                </div>
-                            </div>
 
                             <div className="message-list">
-                                {messages.map((message, index) => (
-                                    <div className="message them" key={index}>
-                                        <div className="message-meta">{message.sender_name} • {message.sent_at}</div>
-                                        <div>{message.message}</div>
-                                    </div>
-                                ))}
+                                {messages.map((message, index) => {
+                                    const mine = String(message.sender_id) === String(user?.id)
+                                    return (
+                                        <div className={`message ${mine ? "me" : "them"}`} key={index}>
+                                            <div className="message-meta">{mine ? "Siz" : (message.sender_name || "Foydalanuvchi")} • {message.sent_at}</div>
+                                            <div>{message.message}</div>
+                                        </div>
+                                    )
+                                })}
                                 {!messages.length && <div className="empty-state">Hozircha xabar yo‘q.</div>}
                             </div>
                         </>
                     ) : (
-                        <div className="empty-state">Chat ko‘rish uchun job tanla.</div>
+                        <div className="empty-state">Suhbatni ko‘rish uchun ish tanlang.</div>
                     )}
                 </aside>
             </div>
+        {proposalModalJob && (
+            <div
+                style={{
+                    position: "fixed",
+                    inset: 0,
+                    zIndex: 1200,
+                    background: "rgba(15, 23, 42, 0.58)",
+                    display: "grid",
+                    placeItems: "center",
+                    padding: 18
+                }}
+                onMouseDown={(event) => {
+                    if (event.target === event.currentTarget) setProposalModalJob(null)
+                }}
+            >
+                <div className="card" style={{ width: "min(560px, 100%)", margin: 0, maxHeight: "90vh", overflow: "auto" }}>
+                    <div className="section-toolbar">
+                        <div className="page-head">
+                            <span className="profile-eyebrow">{proposalModalExisting ? "TAKLIFNI TAHRIRLASH" : "TAKLIF YUBORISH"}</span>
+                            <h2>{proposalModalJob.title}</h2>
+                            <p className="muted">{proposalModalExisting ? "Taklifingizdagi ma’lumotlarni yangilang." : "Narx, muddat va qisqa izohni kiriting."}</p>
+                        </div>
+                        <button className="btn btn-secondary" type="button" onClick={() => setProposalModalJob(null)}>×</button>
+                    </div>
+                    {proposalModalLoading ? (
+                        <div className="empty-state" style={{ padding: 24 }}>Taklif ma’lumotlari yuklanmoqda...</div>
+                    ) : (
+                        <form onSubmit={submitProposal} className="form">
+                            <label className="field">
+                                <span>Taklif narxi (UZS)</span>
+                                <input className="input" type="number" min="1" step="1" value={proposalPrice} onChange={(e) => setProposalPrice(e.target.value)} required />
+                            </label>
+                            <label className="field">
+                                <span>Bajarish muddati</span>
+                                <input className="input" type="date" value={proposalDeadline} onChange={(e) => setProposalDeadline(e.target.value)} required />
+                            </label>
+                            <label className="field">
+                                <span>Taklif izohi</span>
+                                <textarea className="textarea" maxLength={3000} rows={5} placeholder="Nima qilishingizni va qachon topshirishingizni yozing..." value={proposalMessage} onChange={(e) => setProposalMessage(e.target.value)} />
+                            </label>
+                            <div className="actions">
+                                <button className="btn btn-secondary" type="button" onClick={() => setProposalModalJob(null)}>Bekor qilish</button>
+                                <button className="btn btn-primary" type="submit" disabled={proposalSubmitting}>
+                                    {proposalSubmitting ? "Saqlanmoqda..." : proposalModalExisting ? "Taklifni yangilash" : "Taklifni yuborish"}
+                                </button>
+                            </div>
+                        </form>
+                    )}
+                </div>
+            </div>
+        )}
         </AppLayout>
     )
 }

@@ -13,10 +13,23 @@ export default function Rating() {
     const [form, setForm] = useState({
         score: 5,
         comment: "",
-        to_user: String(location.state?.job?.worker_id || location.state?.job?.user_id || "")
+        to_user: ""
     })
     const [notice, setNotice] = useState("")
     const [loading, setLoading] = useState(false)
+
+    useEffect(() => {
+        if (!job) return
+
+        const targetId = String(job.worker_id) === String(me?.id)
+            ? job.user_id
+            : job.worker_id
+
+        if (targetId && String(targetId) !== String(me?.id)) {
+            const nextTarget = String(targetId)
+            setForm((prev) => prev.to_user === nextTarget ? prev : { ...prev, to_user: nextTarget })
+        }
+    }, [job, me?.id])
 
     useEffect(() => {
         const fetchJob = async () => {
@@ -24,8 +37,10 @@ export default function Rating() {
                 const jobData = await api(`/jobs/${jobId}`, { token })
                 if (jobData?.id) {
                     setJob(jobData)
-                    const targetId = jobData.user_id === me?.id ? jobData.worker_id : jobData.user_id
-                    if (targetId) {
+                    const targetId = String(jobData.user_id) === String(me?.id)
+                        ? jobData.worker_id
+                        : jobData.user_id
+                    if (targetId && String(targetId) !== String(me?.id)) {
                         setForm((prev) => ({ ...prev, to_user: String(targetId) }))
                     }
                 }
@@ -35,8 +50,13 @@ export default function Rating() {
     }, [jobId, job, me?.id, token])
 
     const ready = useMemo(
-        () => Number(form.score) >= 1 && Number(form.score) <= 10 && form.to_user,
-        [form]
+        () =>
+            job?.status === "finished" &&
+            Number(form.score) >= 1 &&
+            Number(form.score) <= 10 &&
+            form.to_user &&
+            String(form.to_user) !== String(me?.id),
+        [job, form, me?.id]
     )
 
     const submit = async (e) => {
@@ -63,17 +83,17 @@ export default function Rating() {
             return
         }
 
-        setNotice(result?.msg || "Rating xato")
+        setNotice(result?.msg || "Baho yuborishda xato")
     }
 
     return (
         <AppLayout
-            title="Rating"
-            subtitle="Job tugagach 1 dan 10 gacha baho bering."
+            title="Baho berish"
+            subtitle="Ish tugagach 1 dan 10 gacha baho bering."
         >
             <div className="grid-2">
                 <section className="card">
-                    <h2>Submit rating</h2>
+                    <h2>Bahoni yuborish</h2>
                     <p className="muted">Bajarilgan ish sifatini baholang.</p>
 
                     {notice && (
@@ -82,9 +102,15 @@ export default function Rating() {
                         </div>
                     )}
 
+                    {job && job.status !== "finished" && (
+                        <div className="notice warn" style={{ marginBottom: 14 }}>
+                            Baho faqat ish tugagandan keyin beriladi.
+                        </div>
+                    )}
+
                     <form className="form" onSubmit={submit}>
                         <div>
-                            <div className="helper" style={{ marginBottom: 8 }}>Baho (Score): <strong>{form.score} / 10</strong></div>
+                            <div className="helper" style={{ marginBottom: 8 }}>Baho: <strong>{form.score} / 10</strong></div>
                             <input
                                 type="range"
                                 min="1"
@@ -96,18 +122,18 @@ export default function Rating() {
                         </div>
 
                         <div>
-                            <label className="helper" style={{ display: "block", marginBottom: 4 }}>Baho berilayotgan foydalanuvchi ID</label>
-                            <input
-                                className="input"
-                                placeholder="To user ID"
-                                value={form.to_user}
-                                onChange={(e) => setForm({ ...form, to_user: e.target.value })}
-                                required
-                            />
+                            <label className="helper" style={{ display: "block", marginBottom: 4 }}>Baho berilayotgan foydalanuvchi</label>
+                            <div className="input rating-user-field">
+                                {job
+                                    ? (String(job.worker_id) === String(me?.id)
+                                        ? ([job.creator_first, job.creator_last].filter(Boolean).join(" ") || job.creator_username || "Foydalanuvchi")
+                                        : ([job.worker_first, job.worker_last].filter(Boolean).join(" ") || job.worker_username || "Foydalanuvchi"))
+                                    : "Ish ma'lumotlari yuklanmoqda..."}
+                            </div>
                         </div>
 
                         <div>
-                            <label className="helper" style={{ display: "block", marginBottom: 4 }}>Izoh (Comment)</label>
+                            <label className="helper" style={{ display: "block", marginBottom: 4 }}>Izoh</label>
                             <textarea
                                 className="textarea"
                                 placeholder="Xizmat haqida fikringizni yozing..."
@@ -118,26 +144,26 @@ export default function Rating() {
 
                         <div className="actions">
                             <button className="btn btn-primary" disabled={!ready || loading}>
-                                {loading ? "Yuborilmoqda..." : "Submit rating"}
+                                {loading ? "Yuborilmoqda..." : "Bahoni yuborish"}
                             </button>
                             <button type="button" className="btn btn-secondary" onClick={() => navigate(-1)}>
-                                Back
+                                Orqaga
                             </button>
                         </div>
                     </form>
                 </section>
 
                 <aside className="card">
-                    <h3>Job context</h3>
+                    <h3>Ish ma’lumotlari</h3>
                     <div className="chip-row">
-                        <span className="chip">Job # {jobId}</span>
-                        {job && <span className="chip">Title: {job.title}</span>}
-                        {job?.status && <span className="chip">Status: {job.status}</span>}
+                        <span className="chip">Ish # {jobId}</span>
+                        {job && <span className="chip">Sarlavha: {job.title}</span>}
+                        {job?.status && <span className="chip">Holat: {job.status}</span>}
                     </div>
                     <div className="empty-state" style={{ marginTop: 16 }}>
                         {job
                             ? `Ushbu baho ${job.title} ishi bo'yicha beriladi.`
-                            : "Job ma'lumotlari avtomatik bog'lanadi."}
+                            : "Ish ma'lumotlari avtomatik bog‘lanadi."}
                     </div>
                 </aside>
             </div>
