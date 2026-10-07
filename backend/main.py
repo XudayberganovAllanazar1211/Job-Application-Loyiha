@@ -2455,7 +2455,7 @@ def portfolio():
     
 PORTFOLIO_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads", "portfolio")
 os.makedirs(PORTFOLIO_UPLOAD_DIR, exist_ok=True)
-PORTFOLIO_ALLOWED_EXTENSIONS = {"pdf", "png", "jpg", "jpeg", "webp"}
+PORTFOLIO_ALLOWED_EXTENSIONS = {"pdf", "png", "jpg", "jpeg", "webp", "doc", "docx"}
 PORTFOLIO_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 MAX_PORTFOLIO_FILE_SIZE = 10 * 1024 * 1024
 
@@ -2512,10 +2512,13 @@ def upload_portfolio_file():
             image.close()
             source.close()
         else:
-            header = upload.stream.read(5)
+            header = upload.stream.read(8)
             upload.stream.seek(0)
-            if header != b"%PDF-":
-                return jsonify({"msg": "Yuklangan PDF fayli haqiqiy emas"}), 400
+            valid_pdf = extension == "pdf" and header.startswith(b"%PDF-")
+            valid_doc = extension == "doc" and header.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1")
+            valid_docx = extension == "docx" and header.startswith(b"PK\x03\x04")
+            if not (valid_pdf or valid_doc or valid_docx):
+                return jsonify({"msg": "Yuklangan fayl formati yoki tarkibi noto‘g‘ri"}), 400
             stored_name = f"{uuid.uuid4().hex}.{stored_extension}"
             filepath = os.path.join(PORTFOLIO_UPLOAD_DIR, stored_name)
             upload.save(filepath)
