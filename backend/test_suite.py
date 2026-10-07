@@ -341,6 +341,73 @@ class JobPlatformTestCase(unittest.TestCase):
         self.assertEqual(config.status_code, 200)
         self.assertEqual(config.get_json()["commission_percent"], 12.5)
 
+        # Verify the changed percentage is actually used during payout.
+        res_job = self.client.post(
+            "/job",
+            headers={"Authorization": f"Bearer {token_admin}"},
+            json={
+                "service_id": 1,
+                "title": "Commission Integration Check",
+                "description": "Verify dynamic payout commission.",
+                "price": 1000000,
+                "location": "Remote"
+            }
+        )
+        self.assertEqual(res_job.status_code, 200)
+        jobs = self.client.get(
+            "/jobs",
+            headers={"Authorization": f"Bearer {token_admin}"}
+        ).get_json()
+        job_id = [item["id"] for item in jobs if item["title"] == "Commission Integration Check"][0]
+
+        res_worker = self.client.post(
+            "/login",
+            json={"username": "tester_worker", "password": "Password123!"}
+        )
+        self.assertEqual(res_worker.status_code, 200)
+        token_worker = res_worker.get_json()["token"]
+
+        res_accept = self.client.post(
+            "/accept_job",
+            headers={"Authorization": f"Bearer {token_worker}"},
+            json={"job_id": job_id}
+        )
+        self.assertEqual(res_accept.status_code, 200)
+
+        balance_before = self.client.get(
+            "/wallet",
+            headers={"Authorization": f"Bearer {token_worker}"}
+        ).get_json()["balance"]
+
+        payment = self.client.post(
+            f"/payments/dummy/{job_id}",
+            headers={"Authorization": f"Bearer {token_admin}"}
+        )
+        self.assertEqual(payment.status_code, 200)
+        self.assertEqual(payment.get_json()["status"], "held")
+
+        self.assertEqual(
+            self.client.post(
+                "/finish_job",
+                headers={"Authorization": f"Bearer {token_admin}"},
+                json={"job_id": job_id}
+            ).status_code,
+            200
+        )
+        finished = self.client.post(
+            "/finish_job",
+            headers={"Authorization": f"Bearer {token_worker}"},
+            json={"job_id": job_id}
+        )
+        self.assertEqual(finished.status_code, 200)
+        self.assertTrue(finished.get_json()["finished"])
+
+        balance_after = self.client.get(
+            "/wallet",
+            headers={"Authorization": f"Bearer {token_worker}"}
+        ).get_json()["balance"]
+        self.assertAlmostEqual(balance_after - balance_before, 875000.0, places=2)
+
         invalid = self.client.patch(
             "/admin/settings/commission",
             headers={"Authorization": f"Bearer {token_admin}"},
@@ -353,6 +420,169 @@ class JobPlatformTestCase(unittest.TestCase):
             headers={"Authorization": f"Bearer {token_admin}"},
             json={"commission_percent": 10}
         )
+
+    def test_07_notifications_read_flow(self):
+        res = self.client.post(
+            "/login",
+            json={"username": "tester_creator", "password": "Password123!"}
+        )
+        self.assertEqual(res.status_code, 200)
+        token_admin = res.get_json()["token"]
+
+        notifications = self.client.get(
+            "/notifications",
+            headers={"Authorization": f"Bearer {token_admin}"}
+        )
+        self.assertEqual(notifications.status_code, 200)
+        data = notifications.get_json()
+        self.assertTrue("items" in data)
+        self.assertTrue("unread" in data)
+
+        read = self.client.post(
+            "/notifications/read",
+            headers={"Authorization": f"Bearer {token_admin}"}
+        )
+        self.assertEqual(read.status_code, 200)
+
+        after = self.client.get(
+            "/notifications",
+            headers={"Authorization": f"Bearer {token_admin}"}
+        )
+        self.assertEqual(after.status_code, 200)
+        self.assertEqual(after.get_json()["unread"], 0)
+
+    def test_08_withdrawal_has_no_extra_commission(self):
+        res = self.client.post(
+            "/login",
+            json={"username": "tester_worker", "password": "Password123!"}
+        )
+        self.assertEqual(res.status_code, 200)
+        token_worker = res.get_json()["token"]
+
+        before = self.client.get(
+            "/wallet",
+            headers={"Authorization": f"Bearer {token_worker}"}
+        ).get_json()["balance"]
+        amount = 10000.0
+
+        withdrawal = self.client.post(
+            "/wallet/withdraw",
+            headers={"Authorization": f"Bearer {token_worker}"},
+            json={"amount": amount}
+        )
+        self.assertEqual(withdrawal.status_code, 200)
+        result = withdrawal.get_json()
+        self.assertEqual(result["amount"], amount)
+        self.assertEqual(result["withdrawal_fee"], 0.0)
+        self.assertAlmostEqual(result["balance"], before - amount, places=2)
+
+    def test_09_report_resolution_and_refund(self):
+        res_admin = self.client.post(
+            "/login",
+            json={"username": "tester_creator", "password": "Password123!"}
+        )
+        self.assertEqual(res_admin.status_code, 200)
+        token_admin = res_admin.get_json()["token"]
+
+        res_worker = self.client.post(
+            "/login",
+            json={"username": "tester_worker", "password": "Password123!"}
+        )
+        self.assertEqual(res_worker.status_code, 200)
+        token_worker = res_worker.get_json()["token"]
+
+        created = self.client.post(
+            "/job",
+            headers={"Authorization": f"Bearer {token_admin}"},
+            json={
+                "service_id": 1,
+                "title": "Report Refund Check",
+                "description": "Verify admin report refund flow.",
+                "price": 300000,
+                "location": "Remote"
+            }
+        )
+        self.assertEqual(created.status_code, 200)
+
+        jobs = self.client.get(
+            "/jobs",
+            headers={"Authorization": f"Bearer {token_admin}"}
+        ).get_json()
+        job = [item for item in jobs if item["title"] == "Report Refund Check"][0]
+        job_id = job["id"]
+
+        accepted = self.client.post(
+            "/accept_job",
+            headers={"Authorization": f"Bearer {token_worker}"},
+            json={"job_id": job_id}
+        )
+        self.assertEqual(accepted.status_code, 200)
+
+        main.db.q("UPDATE users SET balance=500000 WHERE username=?", ("tester_creator",)).close()
+        paid = self.client.post(
+            f"/payments/dummy/{job_id}",
+            headers={"Authorization": f"Bearer {token_admin}"}
+        )
+        self.assertEqual(paid.status_code, 200)
+
+        report = self.client.post(
+            "/report",
+            headers={"Authorization": f"Bearer {token_admin}"},
+            json={
+                "job_id": job_id,
+                "reported_user_id": self.client.get(
+                    "/profile", headers={"Authorization": f"Bearer {token_worker}"}
+                ).get_json()["id"],
+                "reason": "Test report",
+                "details": "Testing moderation refund."
+            }
+        )
+        self.assertEqual(report.status_code, 201)
+
+        reports = self.client.get(
+            "/admin/overview",
+            headers={"Authorization": f"Bearer {token_admin}"}
+        ).get_json()["reports"]
+        report_id = [item["id"] for item in reports if item["reason"] == "Test report"][0]
+
+        resolved = self.client.patch(
+            f"/admin/report/{report_id}",
+            headers={"Authorization": f"Bearer {token_admin}"},
+            json={"status": "resolved"}
+        )
+        self.assertEqual(resolved.status_code, 200)
+
+        job_after = self.client.get(
+            f"/jobs/{job_id}",
+            headers={"Authorization": f"Bearer {token_admin}"}
+        )
+        self.assertEqual(job_after.status_code, 404)
+
+        balance_after = self.client.get(
+            "/wallet",
+            headers={"Authorization": f"Bearer {token_admin}"}
+        ).get_json()["balance"]
+        self.assertAlmostEqual(balance_after, 500000.0, places=2)
+
+    def test_10_logout_invalidates_token(self):
+        res = self.client.post(
+            "/login",
+            json={"username": "tester_worker", "password": "Password123!"}
+        )
+        self.assertEqual(res.status_code, 200)
+        token_worker = res.get_json()["token"]
+
+        logout = self.client.post(
+            "/logout",
+            headers={"Authorization": f"Bearer {token_worker}"}
+        )
+        self.assertEqual(logout.status_code, 200)
+
+        profile = self.client.get(
+            "/profile",
+            headers={"Authorization": f"Bearer {token_worker}"}
+        )
+        self.assertEqual(profile.status_code, 401)
 
 
 if __name__ == "__main__":
