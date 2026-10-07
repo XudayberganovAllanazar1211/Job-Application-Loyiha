@@ -93,7 +93,7 @@ export default function Chat() {
             sendTypingState(false)
             document.removeEventListener("visibilitychange", handleVisibilityChange)
         }
-    }, [jobId])
+    }, [jobId, receiverId])
 
     useEffect(() => {
         if (location.state?.job) {
