@@ -1316,6 +1316,8 @@ def admin_create_block(user_id):
         (user_id,block_type,reason,duration,now.isoformat(),expires,request.uid)
     )
     block_id=result.lastrowid; result.close()
+    if block_type == "full":
+        db.q("UPDATE users SET is_blocked=1 WHERE id=?", (user_id,)).close()
     admin_audit("user_block_created","user",user_id,f"{block_type}: {reason}")
     deadline="muddatsiz" if not expires else expires
     create_notification(
@@ -1339,6 +1341,8 @@ def admin_update_block(block_id):
         return jsonify({"msg":"Block allaqachon olib tashlangan"}),409
     now=datetime.datetime.now(datetime.timezone.utc).isoformat()
     db.q("UPDATE user_blocks SET active=0,lifted_at=?,lifted_by=? WHERE id=?",(now,request.uid,block_id)).close()
+    if block[2] == "full" and not _active_block_row(block[1], "full"):
+        db.q("UPDATE users SET is_blocked=0 WHERE id=?", (block[1],)).close()
     admin_audit("user_block_lifted","user",block[1],f"block={block_id}:{block[2]}")
     create_notification(block[1],"account_moderation","Cheklov olib tashlandi",
                         f"{BLOCK_TYPE_LABELS.get(block[2],block[2])} administrator tomonidan olib tashlandi.","/appeals")
@@ -1444,6 +1448,9 @@ def admin_review_appeal(appeal_id):
          (status,response if status!="reviewing" else "",now,request.uid,appeal_id)).close()
     if status=="approved":
         db.q("UPDATE user_blocks SET active=0,lifted_at=?,lifted_by=? WHERE id=?",(now,request.uid,row[2])).close()
+        block_row = db.q("SELECT user_id,block_type FROM user_blocks WHERE id=?", (row[2],)).fetchone()
+        if block_row and block_row[1] == "full" and not _active_block_row(block_row[0], "full"):
+            db.q("UPDATE users SET is_blocked=0 WHERE id=?", (block_row[0],)).close()
         message="Appealingiz tasdiqlandi va ushbu cheklov olib tashlandi."
     elif status=="rejected":
         message="Appealingiz rad etildi."
@@ -1460,8 +1467,15 @@ def admin_review_appeal(appeal_id):
 def admin_overview():
     users = db.q(
         """SELECT id, username, first_name, last_name, email, birthday, bio, skills, role, created_at,
-                  average_rating, COALESCE(balance,0), COALESCE(is_blocked,0)
-           FROM users ORDER BY id DESC"""
+                  average_rating, COALESCE(balance,0),
+                  CASE WHEN EXISTS(
+                      SELECT 1 FROM user_blocks ub
+                      WHERE ub.user_id=users.id AND ub.active=1
+                        AND (ub.expires_at IS NULL OR ub.expires_at>?)
+                        AND ub.block_type='full'
+                  ) THEN 1 ELSE 0 END
+           FROM users ORDER BY id DESC""",
+        (datetime.datetime.now(datetime.timezone.utc).isoformat(),)
     ).fetchall()
     jobs = db.q(
         """SELECT j.id,j.title,j.price,j.currency,j.location,j.status,j.created_at,
@@ -1623,9 +1637,16 @@ def admin_search():
         return jsonify({"users":[],"jobs":[],"services":[],"reports":[]})
     like=f"%{q}%"
     users=db.q(
-        """SELECT id,username,first_name,last_name,email,role,COALESCE(is_blocked,0)
+        """SELECT id,username,first_name,last_name,email,role,
+                  CASE WHEN EXISTS(
+                      SELECT 1 FROM user_blocks ub
+                      WHERE ub.user_id=users.id AND ub.active=1
+                        AND (ub.expires_at IS NULL OR ub.expires_at>?)
+                        AND ub.block_type='full'
+                  ) THEN 1 ELSE 0 END
            FROM users WHERE username LIKE ? OR email LIKE ? OR first_name LIKE ? OR last_name LIKE ?
-           ORDER BY id DESC LIMIT 12""",(like,like,like,like)
+           ORDER BY id DESC LIMIT 12""",
+        (datetime.datetime.now(datetime.timezone.utc).isoformat(),like,like,like,like)
     ).fetchall()
     jobs=db.q(
         """SELECT j.id,j.title,j.status,u.username
@@ -1670,6 +1691,7 @@ def admin_user_status(user_id):
             (user_id,"full","Administrator tomonidan berilgan to‘liq blok.",None,now.isoformat(),None,request.uid)
         )
         block_id=result.lastrowid; result.close()
+        db.q("UPDATE users SET is_blocked=1 WHERE id=?", (user_id,)).close()
         admin_audit("user_block_created","user",user_id,f"full: legacy endpoint")
         create_notification(user_id,"account_moderation","Hisobingiz to‘liq bloklandi","Administrator hisobingizni to‘liq blokladi. Sabab: Administrator tomonidan berilgan to‘liq blok. Appeal yuborish uchun Appeals bo‘limiga kiring.","/appeals")
         return jsonify({"msg":"Foydalanuvchi bloklandi.","block_id":block_id})
@@ -1678,6 +1700,8 @@ def admin_user_status(user_id):
         return jsonify({"msg":"Faol to‘liq block topilmadi."})
     now=datetime.datetime.now(datetime.timezone.utc).isoformat()
     db.q("UPDATE user_blocks SET active=0,lifted_at=?,lifted_by=? WHERE id=?",(now,request.uid,existing[0])).close()
+    if not _active_block_row(user_id, "full"):
+        db.q("UPDATE users SET is_blocked=0 WHERE id=?", (user_id,)).close()
     admin_audit("user_block_lifted","user",user_id,f"block={existing[0]}: legacy endpoint")
     create_notification(user_id,"account_moderation","To‘liq block olib tashlandi","Administrator to‘liq blokni olib tashladi.","/appeals")
     return jsonify({"msg":"Foydalanuvchi qayta faollashtirildi."})
@@ -1701,6 +1725,7 @@ def admin_update_commission():
            ON CONFLICT(key) DO UPDATE SET value=excluded.value""",
         (str(value),)
     ).close()
+    admin_audit("commission_update","settings",None,f"commission_percent={value:g}")
 
     return jsonify({"ok": True, "msg": f"Platforma komissiyasi {value:g}% ga o‘zgartirildi.", "commission_percent": value})
 
@@ -1821,6 +1846,14 @@ def admin_delete_user(user_id):
         cur = conn.cursor()
         cur.execute("DELETE FROM messages WHERE sender_id=? OR receiver_id=?", (user_id, user_id))
         cur.execute("DELETE FROM ratings WHERE from_user=? OR to_user=?", (user_id, user_id))
+        cur.execute("DELETE FROM job_proposals WHERE worker_id=? OR job_id IN (SELECT id FROM jobs WHERE user_id=? OR worker_id=?)", (user_id, user_id, user_id))
+        cur.execute("DELETE FROM favorites WHERE user_id=? OR (target_type='user' AND target_id=?) OR (target_type='job' AND target_id IN (SELECT id FROM jobs WHERE user_id=? OR worker_id=?))", (user_id, user_id, user_id, user_id))
+        cur.execute("DELETE FROM portfolio_items WHERE user_id=?", (user_id,))
+        cur.execute("DELETE FROM notifications WHERE user_id=?", (user_id,))
+        cur.execute("DELETE FROM reports WHERE reporter_id=? OR reported_user_id=? OR job_id IN (SELECT id FROM jobs WHERE user_id=? OR worker_id=?)", (user_id, user_id, user_id, user_id))
+        cur.execute("DELETE FROM appeals WHERE user_id=? OR block_id IN (SELECT id FROM user_blocks WHERE user_id=?)", (user_id, user_id))
+        cur.execute("DELETE FROM user_blocks WHERE user_id=?", (user_id,))
+        cur.execute("DELETE FROM typing_states WHERE user_id=?", (user_id,))
         cur.execute("DELETE FROM job_services WHERE job_id IN (SELECT id FROM jobs WHERE user_id=? OR worker_id=?)", (user_id, user_id))
         cur.execute("DELETE FROM jobs WHERE user_id=? OR worker_id=?", (user_id, user_id))
         cur.execute("UPDATE services SET created_by=NULL WHERE created_by=?", (user_id,))
@@ -1910,6 +1943,10 @@ def admin_delete_job(job_id):
         cur = conn.cursor()
         cur.execute("DELETE FROM messages WHERE job_id=?", (job_id,))
         cur.execute("DELETE FROM ratings WHERE job_id=?", (job_id,))
+        cur.execute("DELETE FROM job_proposals WHERE job_id=?", (job_id,))
+        cur.execute("DELETE FROM favorites WHERE target_type='job' AND target_id=?", (job_id,))
+        cur.execute("DELETE FROM reports WHERE job_id=?", (job_id,))
+        cur.execute("DELETE FROM typing_states WHERE job_id=?", (job_id,))
         cur.execute("DELETE FROM job_services WHERE job_id=?", (job_id,))
         cur.execute("DELETE FROM jobs WHERE id=?", (job_id,))
         conn.commit()
@@ -2486,7 +2523,7 @@ def get_job_detail(job_id):
 @app.route("/jobs/<int:job_id>/proposals", methods=["GET", "POST"])
 @auth
 def job_proposals(job_id):
-    block_response=enforce_block("proposal" if request.method=="POST" else "full")
+    block_response=enforce_block("full") if request.method=="GET" else enforce_block("proposal")
     if block_response: return block_response
 
     
@@ -2776,6 +2813,24 @@ def accept():
 
     if updated != 1:
         return jsonify({"msg": "Ushbu ish allaqachon boshqa foydalanuvchi tomonidan qabul qilingan!"}), 409
+
+    pending_proposals = db.q(
+        "SELECT worker_id FROM job_proposals WHERE job_id=? AND status='pending'",
+        (job_id,),
+    ).fetchall()
+    now_proposal_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    db.q(
+        "UPDATE job_proposals SET status='rejected',updated_at=? WHERE job_id=? AND status='pending'",
+        (now_proposal_time, job_id),
+    ).close()
+    for proposal_worker_id in [row[0] for row in pending_proposals]:
+        create_notification(
+            proposal_worker_id,
+            "proposal_rejected",
+            "Taklifingiz yopildi",
+            f"«{job[3]}» ishini boshqa bajaruvchi qabul qildi, shuning uchun pending taklifingiz yopildi.",
+            "/jobs",
+        )
 
     if held_payment:
         db.q(
