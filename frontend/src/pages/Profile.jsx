@@ -87,6 +87,9 @@ export default function Profile() {
     const [cropImageSize, setCropImageSize] = useState({ width: 500, height: 500 })
     const [cropDragging, setCropDragging] = useState(false)
     const [walletTransactions, setWalletTransactions] = useState([])
+    const [portfolio, setPortfolio] = useState([])
+    const [portfolioForm, setPortfolioForm] = useState({ title: "", description: "", url: "" })
+    const [portfolioLoading, setPortfolioLoading] = useState(false)
     const [walletLoading, setWalletLoading] = useState(true)
     const [withdrawOpen, setWithdrawOpen] = useState(false)
     const [withdrawAmount, setWithdrawAmount] = useState("")
@@ -131,6 +134,7 @@ export default function Profile() {
                 setSkills(profileSkills)
                 setSavedSkills(profileSkills)
                 setAvatarUrl(result.avatar_url || "")
+                setPortfolio(Array.isArray(result.portfolio) ? result.portfolio : [])
             }
 
             setInitialLoad(false)
@@ -859,6 +863,99 @@ export default function Profile() {
                         </div>
                     </div>
                 </div>
+
+                <section className="card" style={{ marginTop: 18 }}>
+                    <div className="profile-section-head">
+                        <div>
+                            <span className="profile-eyebrow">PORTFOLIO</span>
+                            <h3 className="section-title">Ish namunalari</h3>
+                            <p className="muted">Bajargan loyihalaringizni qisqacha ko‘rsating.</p>
+                        </div>
+                        <span className="profile-count">{portfolio.length}</span>
+                    </div>
+
+                    {portfolio.length > 0 ? (
+                        <div style={{ display: "grid", gap: 10 }}>
+                            {portfolio.map((item) => (
+                                <article key={item.id} className="card" style={{ margin: 0 }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+                                        <div>
+                                            <strong>{item.title}</strong>
+                                            {item.description && <p style={{ margin: "6px 0 0" }}>{item.description}</p>}
+                                            {item.url && (
+                                                <a href={item.url} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 8 }}>
+                                                    Loyihani ko‘rish →
+                                                </a>
+                                            )}
+                                        </div>
+                                        <button
+                                            type="button"
+                                            className="btn btn-secondary"
+                                            onClick={async () => {
+                                                const result = await api(`/portfolio/${item.id}`, { method: "DELETE", token: localStorage.getItem("token") || "" })
+                                                if (result?.ok) {
+                                                    setPortfolio((items) => items.filter((current) => current.id !== item.id))
+                                                    setNotice("Portfolio o‘chirildi.")
+                                                } else {
+                                                    setNotice(result?.msg || "Portfolio o‘chirilmadi.")
+                                                }
+                                            }}
+                                        >
+                                            O‘chirish
+                                        </button>
+                                    </div>
+                                </article>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="profile-empty" style={{ marginBottom: 14 }}>
+                            <strong>Hali portfolio yo‘q</strong>
+                            <span>Kamida 1–2 ta yaxshi ish namunasi qo‘shish profilingizni kuchaytiradi.</span>
+                        </div>
+                    )}
+
+                    <form
+                        className="form"
+                        style={{ marginTop: 16 }}
+                        onSubmit={async (event) => {
+                            event.preventDefault()
+                            if (!portfolioForm.title.trim()) return
+                            setPortfolioLoading(true)
+                            const result = await api("/portfolio", {
+                                method: "POST",
+                                token: localStorage.getItem("token") || "",
+                                body: portfolioForm
+                            })
+                            setPortfolioLoading(false)
+                            if (result?.ok) {
+                                const refreshed = await api("/portfolio", { token: localStorage.getItem("token") || "" })
+                                setPortfolio(Array.isArray(refreshed) ? refreshed : portfolio)
+                                setPortfolioForm({ title: "", description: "", url: "" })
+                                setNotice("Portfolio qo‘shildi.")
+                            } else {
+                                setNotice(result?.msg || "Portfolio qo‘shilmadi.")
+                            }
+                        }}
+                    >
+                        <div className="form-row">
+                            <label>
+                                <span className="helper profile-label">Loyiha nomi</span>
+                                <input className="input" maxLength={120} value={portfolioForm.title} onChange={(e) => setPortfolioForm({ ...portfolioForm, title: e.target.value })} placeholder="Masalan: FinJob marketplace" />
+                            </label>
+                            <label>
+                                <span className="helper profile-label">Havola</span>
+                                <input className="input" type="url" value={portfolioForm.url} onChange={(e) => setPortfolioForm({ ...portfolioForm, url: e.target.value })} placeholder="https://..." />
+                            </label>
+                        </div>
+                        <label>
+                            <span className="helper profile-label">Qisqa tavsif</span>
+                            <textarea className="textarea" maxLength={2000} value={portfolioForm.description} onChange={(e) => setPortfolioForm({ ...portfolioForm, description: e.target.value })} placeholder="Loyihada nima qildingiz?" />
+                        </label>
+                        <button className="btn btn-primary" type="submit" disabled={portfolioLoading}>
+                            {portfolioLoading ? "Saqlanmoqda..." : "Portfolio qo‘shish"}
+                        </button>
+                    </form>
+                </section>
             )}
         </AppLayout>
         {cropImageUrl && (
