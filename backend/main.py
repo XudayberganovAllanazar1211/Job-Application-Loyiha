@@ -29,12 +29,19 @@ except ImportError:
     pass
 
 app = Flask(__name__)
-allowed_origins = [origin.strip().rstrip("/") for origin in os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://localhost:5174").split(",") if origin.strip()]
+finjob_env = os.environ.get("FINJOB_ENV", "development").strip().lower()
+is_production = finjob_env in {"production", "prod"}
+raw_cors_origins = os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://localhost:5174")
+allowed_origins = [origin.strip().rstrip("/") for origin in raw_cors_origins.split(",") if origin.strip()]
+if is_production and "*" in allowed_origins:
+    raise RuntimeError("Production muhitida CORS_ORIGINS wildcard (*) bo‘lishi mumkin emas.")
 CORS(app, resources={r"/*": {"origins": allowed_origins, "supports_credentials": False}})
 secret_key = os.environ.get("SECRET_KEY", "").strip()
 if not secret_key:
+    if is_production:
+        raise RuntimeError("Production muhitida SECRET_KEY environment o‘zgaruvchisi majburiy.")
     secret_key = secrets.token_hex(32)
-    app.logger.warning("SECRET_KEY o‘rnatilmagan; vaqtinchalik kalit ishlatilmoqda. Ishlab chiqarishda SECRET_KEY ni environment orqali belgilang.")
+    app.logger.warning("SECRET_KEY o‘rnatilmagan; development uchun vaqtinchalik kalit ishlatilmoqda.")
 app.config["SECRET_KEY"] = secret_key
 app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
 try:
