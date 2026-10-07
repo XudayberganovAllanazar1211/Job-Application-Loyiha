@@ -650,7 +650,8 @@ export default function Jobs() {
                         minWidth: 0,
                         width: "100%",
                         position: "sticky",
-                        top: 18,
+                        top: "var(--sticky-panel-top)",
+                        maxHeight: "calc(100vh - var(--sticky-panel-top) - 18px)",
                         alignSelf: "start"
                     }}
                 >
