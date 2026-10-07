@@ -680,6 +680,21 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
             changed = cursor.rowcount
             if changed:
                 cursor.execute(
+                    """CREATE TABLE IF NOT EXISTS platform_wallet(
+                        id INTEGER PRIMARY KEY CHECK(id=1),
+                        balance REAL NOT NULL DEFAULT 0,
+                        escrow_balance REAL NOT NULL DEFAULT 0
+                    )"""
+                )
+                platform_columns = [row[1] for row in cursor.execute("PRAGMA table_info(platform_wallet)").fetchall()]
+                if "escrow_balance" not in platform_columns:
+                    cursor.execute("ALTER TABLE platform_wallet ADD COLUMN escrow_balance REAL NOT NULL DEFAULT 0")
+                cursor.execute("INSERT OR IGNORE INTO platform_wallet(id,balance,escrow_balance) VALUES(1,0,0)")
+                cursor.execute(
+                    "UPDATE platform_wallet SET escrow_balance=ROUND(escrow_balance+?,2) WHERE id=1",
+                    (float(expected_amount),),
+                )
+                cursor.execute(
                     "UPDATE jobs SET status='accepted' WHERE id=? AND status='payment_pending'",
                     (job_id,),
                 )
