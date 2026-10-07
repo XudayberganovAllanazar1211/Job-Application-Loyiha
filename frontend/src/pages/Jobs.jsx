@@ -761,36 +761,237 @@ export default function Jobs() {
                         <div>
                             <span className="profile-eyebrow">ISH MA'LUMOTI</span>
                             <h2>To‘liq ma’lumot</h2>
-                            <p>Tanlangan jobning barcha tafsilotlari.</p>
+                            <p>Tanlangan jobning barcha tafsilotlari va mavjud amallari.</p>
                         </div>
                     </div>
-                    {selectedJob ? (
-                        <div className="dashboard-job-detail-body">
-                            <div>
-                                <span className="helper">NOMI</span>
-                                <h2 className="dashboard-job-detail-title">{selectedJob.title}</h2>
+
+                    {selectedJob ? (() => {
+                        const selectedStatus = String(selectedJob.status || "").trim().toLowerCase()
+                        const selectedIsMyJob = String(selectedJob.user_id) === String(user?.id)
+                        const selectedIsWorker = String(selectedJob.worker_id) === String(user?.id)
+                        const selectedParticipant = selectedIsMyJob || selectedIsWorker
+                        const selectedCanAccept = selectedStatus === "active" && !selectedIsMyJob && selectedJob.worker_id == null
+                        const selectedCanFinish = selectedStatus === "accepted" && (
+                            (selectedIsMyJob && !selectedJob.owner_finished) ||
+                            (selectedIsWorker && !selectedJob.worker_finished)
+                        )
+                        const selectedCanReport = selectedParticipant && selectedJob.worker_id != null && ["accepted", "pending_finish", "finished"].includes(selectedStatus)
+                        const selectedStatusLabel = {
+                            active: "Faol",
+                            payment_pending: "To‘lov kutilmoqda",
+                            accepted: "Qabul qilingan",
+                            pending_finish: "Tasdiqlash kutilmoqda",
+                            finished: "Yakunlangan"
+                        }[selectedStatus] || selectedStatus
+
+                        return (
+                            <div className="dashboard-job-detail-body">
+                                <div>
+                                    <span className="helper">ISH NOMI</span>
+                                    <h2 className="dashboard-job-detail-title">{selectedJob.title}</h2>
+                                </div>
+
+                                <div className="dashboard-job-detail-section">
+                                    <span className="helper">TAVSIF</span>
+                                    <p>{selectedJob.description || "Tavsif kiritilmagan."}</p>
+                                </div>
+
+                                <div className="dashboard-job-detail-facts">
+                                    <div>
+                                        <span>Narx</span>
+                                        <strong>{selectedJob.price ?? "-"} {selectedJob.currency || "UZS"}</strong>
+                                    </div>
+                                    <div>
+                                        <span>Joylashuv</span>
+                                        <strong>{selectedJob.location || "—"}</strong>
+                                    </div>
+                                    <div>
+                                        <span>Soha</span>
+                                        <strong>{selectedJob.service_name || serviceMap[String(selectedJob.service_id)] || "Noma’lum"}</strong>
+                                    </div>
+                                    <div>
+                                        <span>Yaratilgan</span>
+                                        <strong>{selectedJob.created_at || "—"}</strong>
+                                    </div>
+                                    <div>
+                                        <span>Holat</span>
+                                        <strong>{selectedStatusLabel}</strong>
+                                    </div>
+                                    <div>
+                                        <span>Yaratuvchi</span>
+                                        <strong>
+                                            <button
+                                                type="button"
+                                                className="profile-link-button"
+                                                onClick={() => navigate(`/profiles/${selectedJob.creator_username}`)}
+                                            >
+                                                {(`${selectedJob.creator_first || ""} ${selectedJob.creator_last || ""}`).trim() || selectedJob.creator_username || "Noma’lum"}
+                                            </button>
+                                        </strong>
+                                    </div>
+                                    <div>
+                                        <span>Bajaruvchi</span>
+                                        <strong>
+                                            {selectedJob.worker_id ? (
+                                                <button
+                                                    type="button"
+                                                    className="profile-link-button"
+                                                    onClick={() => navigate(`/profiles/${selectedJob.worker_username}`)}
+                                                >
+                                                    {(`${selectedJob.worker_first || ""} ${selectedJob.worker_last || ""}`).trim() || selectedJob.worker_username || "Noma’lum"}
+                                                </button>
+                                            ) : "Hali qabul qilinmagan"}
+                                        </strong>
+                                    </div>
+                                    {selectedStatus === "accepted" && (
+                                        <>
+                                            <div>
+                                                <span>Yaratuvchi yakunladi</span>
+                                                <strong>{selectedJob.owner_finished ? "Ha" : "Yo‘q"}</strong>
+                                            </div>
+                                            <div>
+                                                <span>Bajaruvchi yakunladi</span>
+                                                <strong>{selectedJob.worker_finished ? "Ha" : "Yo‘q"}</strong>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+
+                                <div className="dashboard-job-detail-section">
+                                    <span className="helper">AMALLAR</span>
+                                    <div className="actions" style={{ marginTop: 10 }}>
+                                        {selectedParticipant && (
+                                            <button
+                                                className="btn btn-secondary"
+                                                onClick={() => navigate(`/chat/${selectedJob.id}`, { state: { job: selectedJob } })}
+                                            >
+                                                Suhbat
+                                            </button>
+                                        )}
+
+                                        {selectedParticipant && selectedStatus === "finished" && (
+                                            <button
+                                                className="btn btn-secondary"
+                                                onClick={() => navigate(`/rating/${selectedJob.id}`, { state: { job: selectedJob } })}
+                                            >
+                                                Baho
+                                            </button>
+                                        )}
+
+                                        {selectedCanAccept && (
+                                            <button
+                                                className="btn btn-primary"
+                                                disabled={actionJobId === selectedJob.id}
+                                                onClick={() => acceptJob(selectedJob)}
+                                            >
+                                                {actionJobId === selectedJob.id ? "Qabul qilinmoqda..." : "Ishni qabul qilish"}
+                                            </button>
+                                        )}
+
+                                        {selectedIsMyJob && selectedStatus === "payment_pending" && (
+                                            <button
+                                                className="btn btn-primary"
+                                                onClick={() => navigate(`/payments/job/${selectedJob.id}`)}
+                                            >
+                                                💳 To‘lovni amalga oshirish
+                                            </button>
+                                        )}
+
+                                        {selectedCanReport && (
+                                            <button
+                                                className="btn btn-secondary"
+                                                onClick={() => setReportJobId(reportJobId === selectedJob.id ? null : selectedJob.id)}
+                                            >
+                                                ⚑ Shikoyat
+                                            </button>
+                                        )}
+
+                                        {selectedIsMyJob && selectedCanFinish && (
+                                            <button
+                                                className="btn btn-warn"
+                                                onClick={() => cancelWorker(selectedJob)}
+                                            >
+                                                Ishchini almashtirish
+                                            </button>
+                                        )}
+
+                                        {(selectedIsMyJob || selectedIsWorker) && selectedCanFinish && (
+                                            <button
+                                                className="btn btn-success"
+                                                disabled={actionJobId === selectedJob.id}
+                                                onClick={() => selectedIsWorker ? finishJobWorker(selectedJob.id) : finishJobSeeker(selectedJob)}
+                                            >
+                                                {actionJobId === selectedJob.id ? "Yuborilmoqda..." : "Yakunlash"}
+                                            </button>
+                                        )}
+
+                                        {selectedIsWorker && selectedStatus === "payment_pending" && (
+                                            <span className="chip job-accepted-chip">
+                                                ⏳ Ish egasining to‘lovi kutilmoqda
+                                            </span>
+                                        )}
+
+                                        {selectedIsWorker && selectedStatus === "accepted" && (
+                                            <span className="chip job-accepted-chip">
+                                                ✅ Siz qabul qilgansiz
+                                            </span>
+                                        )}
+
+                                        {selectedParticipant && selectedStatus === "accepted" && (selectedJob.owner_finished || selectedJob.worker_finished) && (
+                                            <span className="chip">
+                                                ⏳ Ikkinchi tomonning yakunlashini kutmoqda
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {reportJobId === selectedJob.id && selectedCanReport && (
+                                        <div className="report-panel" style={{ marginTop: 12 }}>
+                                            <strong>{selectedIsMyJob ? "Bajaruvchi haqida shikoyat" : "Ish egasi haqida shikoyat"}</strong>
+                                            <select
+                                                className="select"
+                                                value={reportReason}
+                                                onChange={(e) => setReportReason(e.target.value)}
+                                            >
+                                                <option value="">Sababni tanlang</option>
+                                                <option value="Firibgarlik yoki aldov">Firibgarlik yoki aldov</option>
+                                                <option value="Noto‘g‘ri yoki yolg‘on e’lon">Noto‘g‘ri yoki yolg‘on e’lon</option>
+                                                <option value="Haqorat yoki nomaqbul xatti-harakat">Haqorat yoki nomaqbul xatti-harakat</option>
+                                                <option value="Spam">Spam</option>
+                                                <option value="Boshqa">Boshqa</option>
+                                            </select>
+                                            <textarea
+                                                className="textarea"
+                                                maxLength={2000}
+                                                placeholder="Qo‘shimcha tafsilot..."
+                                                value={reportDetails}
+                                                onChange={(e) => setReportDetails(e.target.value)}
+                                            />
+                                            <div className="actions">
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-danger"
+                                                    disabled={!reportReason}
+                                                    onClick={() => submitReport(selectedJob)}
+                                                >
+                                                    Yuborish
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-secondary"
+                                                    onClick={() => setReportJobId(null)}
+                                                >
+                                                    Bekor qilish
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                            <div className="dashboard-job-detail-section">
-                                <span className="helper">TAVSIF</span>
-                                <p>{selectedJob.description || "Tavsif kiritilmagan."}</p>
-                            </div>
-                            <div className="dashboard-job-detail-facts">
-                                <div><span>Narx</span><strong>{selectedJob.price ?? "-"} {selectedJob.currency || "UZS"}</strong></div>
-                                <div><span>Joylashuv</span><strong>{selectedJob.location || "—"}</strong></div>
-                                <div><span>Soha</span><strong>{selectedJob.service_name || serviceMap[String(selectedJob.service_id)] || "Noma’lum"}</strong></div>
-                                <div><span>Yaratilgan</span><strong>{selectedJob.created_at || "—"}</strong></div>
-                                <div><span>Holat</span><strong>{({ active: "Faol", payment_pending: "To‘lov kutilmoqda", accepted: "Qabul qilingan", pending_finish: "Tasdiqlash kutilmoqda", finished: "Yakunlangan" }[String(selectedJob.status || "").toLowerCase()] || selectedJob.status || "—")}</strong></div>
-                                <div><span>Yaratuvchi</span><strong><button type="button" className="profile-link-button" onClick={() => navigate(`/profiles/${selectedJob.creator_username}`)}>{`${selectedJob.creator_first || ""} ${selectedJob.creator_last || ""}`.trim() || selectedJob.creator_username}</button></strong></div>
-                                <div><span>Bajaruvchi</span><strong>{selectedJob.worker_id ? <button type="button" className="profile-link-button" onClick={() => navigate(`/profiles/${selectedJob.worker_username}`)}>{`${selectedJob.worker_first || ""} ${selectedJob.worker_last || ""}`.trim() || selectedJob.worker_username}</button> : "Hali qabul qilinmagan"}</strong></div>
-                            </div>
-                            <div className="actions">
-                                {(String(selectedJob.user_id) === String(user?.id) || String(selectedJob.worker_id) === String(user?.id)) && (
-                                    <button className="btn btn-secondary" onClick={() => navigate(`/chat/${selectedJob.id}`, { state: { job: selectedJob } })}>Suhbatni ochish</button>
-                                )}
-                            </div>
+                        )
+                    })() : (
+                        <div className="empty-state">
+                            To‘liq ma’lumotni ko‘rish uchun chap tomondagi jobni tanlang.
                         </div>
-                    ) : (
-                        <div className="empty-state">To‘liq ma’lumotni ko‘rish uchun job tanlang.</div>
                     )}
                 </aside>
             </div>
