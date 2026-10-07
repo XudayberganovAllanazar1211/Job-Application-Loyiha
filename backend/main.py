@@ -1876,6 +1876,204 @@ def get_job_detail(job_id):
     })
 
 
+
+@app.route("/jobs/<int:job_id>/proposals", methods=["GET", "POST"])
+@auth
+def job_proposals(job_id):
+    job = db.q(
+        "SELECT user_id, worker_id, status, price, title FROM jobs WHERE id=?",
+        (job_id,),
+    ).fetchone()
+    if not job:
+        return jsonify({"msg": "Ish topilmadi"}), 404
+
+    owner_id, assigned_worker_id, job_status, job_price, job_title = job
+
+    if request.method == "GET":
+        if request.uid == owner_id:
+            items = db.q(
+                """SELECT p.id,p.job_id,p.worker_id,p.price,p.deadline,p.message,p.status,p.created_at,p.updated_at,
+                          u.username,u.first_name,u.last_name,u.average_rating
+                   FROM job_proposals p
+                   JOIN users u ON u.id=p.worker_id
+                   WHERE p.job_id=?
+                   ORDER BY CASE WHEN p.status='pending' THEN 0 ELSE 1 END, p.created_at DESC""",
+                (job_id,),
+            ).fetchall()
+        elif job_status == "active" or request.uid == assigned_worker_id:
+            items = db.q(
+                """SELECT p.id,p.job_id,p.worker_id,p.price,p.deadline,p.message,p.status,p.created_at,p.updated_at,
+                          u.username,u.first_name,u.last_name,u.average_rating
+                   FROM job_proposals p
+                   JOIN users u ON u.id=p.worker_id
+                   WHERE p.job_id=? AND p.worker_id=?
+                   ORDER BY p.created_at DESC""",
+                (job_id, request.uid),
+            ).fetchall()
+        else:
+            return jsonify({"msg": "Ruxsat berilmadi"}), 403
+
+        return jsonify([
+            {
+                "id": x[0], "job_id": x[1], "worker_id": x[2], "price": float(x[3]),
+                "deadline": x[4], "message": x[5], "status": x[6],
+                "created_at": x[7], "updated_at": x[8], "username": x[9],
+                "first_name": x[10] or "", "last_name": x[11] or "",
+                "average_rating": float(x[12] or 0),
+            }
+            for x in items
+        ])
+
+    if request.uid == owner_id:
+        return jsonify({"msg": "Ish egasi o‘zi uchun taklif yubora olmaydi"}), 400
+    if job_status != "active" or assigned_worker_id is not None:
+        return jsonify({"msg": "Bu ish hozir takliflar uchun ochiq emas"}), 409
+
+    data = request.json or {}
+    try:
+        proposal_price = float(data.get("price"))
+    except (TypeError, ValueError):
+        return jsonify({"msg": "Taklif narxi noto‘g‘ri"}), 400
+    if not math.isfinite(proposal_price) or proposal_price <= 0 or proposal_price > 100000000000:
+        return jsonify({"msg": "Taklif narxi 0 dan katta va 100 000 000 000 dan oshmasligi kerak"}), 400
+
+    deadline = str(data.get("deadline", "")).strip()
+    message = str(data.get("message", "")).strip()
+    if not deadline or len(deadline) > 64:
+        return jsonify({"msg": "Muddatni kiriting"}), 400
+    if len(message) > 3000:
+        return jsonify({"msg": "Taklif izohi 3000 belgidan oshmasligi kerak"}), 400
+
+    existing = db.q(
+        "SELECT id,status FROM job_proposals WHERE job_id=? AND worker_id=?",
+        (job_id, request.uid),
+    ).fetchone()
+    now_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    if existing and existing[1] in ("accepted", "pending"):
+        return jsonify({"msg": "Bu ish uchun faol taklifingiz allaqachon mavjud"}), 409
+
+    if existing:
+        result = db.q(
+            """UPDATE job_proposals
+               SET price=?,deadline=?,message=?,status='pending',updated_at=?
+               WHERE id=?""",
+            (proposal_price, deadline, message, now_time, existing[0]),
+        )
+    else:
+        result = db.q(
+            """INSERT INTO job_proposals(job_id,worker_id,price,deadline,message,status,created_at,updated_at)
+               VALUES(?,?,?,?,?,?,?,?)""",
+            (job_id, request.uid, proposal_price, deadline, message, "pending", now_time, now_time),
+        )
+    proposal_id = result.lastrowid
+    result.close()
+
+    create_notification(
+        owner_id,
+        "new_proposal",
+        "Yangi ish taklifi",
+        f"«{job_title}» ishiga {proposal_price:,.0f} UZS taklif olindi.",
+        "/jobs",
+    )
+    return jsonify({"msg": "Taklif yuborildi.", "proposal_id": proposal_id}), 201
+
+
+@app.route("/proposals/<int:proposal_id>", methods=["PATCH", "DELETE"])
+@auth
+def update_proposal(proposal_id):
+    proposal = db.q(
+        """SELECT p.id,p.job_id,p.worker_id,p.price,j.user_id,j.worker_id,j.status,j.title
+           FROM job_proposals p JOIN jobs j ON j.id=p.job_id WHERE p.id=?""",
+        (proposal_id,),
+    ).fetchone()
+    if not proposal:
+        return jsonify({"msg": "Taklif topilmadi"}), 404
+
+    _, job_id, proposal_worker_id, proposal_price, owner_id, assigned_worker_id, job_status, job_title = proposal
+    action = "withdraw" if request.method == "DELETE" else str((request.json or {}).get("action", "")).strip().lower()
+
+    if action == "withdraw":
+        if request.uid != proposal_worker_id:
+            return jsonify({"msg": "Faqat taklif egasi uni bekor qilishi mumkin"}), 403
+        if job_status != "active":
+            return jsonify({"msg": "Bu taklifni hozir bekor qilib bo‘lmaydi"}), 409
+        db.q(
+            "UPDATE job_proposals SET status='withdrawn',updated_at=? WHERE id=? AND status='pending'",
+            (datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), proposal_id),
+        ).close()
+        return jsonify({"msg": "Taklif bekor qilindi."})
+
+    if request.uid != owner_id:
+        return jsonify({"msg": "Faqat ish egasi taklifni boshqarishi mumkin"}), 403
+    if action not in ("accept", "reject"):
+        return jsonify({"msg": "Amal noto‘g‘ri"}), 400
+
+    if action == "reject":
+        result = db.q(
+            "UPDATE job_proposals SET status='rejected',updated_at=? WHERE id=? AND status='pending'",
+            (datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), proposal_id),
+        )
+        if result.rowcount != 1:
+            result.close()
+            return jsonify({"msg": "Bu taklif endi faol emas"}), 409
+        result.close()
+        create_notification(
+            proposal_worker_id,
+            "proposal_rejected",
+            "Taklifingiz rad etildi",
+            f"«{job_title}» ishiga yuborgan taklifingiz rad etildi.",
+            "/jobs",
+        )
+        return jsonify({"msg": "Taklif rad etildi."})
+
+    if job_status != "active" or assigned_worker_id is not None:
+        return jsonify({"msg": "Bu ish uchun boshqa bajaruvchi allaqachon biriktirilgan"}), 409
+
+    conn = db.get_connection()
+    try:
+        cur = conn.cursor()
+        pending = cur.execute(
+            "SELECT status FROM job_proposals WHERE id=?",
+            (proposal_id,),
+        ).fetchone()
+        if not pending or pending[0] != "pending":
+            conn.rollback()
+            return jsonify({"msg": "Bu taklif endi faol emas"}), 409
+
+        cur.execute(
+            """UPDATE jobs
+               SET worker_id=?,status='payment_pending',agreed_price=?,
+                   finished_at=NULL,owner_finished=0,worker_finished=0
+               WHERE id=? AND status='active' AND worker_id IS NULL""",
+            (proposal_worker_id, float(proposal_price), job_id),
+        )
+        if cur.rowcount != 1:
+            conn.rollback()
+            return jsonify({"msg": "Ishni biriktirishda to‘qnashuv yuz berdi"}), 409
+
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cur.execute("UPDATE job_proposals SET status='accepted',updated_at=? WHERE id=?", (now, proposal_id))
+        cur.execute(
+            "UPDATE job_proposals SET status='rejected',updated_at=? WHERE job_id=? AND id!=? AND status='pending'",
+            (now, job_id, proposal_id),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        return jsonify({"msg": "Taklifni qabul qilishda xatolik yuz berdi"}), 500
+    finally:
+        conn.close()
+
+    create_notification(
+        proposal_worker_id,
+        "proposal_accepted",
+        "Taklifingiz qabul qilindi",
+        f"«{job_title}» ishiga {float(proposal_price):,.0f} UZS taklifingiz qabul qilindi. Endi ish egasi to‘lovni amalga oshiradi.",
+        f"/payments/job/{job_id}",
+    )
+    return jsonify({"msg": "Taklif qabul qilindi.", "worker_id": proposal_worker_id, "price": float(proposal_price)})
+
 @app.route("/accept_job", methods=["POST"])
 @auth
 def accept():
