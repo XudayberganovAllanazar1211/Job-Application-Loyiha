@@ -763,7 +763,7 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
             cursor = conn.cursor()
             cursor.execute(
                 """UPDATE payments SET provider_transaction_id=?,provider_payload=?,
-                   status='held',paid_at=? WHERE id=? AND status IN ('pending','paid')""",
+                   status='held',paid_at=? WHERE id=? AND status='pending'""",
                 (click_trans_id,json.dumps(data,ensure_ascii=False),now,payment_id),
             )
             changed = cursor.rowcount
