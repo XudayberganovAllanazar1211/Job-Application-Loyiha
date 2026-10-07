@@ -159,6 +159,33 @@ export default function Profile() {
         loadServices()
     }, [])
 
+    const formatWalletDate = (dateString) => {
+        if (!dateString) return "Vaqt noma'lum"
+        const date = new Date(String(dateString).replace(" ", "T"))
+        if (Number.isNaN(date.getTime())) return "Vaqt noma'lum"
+        return date.toLocaleString("uz-UZ", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })
+    }
+
+    const submitWithdrawal = async (event) => {
+        event.preventDefault()
+        const amount = Number(withdrawAmount)
+        if (!Number.isFinite(amount) || amount <= 0) { setNotice("Yechib olish summasini to‘g‘ri kiriting"); return }
+        if (amount > Number(form.balance || 0)) { setNotice("Balansda yetarli mablag‘ yo‘q"); return }
+        setWithdrawLoading(true)
+        const token = localStorage.getItem("token") || ""
+        const result = await api("/wallet/withdraw", { method: "POST", body: { amount }, token })
+        if (result?.msg === "ok") {
+            setForm((current) => ({ ...current, balance: Number(result.balance) || 0 }))
+            setWithdrawAmount("")
+            setWithdrawOpen(false)
+            setNotice("Yechib olish muvaffaqiyatli bajarildi")
+            const wallet = await api("/wallet", { token })
+            if (wallet && typeof wallet === "object") setWalletTransactions(Array.isArray(wallet.transactions) ? wallet.transactions : [])
+        } else {
+            setNotice(result?.msg || "Yechib olishda xatolik yuz berdi")
+        }
+        setWithdrawLoading(false)
+    }
     const startEditing = () => {
         setSavedForm({ ...form })
         setSavedSkills([...skills])
