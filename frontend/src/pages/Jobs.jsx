@@ -46,6 +46,8 @@ export default function Jobs() {
     const [profileSkills, setProfileSkills] = useState([])
     const [notice, setNotice] = useState("")
     const [noticeType, setNoticeType] = useState("ok")
+    const [loading, setLoading] = useState(true)
+    const [actionJobId, setActionJobId] = useState(null)
     const token = localStorage.getItem("token") || ""
     const user = JSON.parse(localStorage.getItem("user") || "null")
     const navigate = useNavigate()
@@ -66,23 +68,31 @@ export default function Jobs() {
     )
 
     const load = async () => {
-        const [jobResult, serviceResult, profileResult] = await Promise.all([
-            api("/jobs", { token }),
-            api("/services", { token }),
-            api("/profile", { token })
-        ])
+        setLoading(true)
+        try {
+            const [jobResult, serviceResult, profileResult] = await Promise.all([
+                api("/jobs", { token }),
+                api("/services", { token }),
+                api("/profile", { token })
+            ])
 
-        if (Array.isArray(jobResult)) setJobs(jobResult)
-        if (Array.isArray(serviceResult)) setServices(serviceResult)
+            if (Array.isArray(jobResult)) setJobs(jobResult)
+            if (Array.isArray(serviceResult)) setServices(serviceResult)
 
-        if (profileResult?.id) {
-            localStorage.setItem("user", JSON.stringify(profileResult))
-            const skills = Array.isArray(profileResult.skills)
-                ? profileResult.skills
-                : typeof profileResult.skills === "string"
-                    ? profileResult.skills.split(",")
-                    : []
-            setProfileSkills(skills.map((skill) => String(skill).trim()).filter(Boolean))
+            if (profileResult?.id) {
+                localStorage.setItem("user", JSON.stringify(profileResult))
+                const skills = Array.isArray(profileResult.skills)
+                    ? profileResult.skills
+                    : typeof profileResult.skills === "string"
+                        ? profileResult.skills.split(",")
+                        : []
+                setProfileSkills(skills.map((skill) => String(skill).trim()).filter(Boolean))
+            }
+        } catch {
+            setNoticeType("warn")
+            setNotice("Ma'lumotlarni yuklashda xatolik yuz berdi.")
+        } finally {
+            setLoading(false)
         }
     }
 
@@ -215,29 +225,50 @@ export default function Jobs() {
         setShowServiceMenu(false)
     }
 
+    const activeFilterCount =
+        selectedServices.length +
+        (minPrice !== "" ? 1 : 0) +
+        (maxPrice !== "" ? 1 : 0) +
+        (timeFilter !== "all" ? 1 : 0) +
+        (locationFilter.trim() ? 1 : 0)
+
+    const hasSearchOrFilters = Boolean(search.trim() || serviceSearch.trim() || activeFilterCount)
+
     const acceptJob = async (job) => {
-        const result = await api("/accept_job", {
-            method: "POST",
-            body: { job_id: job.id },
-            token
-        })
-        const accepted = result?.msg === "ok"
-        setNoticeType(accepted ? "ok" : "warn")
-        setNotice(accepted ? "Ish qabul qilindi" : (result?.msg || "Xato"))
-        load()
+        if (actionJobId) return
+        setActionJobId(job.id)
+        try {
+            const result = await api("/accept_job", {
+                method: "POST",
+                body: { job_id: job.id },
+                token
+            })
+            const accepted = result?.msg === "ok"
+            setNoticeType(accepted ? "ok" : "warn")
+            setNotice(accepted ? "Ish qabul qilindi" : (result?.msg || "Xato"))
+            await load()
+        } finally {
+            setActionJobId(null)
+        }
     }
 
     // Ish beruvchi uchun ishni tugatish so'rovi
     const finishJobSeeker = async (job) => {
-        const result = await api("/finish_job", {
-            method: "POST",
-            body: { job_id: job.id },
-            token
-        })
-        const requested = result?.msg === "ok"
-        setNoticeType(requested ? "ok" : "warn")
-        setNotice(requested ? "Yakunlash so'rovi yuborildi. Bajaruvchi tasdiqlashi kutilmoqda." : (result?.msg || "Xato"))
-        load()
+        if (actionJobId) return
+        setActionJobId(job.id)
+        try {
+            const result = await api("/finish_job", {
+                method: "POST",
+                body: { job_id: job.id },
+                token
+            })
+            const requested = result?.msg === "ok"
+            setNoticeType(requested ? "ok" : "warn")
+            setNotice(requested ? "Yakunlash so'rovi yuborildi. Bajaruvchi tasdiqlashi kutilmoqda." : (result?.msg || "Xato"))
+            await load()
+        } finally {
+            setActionJobId(null)
+        }
     }
 
     const cancelWorker = async (job) => {
@@ -323,6 +354,7 @@ export default function Jobs() {
                     <div className="actions jobs-toolbar">
                         <input
                             className="input jobs-search-input"
+                            aria-label="Ishlarni qidirish"
                             placeholder="Ish qidirish..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
@@ -387,7 +419,7 @@ export default function Jobs() {
                         </div>
 
                         <div className="jobs-filter-wrap" ref={filterRef}>
-                            <button className="btn btn-secondary" type="button" onClick={() => setShowFilters(!showFilters)}>Filtrlash</button>
+                            <button className="btn btn-secondary jobs-filter-button" type="button" onClick={() => setShowFilters(!showFilters)}><span>Filtrlash</span>{activeFilterCount > 0 && <b>{activeFilterCount}</b>}</button>
                             {showFilters && (
                                 <div className="jobs-filter-panel">
                                     <div className="jobs-filter-title">Ishlarni filtrlash</div>
@@ -402,22 +434,37 @@ export default function Jobs() {
                             )}
                         </div>
 
-                        <button className="btn btn-secondary" onClick={load}>Yangilash</button>
+                        <button className="btn btn-secondary" onClick={load} disabled={loading}>{loading ? "Yangilanmoqda..." : "Yangilash"}</button>
                         <button className="btn btn-primary" onClick={() => navigate("/create")}>
                             Ish yaratish
                         </button>
                     </div>
                 </div>
                 <div className="jobs-filter-note">
-                    {selectedServices.length
-                        ? <><strong>{selectedServices.length}</strong> ta soha tanlangan • <strong>{filtered.length}</strong> ta ish ko‘rsatilmoqda</>
-                        : <><strong>{filtered.length}</strong> ta ish ko‘rsatilmoqda</>}
+                    <span><strong>{filtered.length}</strong> ta ish ko‘rsatilmoqda</span>
+                    {activeFilterCount > 0 && <span className="jobs-active-filter-label">{activeFilterCount} ta filtr faol</span>}
+                    {hasSearchOrFilters && <button type="button" className="jobs-clear-inline" onClick={clearAllFilters}>Hammasini tozalash</button>}
                 </div>
 
                 {notice && <div className={`notice ${noticeType === "ok" ? "ok" : "warn"}`} style={{ marginTop: 14 }}>{notice}</div>}
             </div>
 
-            {recommendationData.recommended.length > 0 && (
+            {loading ? (
+                <div className="jobs-loading-grid" aria-label="Ishlar yuklanmoqda">
+                    {Array.from({ length: 6 }).map((_, index) => (
+                        <div className="card job-card jobs-skeleton-card" key={index}>
+                            <div className="skeleton skeleton-line skeleton-title" />
+                            <div className="skeleton skeleton-line" />
+                            <div className="skeleton skeleton-line short" />
+                            <div className="skeleton-row">
+                                <div className="skeleton skeleton-chip" />
+                                <div className="skeleton skeleton-chip" />
+                                <div className="skeleton skeleton-chip" />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            ) : recommendationData.recommended.length > 0 && (
                 <section className="jobs-recommendations card">
                     <div className="jobs-recommendations-head">
                         <div>
@@ -571,8 +618,8 @@ export default function Jobs() {
                                 )}
 
                                 {canAccept && (
-                                    <button className="btn btn-primary" onClick={() => acceptJob(job)}>
-                                        Ishni qabul qilish
+                                    <button className="btn btn-primary" disabled={actionJobId === job.id} onClick={() => acceptJob(job)}>
+                                        {actionJobId === job.id ? "Qabul qilinmoqda..." : "Ishni qabul qilish"}
                                     </button>
                                 )}
                                 {isMyJob && status === "active" && (
@@ -602,14 +649,14 @@ export default function Jobs() {
 
                                 {/* --- FINISH TUGMASI (Ish egasi uchun) --- */}
                                 {isMyJob && status === "accepted" && (
-                                    <button className="btn btn-success" onClick={() => finishJobSeeker(job)}>
-                                        Yakunlash
+                                    <button className="btn btn-success" disabled={actionJobId === job.id} onClick={() => finishJobSeeker(job)}>
+                                        {actionJobId === job.id ? "Yuborilmoqda..." : "Yakunlash"}
                                     </button>
                                 )}
 
                                 {/* --- FINISH TUGMASI (Bajaruvchi uchun) --- */}
                                 {isIAccepted && status === "pending_finish" && activeConfirmJobId !== job.id && (
-                                    <button className="btn btn-success" style={{ background: "#f59e0b" }} onClick={() => openConfirmPanel(job.id)}>
+                                    <button className="btn btn-success" style={{ background: "#f59e0b" }} disabled={actionJobId === job.id} onClick={() => openConfirmPanel(job.id)}>
                                         Yakunlash
                                     </button>
                                 )}
@@ -618,7 +665,13 @@ export default function Jobs() {
                     )
                 })}
 
-                {!filtered.length && <div className="empty-state">Ish topilmadi.</div>}
+                {!loading && !filtered.length && (
+    <div className="empty-state jobs-empty-state">
+        <strong>{hasSearchOrFilters ? "Sizning mezonlaringiz bo‘yicha ish topilmadi." : "Hozircha faol ishlar yo‘q."}</strong>
+        <span>{hasSearchOrFilters ? "Qidiruv yoki filtrlarni o‘zgartirib ko‘ring." : "Yangi e’lonlar paydo bo‘lishi bilan shu yerda ko‘rinadi."}</span>
+        {hasSearchOrFilters && <button className="btn btn-secondary" type="button" onClick={clearAllFilters}>Filtrlarni tozalash</button>}
+    </div>
+)}
             </div>
         </AppLayout>
     )
