@@ -2553,7 +2553,17 @@ def update_portfolio(item_id):
         return jsonify({"msg": "Ruxsat berilmadi"}), 403
 
     if request.method == "DELETE":
+        item = db.q("SELECT file_url FROM portfolio_items WHERE id=?", (item_id,)).fetchone()
         db.q("DELETE FROM portfolio_items WHERE id=?", (item_id,)).close()
+
+        if item and item[0] and item[0].startswith("/uploads/portfolio/"):
+            filename = item[0].rsplit("/", 1)[-1]
+            filepath = os.path.join(PORTFOLIO_UPLOAD_DIR, filename)
+            if os.path.isfile(filepath):
+                try:
+                    os.remove(filepath)
+                except OSError:
+                    pass
         return jsonify({"msg": "Portfolio o‘chirildi."})
 
     data = request.json or {}
@@ -2856,7 +2866,7 @@ def public_profile(username):
     successful_worker_jobs = db.q("SELECT COUNT(*) FROM jobs WHERE worker_id=? AND status='finished'", (u[0],)).fetchone()[0]
     success_rate = round((successful_worker_jobs / worker_jobs) * 100, 1) if worker_jobs else 0.0
     portfolio_rows = db.q(
-        """SELECT id,title,description,url,image_url,created_at,updated_at
+        """SELECT id,title,description,url,image_url,file_url,file_name,created_at,updated_at
            FROM portfolio_items WHERE user_id=? ORDER BY id DESC LIMIT 50""",
         (u[0],),
     ).fetchall()
@@ -2932,7 +2942,7 @@ def profile():
             "balance": balance,
             "portfolio": [
                 {"id": x[0], "title": x[1], "description": x[2], "url": x[3], "image_url": x[4],
-                 "created_at": x[5], "updated_at": x[6]}
+                 "file_url": x[5], "file_name": x[6], "created_at": x[7], "updated_at": x[8]}
                 for x in portfolio_rows
             ],
         })
