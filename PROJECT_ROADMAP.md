@@ -2,6 +2,8 @@
 
 This roadmap is the working priority for the FinJob project.
 
+**Regression rule:** After every phase, run the full Phase 0 stabilization/testing pass before starting the next phase. This applies to Phase 1 through Phase 10.
+
 ## Phase 0 — Stabilization
 - Run and expand backend automated tests.
 - Verify frontend lint and production build.
@@ -11,12 +13,14 @@ This roadmap is the working priority for the FinJob project.
 - Do not modify `main` unless explicitly requested.
 
 ## Phase 1 — Marketplace
+Status: implemented and regression-tested.
 - Proposal/offer system.
 - Worker price/deadline proposals.
 - Client proposal comparison and selection.
 - Accept/reject proposal lifecycle.
 
 ## Phase 2 — Search & Discovery
+Status: implemented and regression-tested.
 - Strong job/service search.
 - Category/subcategory filters.
 - Price, rating, location, status filters.
@@ -24,6 +28,7 @@ This roadmap is the working priority for the FinJob project.
 - Recommendations.
 
 ## Phase 3 — Professional Profiles
+Status: implemented and regression-tested.
 - Portfolio.
 - Work history.
 - Completed-job statistics.
@@ -32,6 +37,7 @@ This roadmap is the working priority for the FinJob project.
 - Better public freelancer profiles.
 
 ## Phase 4 — Communication 2.0
+Status: implemented and regression-tested.
 - Better conversation list and unread counts.
 - Online/offline and typing status.
 - Attachments.
