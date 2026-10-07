@@ -961,7 +961,7 @@ def notify_matching_users(job_id, job_title, creator_id):
             create_notification(user_id, "matching_job", "Sizga mos yangi ish", f"Sizning sohalaringizga mos yangi ish yaratildi: {job_title}", "/jobs")
 
 
-register_payment_routes(app, db, auth, admin_required, create_notification)
+register_payment_routes(app, db, auth, admin_required, create_notification, admin_audit)
 
 @app.route("/notifications")
 @auth
@@ -1119,6 +1119,7 @@ def update_report(report_id):
                 "/jobs"
             )
 
+    admin_audit("report_status_update","report",report_id,f"status={status}")
     return jsonify({"msg":"Shikoyat holati yangilandi","status":status})
 
 
@@ -1150,6 +1151,40 @@ def admin_analytics():
         "wallet":{"balance":float(wallet[0] or 0) if wallet else 0,"escrow_balance":float(wallet[1] or 0) if wallet else 0},
         "transactions":[{"type":x[0],"count":x[1],"inflow":float(x[2] or 0),"outflow":float(x[3] or 0)} for x in tx],
         "top_services":[{"name":x[0],"total":x[1]} for x in top_services],
+    })
+
+
+@app.route("/admin/finance")
+@admin_required
+def admin_finance():
+    transactions = db.q(
+        """SELECT wt.id,wt.user_id,u.username,wt.type,wt.amount,wt.balance_after,wt.job_id,wt.description,wt.created_at
+           FROM wallet_transactions wt
+           LEFT JOIN users u ON u.id=wt.user_id
+           ORDER BY wt.id DESC LIMIT 100"""
+    ).fetchall()
+    payments = db.q(
+        """SELECT p.id,p.job_id,p.amount,p.currency,p.status,p.provider,p.created_at,p.paid_at,p.released_at,p.refunded_at,
+                  payer.username,payee.username
+           FROM payments p
+           LEFT JOIN users payer ON payer.id=p.payer_id
+           LEFT JOIN users payee ON payee.id=p.payee_id
+           ORDER BY p.id DESC LIMIT 100"""
+    ).fetchall()
+    wallet=db.q("SELECT COALESCE(balance,0),COALESCE(escrow_balance,0) FROM platform_wallet WHERE id=1").fetchone()
+    return jsonify({
+        "wallet":{"balance":float(wallet[0] or 0) if wallet else 0,"escrow_balance":float(wallet[1] or 0) if wallet else 0},
+        "transactions":[
+            {"id":x[0],"user_id":x[1],"username":x[2] or "—","type":x[3],"amount":float(x[4] or 0),
+             "balance_after":float(x[5] or 0),"job_id":x[6],"description":x[7],"created_at":x[8]}
+            for x in transactions
+        ],
+        "payments":[
+            {"id":x[0],"job_id":x[1],"amount":float(x[2] or 0),"currency":x[3],"status":x[4],"provider":x[5],
+             "created_at":x[6],"paid_at":x[7],"released_at":x[8],"refunded_at":x[9],
+             "payer_username":x[10] or "—","payee_username":x[11] or "—"}
+            for x in payments
+        ],
     })
 
 
