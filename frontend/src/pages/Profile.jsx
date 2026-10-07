@@ -934,8 +934,8 @@ export default function Profile() {
                         style={{ marginTop: 16 }}
                         onSubmit={async (event) => {
                             event.preventDefault()
-                            if (!portfolioForm.title.trim()) {
-                                setNotice("Portfolio nomini kiriting.")
+                            if (!portfolioFile && !portfolioForm.title.trim()) {
+                                setNotice("Portfolio nomini kiriting yoki fayl tanlang.")
                                 return
                             }
                             if (portfolioFile && portfolioFile.size > 10 * 1024 * 1024) {
@@ -949,26 +949,16 @@ export default function Profile() {
 
                             if (portfolioFile) {
                                 const data = new FormData()
-                                data.append("title", portfolioForm.title)
+                                const title = portfolioForm.title.trim() || portfolioFile.name.replace(/\\.[^/.]+$/, "")
+                                data.append("title", title)
                                 data.append("description", portfolioForm.description)
                                 data.append("url", portfolioForm.url)
                                 data.append("file", portfolioFile)
-
-                                try {
-                                    const response = await fetch(
-                                        (import.meta.env.VITE_API_URL || "http://localhost:5000") + "/portfolio/upload",
-                                        {
-                                            method: "POST",
-                                            headers: token ? { Authorization: `Bearer ${token}` } : {},
-                                            body: data
-                                        }
-                                    )
-                                    result = await response.json().catch(() => ({}))
-                                    if (!response.ok) result = { ...result, ok: false }
-                                    else result = { ...result, ok: true }
-                                } catch {
-                                    result = { ok: false, msg: "Faylni yuklashda xatolik yuz berdi." }
-                                }
+                                result = await api("/portfolio/upload", {
+                                    method: "POST",
+                                    token,
+                                    body: data
+                                })
                             } else {
                                 result = await api("/portfolio", {
                                     method: "POST",
