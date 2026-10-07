@@ -1,6 +1,5 @@
 import os
 import unittest
-import time
 from main import app, DB, pending_verifications
 import main
 
@@ -8,11 +7,10 @@ class JobPlatformTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.test_db_name = "test_app.db"
-        cls.original_db.db_name = cls.original_db_name
-        if os.path.exists(cls.test_db_name):
-            os.remove(cls.test_db_name)
         cls.original_db = main.db
         cls.original_db_name = cls.original_db.db_name
+        if os.path.exists(cls.test_db_name):
+            os.remove(cls.test_db_name)
         DB(cls.test_db_name)
         cls.original_db.db_name = cls.test_db_name
         main.db = cls.original_db
@@ -21,6 +19,7 @@ class JobPlatformTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        cls.original_db.db_name = cls.original_db_name
         if os.path.exists(cls.test_db_name):
             try:
                 os.remove(cls.test_db_name)
@@ -28,7 +27,7 @@ class JobPlatformTestCase(unittest.TestCase):
                 pass
 
     def test_01_registration_flow(self):
-        # 1. Send code (First registered user becomes admin)
+        # 1. Send code
         payload = {
             "username": "tester_creator",
             "password": "Password123!",
@@ -96,7 +95,7 @@ class JobPlatformTestCase(unittest.TestCase):
         self.assertEqual(res_put.status_code, 200)
 
     def test_03_services_and_job_creation(self):
-        # Login creator (Admin)
+        # Login creator
         res = self.client.post("/login", json={"username": "tester_creator", "password": "Password123!"})
         token_creator = res.get_json().get("token")
 
