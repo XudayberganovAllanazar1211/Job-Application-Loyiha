@@ -104,7 +104,7 @@ export default function Chat() {
 
             <div style={{ width: "100%" }}>
                 <section className="card chat-wrap" style={{ width: "100%", maxWidth: "100%" }}>
-                    <div className="topbar" style={{ marginBottom: 0 }}>
+                    <div className="section-toolbar" style={{ marginBottom: 0 }}>
                         <div className="page-head">
                             <h2 style={{ margin: 0 }}>Xabarlar</h2>
                             <p className="muted" style={{ margin: 0 }}>

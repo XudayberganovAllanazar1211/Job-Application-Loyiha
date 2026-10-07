@@ -143,7 +143,7 @@ export default function AppLayout({ title, subtitle, children }) {
                 </div>
             </aside>
             <main className="main">
-                <div className="topbar">
+                <div className="app-topbar">
                     <div className="page-head">
                         <div className="chip" style={{width:"fit-content",color:"#2563eb",background:"#eff6ff",borderColor:"#dbeafe"}}>FINJOB / ISH MAYDONI</div>
                         <h1 className="page-title">{title}</h1>

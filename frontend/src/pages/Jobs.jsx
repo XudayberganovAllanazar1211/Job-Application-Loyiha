@@ -443,7 +443,7 @@ export default function Jobs() {
             subtitle="Tizimdagi ishlarni qidiring, tanlang va to‘liq ma’lumotlarini ko‘ring."
         >
             <div className="card" style={{ marginBottom: 18 }}>
-                <div className="topbar" style={{ marginBottom: 0 }}>
+                <div className="section-toolbar" style={{ marginBottom: 0 }}>
                     <div className="page-head">
                         <h2 style={{ margin: 0 }}>Mavjud ishlar</h2>
                         <p className="muted" style={{ margin: 0 }}>Ishlarni qidirish, filtrlash va boshqarish bo‘limi.</p>
@@ -646,17 +646,7 @@ export default function Jobs() {
 
                 <aside
                     className="card jobs-detail-panel"
-                    style={{
-                        minWidth: 0,
-                        width: "100%",
-                        position: "sticky",
-                        top: "var(--sticky-panel-top)",
-                        maxHeight: "calc(100vh - var(--sticky-panel-top) - 18px)",
-                        alignSelf: "start",
-                        overflowY: "auto",
-                        overflowX: "hidden",
-                        overscrollBehavior: "contain"
-                    }}
+                    style={{ minWidth: 0, width: "100%" }}
                 >
                     <div className="dashboard-panel-head">
                         <div>

@@ -244,7 +244,7 @@ export default function Dashboard() {
 
             <div className="dashboard-workspace">
                 <section className="card">
-                    <div className="topbar" style={{ marginBottom: 16 }}>
+                    <div className="section-toolbar" style={{ marginBottom: 16 }}>
                         <div className="page-head">
                             <h2 style={{ margin: 0 }}>Mening ish maydonim</h2>
                             <p className="muted" style={{ margin: 0 }}>
@@ -531,7 +531,7 @@ export default function Dashboard() {
                 </aside>
 
                 <aside className="card chat-wrap">
-                    <div className="topbar" style={{ marginBottom: 0 }}>
+                    <div className="section-toolbar" style={{ marginBottom: 0 }}>
                         <div className="page-head">
                             <h2 style={{ margin: 0 }}>Suhbat ko‘rinishi</h2>
                             <p className="muted" style={{ margin: 0 }}>
