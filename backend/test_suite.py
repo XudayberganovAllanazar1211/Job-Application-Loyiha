@@ -158,6 +158,78 @@ class JobPlatformTestCase(unittest.TestCase):
         custom_created = [j for j in custom_jobs if j["title"] == "Custom Service Job"][0]
         self.assertEqual(custom_created["service_name"], "Custom Design, Advanced")
 
+    def test_035_proposal_flow(self):
+        owner_login = self.client.post(
+            "/login",
+            json={"username": "tester_creator", "password": "Password123!"}
+        )
+        worker_login = self.client.post(
+            "/login",
+            json={"username": "tester_worker", "password": "Password123!"}
+        )
+        self.assertEqual(owner_login.status_code, 200)
+        self.assertEqual(worker_login.status_code, 200)
+        owner_token = owner_login.get_json()["token"]
+        worker_token = worker_login.get_json()["token"]
+
+        created = self.client.post(
+            "/job",
+            headers={"Authorization": f"Bearer {owner_token}"},
+            json={
+                "service_id": 1,
+                "title": "Proposal Flow Check",
+                "description": "Verify worker proposals before assignment.",
+                "price": 900000,
+                "location": "Remote"
+            }
+        )
+        self.assertEqual(created.status_code, 200)
+        jobs = self.client.get("/jobs", headers={"Authorization": f"Bearer {owner_token}"}).get_json()
+        job = [item for item in jobs if item["title"] == "Proposal Flow Check"][0]
+        job_id = job["id"]
+        self.assertEqual(job["status"], "active")
+        self.assertEqual(job["proposal_count"], 0)
+
+        proposal = self.client.post(
+            f"/jobs/{job_id}/proposals",
+            headers={"Authorization": f"Bearer {worker_token}"},
+            json={
+                "price": 750000,
+                "deadline": "2026-10-20",
+                "message": "I can complete this within the requested period."
+            }
+        )
+        self.assertEqual(proposal.status_code, 201)
+
+        owner_proposals = self.client.get(
+            f"/jobs/{job_id}/proposals",
+            headers={"Authorization": f"Bearer {owner_token}"}
+        )
+        self.assertEqual(owner_proposals.status_code, 200)
+        proposal_items = owner_proposals.get_json()
+        self.assertEqual(len(proposal_items), 1)
+        self.assertEqual(proposal_items[0]["price"], 750000.0)
+        proposal_id = proposal_items[0]["id"]
+
+        accepted = self.client.patch(
+            f"/proposals/{proposal_id}",
+            headers={"Authorization": f"Bearer {owner_token}"},
+            json={"action": "accept"}
+        )
+        self.assertEqual(accepted.status_code, 200)
+
+        detail = self.client.get(
+            f"/jobs/{job_id}",
+            headers={"Authorization": f"Bearer {owner_token}"}
+        )
+        self.assertEqual(detail.status_code, 200)
+        detail_data = detail.get_json()
+        self.assertEqual(detail_data["worker_id"], self.client.get(
+            "/profile", headers={"Authorization": f"Bearer {worker_token}"}
+        ).get_json()["id"])
+        self.assertEqual(detail_data["price"], 750000.0)
+        self.assertEqual(detail_data["status"], "payment_pending")
+
     def test_04_full_lifecycle_and_rating(self):
         # Register worker (Second user -> regular 'user' role)
         res_reg = self.client.post("/register/send-code", json={
