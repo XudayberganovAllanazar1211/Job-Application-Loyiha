@@ -949,7 +949,7 @@ export default function Profile() {
 
                             if (portfolioFile) {
                                 const data = new FormData()
-                                const title = portfolioForm.title.trim() || portfolioFile.name.replace(/\\.[^/.]+$/, "")
+                                const title = portfolioForm.title.trim() || portfolioFile.name.replace(/\.[^/.]+$/, "")
                                 data.append("title", title)
                                 data.append("description", portfolioForm.description)
                                 data.append("url", portfolioForm.url)
