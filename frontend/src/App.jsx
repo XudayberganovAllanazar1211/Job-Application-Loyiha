@@ -14,6 +14,7 @@ import PrivacyPolicy from "./pages/PrivacyPolicy"
 import Terms from "./pages/Terms"
 import CommunityRules from "./pages/CommunityRules"
 import Admin from "./pages/Admin"
+import Appeals from "./pages/Appeals"
 import Payments from "./pages/Payments"
 
 function AdminOnly({ children }) {
@@ -50,6 +51,7 @@ export default function App() {
 
             <Route path="/leaderboard" element={<Protected><Leaderboard /></Protected>} />
             <Route path="/profile" element={<Protected><Profile /></Protected>} />
+            <Route path="/appeals" element={<Protected><Appeals /></Protected>} />
             <Route path="/profile/:username" element={<Protected><PublicProfile /></Protected>} />
             <Route path="/profiles/:username" element={<Protected><PublicProfile /></Protected>} />
             <Route path="/admin" element={<Protected><AdminOnly><Admin /></AdminOnly></Protected>} />
