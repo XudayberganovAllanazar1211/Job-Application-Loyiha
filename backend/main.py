@@ -643,7 +643,7 @@ def notify_matching_users(job_id, job_title, creator_id):
             create_notification(user_id, "matching_job", "Sizga mos yangi ish", f"Sizning sohalaringizga mos yangi ish yaratildi: {job_title}", "/jobs")
 
 
-register_payment_routes(app, db, auth, create_notification)
+register_payment_routes(app, db, auth, admin_required, create_notification)
 
 @app.route("/notifications")
 @auth
