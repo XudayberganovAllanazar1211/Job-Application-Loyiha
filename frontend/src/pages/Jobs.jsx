@@ -523,7 +523,7 @@ export default function Jobs() {
                     </div>
                     <div className="job-grid jobs-recommendation-grid">
                         {recommendationData.recommended.map(({ job, matchedSkills }) => (
-                            <article className="card job-card job-recommended-card" key={job.id}>
+                            <article className="card job-card job-recommended-card" key={job.id} onClick={() => selectJob(job)} style={{ cursor: "pointer" }}>
                                 <div className="job-recommended-label">★ Sizga mos</div>
                                 <h3 className="job-title">{job.title}</h3>
                                 <p className="job-desc">{job.description || "Tavsif kiritilmagan"}</p>
@@ -534,6 +534,20 @@ export default function Jobs() {
                                     <span className="chip job-service-chip">🧩 {job.service_name || serviceMap[String(job.service_id)] || job.service_id || "Noma’lum"}</span>
                                 </div>
                                 <div className="job-recommended-skills">Mos sohalar: {matchedSkills.join(", ")}</div>
+                                <div className="meta">
+                                    <span className="chip job-worker-chip">
+                                        👤 Yaratuvchi: <button type="button" className="profile-link-button" onClick={(e) => { e.stopPropagation(); navigate(`/profiles/${job.creator_username}`) }}>
+                                            {`${job.creator_first || ""} ${job.creator_last || ""}`.trim() || job.creator_username}
+                                        </button>
+                                    </span>
+                                    <span className="chip job-worker-chip">
+                                        👤 Bajaruvchi: {job.worker_id ? (
+                                            <button type="button" className="profile-link-button" onClick={(e) => { e.stopPropagation(); navigate(`/profiles/${job.worker_username}`) }}>
+                                                {`${job.worker_first || ""} ${job.worker_last || ""}`.trim() || job.worker_username}
+                                            </button>
+                                        ) : "Hali qabul qilinmagan"}
+                                    </span>
+                                </div>
                             </article>
                         ))}
                     </div>
