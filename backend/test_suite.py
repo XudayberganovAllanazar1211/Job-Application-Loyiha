@@ -158,7 +158,7 @@ class JobPlatformTestCase(unittest.TestCase):
         custom_created = [j for j in custom_jobs if j["title"] == "Custom Service Job"][0]
         self.assertEqual(custom_created["service_name"], "Custom Design, Advanced")
 
-    def test_035_proposal_flow(self):
+    def test_055_proposal_flow(self):
         owner_login = self.client.post(
             "/login",
             json={"username": "tester_creator", "password": "Password123!"}
