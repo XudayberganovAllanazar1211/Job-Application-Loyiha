@@ -72,7 +72,7 @@ export default function Jobs() {
     const [proposalMessage, setProposalMessage] = useState("")
     const [proposalActionId, setProposalActionId] = useState(null)
     const [proposalSubmitting, setProposalSubmitting] = useState(false)
-    const [proposalModalLoading, setProposalModalLoading] = useState(false)
+    const [proposalModalExisting, setProposalModalExisting] = useState(null)
 
     const serviceMap = useMemo(
         () => Object.fromEntries(services.map((service) => [String(service.id), service.name])),
@@ -471,20 +471,20 @@ export default function Jobs() {
     const openProposalModal = async (job) => {
         if (!job?.id || String(job.user_id) === String(user?.id) || job.worker_id != null || String(job.status).toLowerCase() !== "active") return
         setProposalModalJob(job)
+        setProposalModalExisting(null)
         setProposalPrice(String(job.price ?? ""))
         setProposalDeadline("")
         setProposalMessage("")
-        setProposalModalLoading(true)
         const result = await api(`/jobs/${job.id}/proposals`, { token })
         const ownProposal = Array.isArray(result)
             ? result.find((item) => String(item.worker_id) === String(user?.id) && item.status === "pending")
             : null
         if (ownProposal) {
+            setProposalModalExisting(ownProposal)
             setProposalPrice(String(ownProposal.price ?? job.price ?? ""))
             setProposalDeadline(ownProposal.deadline || "")
             setProposalMessage(ownProposal.message || "")
         }
-        setProposalModalLoading(false)
     }
     const submitProposal = async (event) => {
         event.preventDefault()
@@ -502,9 +502,7 @@ export default function Jobs() {
             return
         }
 
-        const existingProposal = proposals.find(
-            (item) => String(item.worker_id) === String(user?.id) && item.status === "pending"
-        )
+        const existingProposal = proposalModalExisting
 
         setProposalSubmitting(true)
         try {
@@ -534,6 +532,7 @@ export default function Jobs() {
                 setNotice(existingProposal ? "Taklif yangilandi." : "Taklif muvaffaqiyatli yuborildi.")
                 const jobId = proposalModalJob.id
                 setProposalModalJob(null)
+                setProposalModalExisting(null)
                 const refreshed = await api(`/jobs/${jobId}/proposals`, { token })
                 setProposals(Array.isArray(refreshed) ? refreshed : [])
                 await load()
@@ -1041,9 +1040,9 @@ export default function Jobs() {
                     <div className="card" style={{ width: "min(560px, 100%)", margin: 0, maxHeight: "90vh", overflow: "auto" }}>
                         <div className="section-toolbar">
                             <div className="page-head">
-                                <span className="profile-eyebrow">{myProposal?.status === "pending" ? "TAKLIFNI TAHRIRLASH" : "TAKLIF YUBORISH"}</span>
+                                <span className="profile-eyebrow">{proposalModalExisting ? "TAKLIFNI TAHRIRLASH" : "TAKLIF YUBORISH"}</span>
                                 <h2>{proposalModalJob.title}</h2>
-                                <p className="muted">{myProposal?.status === "pending" ? "Taklifingizdagi narx, muddat yoki izohni yangilang." : "Narxingiz, bajarish muddatingiz va qisqa izohni kiriting."}</p>
+                                <p className="muted">{proposalModalExisting ? "Taklifingizdagi narx, muddat yoki izohni yangilang." : "Narxingiz, bajarish muddatingiz va qisqa izohni kiriting."}</p>
                             </div>
                             <button className="btn btn-secondary" type="button" onClick={() => setProposalModalJob(null)}>×</button>
                         </div>
@@ -1064,7 +1063,7 @@ export default function Jobs() {
                             <div className="actions">
                                 <button className="btn btn-secondary" type="button" onClick={() => setProposalModalJob(null)}>Bekor qilish</button>
                                 <button className="btn btn-primary" type="submit" disabled={proposalSubmitting}>
-                                    {proposalSubmitting ? "Saqlanmoqda..." : myProposal?.status === "pending" ? "Taklifni yangilash" : "Taklifni yuborish"}
+                                    {proposalSubmitting ? "Saqlanmoqda..." : proposalModalExisting ? "Taklifni yangilash" : "Taklifni yuborish"}
                                 </button>
                             </div>
                         </form>
