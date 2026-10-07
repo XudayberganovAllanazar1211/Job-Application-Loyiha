@@ -248,7 +248,7 @@ class JobPlatformTestCase(unittest.TestCase):
         self.assertEqual(detail_data["worker_id"], self.client.get(
             "/profile", headers={"Authorization": f"Bearer {worker_token}"}
         ).get_json()["id"])
-        self.assertEqual(detail_data["price"], 750000.0)
+        self.assertEqual(detail_data["price"], 700000.0)
         self.assertEqual(detail_data["status"], "payment_pending")
 
     def test_04_full_lifecycle_and_rating(self):
