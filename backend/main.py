@@ -2643,7 +2643,7 @@ def update_proposal(proposal_id):
             """UPDATE job_proposals
                SET price=?,deadline=?,message=?,updated_at=?
                WHERE id=? AND worker_id=? AND status='pending'""",
-            (edited_price, edited_deadline, edited_message, proposal_id, request.uid),
+            (edited_price, edited_deadline, edited_message, now_time, proposal_id, request.uid),
         )
         updated = result.rowcount
         result.close()
