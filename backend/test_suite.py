@@ -1,5 +1,6 @@
 import os
 import unittest
+from io import BytesIO
 from main import app, DB, pending_verifications
 import main
 
@@ -732,6 +733,55 @@ class JobPlatformTestCase(unittest.TestCase):
             headers={"Authorization": f"Bearer {token}"}
         )
         self.assertEqual(deleted.status_code, 200)
+
+    def test_10e_portfolio_file_upload_flow(self):
+        login = self.client.post(
+            "/login",
+            json={"username": "tester_worker", "password": "Password123!"}
+        )
+        self.assertEqual(login.status_code, 200)
+        token = login.get_json()["token"]
+
+        pdf_data = b"%PDF-1.4\n% FinJob portfolio test\n"
+        uploaded = self.client.post(
+            "/portfolio/upload",
+            headers={"Authorization": f"Bearer {token}"},
+            data={
+                "title": "Uploaded Portfolio",
+                "description": "Portfolio file upload test.",
+                "url": "https://example.com/uploaded",
+                "file": (BytesIO(pdf_data), "portfolio.pdf"),
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(uploaded.status_code, 201)
+        uploaded_data = uploaded.get_json()
+        self.assertTrue(uploaded_data.get("file_url"))
+        self.assertEqual(uploaded_data.get("file_name"), "portfolio.pdf")
+
+        item = main.db.q(
+            "SELECT file_url,file_name,image_url FROM portfolio_items WHERE id=?",
+            (uploaded_data["id"],)
+        ).fetchone()
+        self.assertIsNotNone(item)
+        self.assertTrue(item[0])
+        self.assertEqual(item[1], "portfolio.pdf")
+        self.assertEqual(item[2], "")
+
+        file_response = self.client.get(item[0])
+        self.assertEqual(file_response.status_code, 200)
+        self.assertEqual(file_response.data[:5], b"%PDF-")
+
+        bad = self.client.post(
+            "/portfolio/upload",
+            headers={"Authorization": f"Bearer {token}"},
+            data={
+                "title": "Bad Portfolio",
+                "file": (BytesIO(b"not a pdf"), "bad.pdf"),
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(bad.status_code, 400)
 
     def test_10d_chat_v2_flow(self):
         owner_login = self.client.post(
