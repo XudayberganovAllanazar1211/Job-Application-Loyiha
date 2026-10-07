@@ -439,7 +439,19 @@ export default function Dashboard() {
                             </div>
                             <div className="jobs-page-controls">
                                 <button className="btn btn-secondary" disabled={currentPage === 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}>‹</button>
-                                <span className="jobs-page-indicator">{currentPage} / {totalPages}</span>
+                                <input
+                                    className="input jobs-page-number"
+                                    type="number"
+                                    min="1"
+                                    max={totalPages}
+                                    value={currentPage}
+                                    aria-label="Sahifa raqami"
+                                    onChange={(e) => {
+                                        const page = Number(e.target.value)
+                                        if (Number.isFinite(page)) setCurrentPage(Math.min(totalPages, Math.max(1, page)))
+                                    }}
+                                />
+                                <span className="jobs-page-total">/ {totalPages}</span>
                                 <button className="btn btn-secondary" disabled={currentPage === totalPages} onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}>›</button>
                             </div>
                         </div>
