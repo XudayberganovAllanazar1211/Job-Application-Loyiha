@@ -966,9 +966,20 @@ def admin_update_job(job_id):
 
     job_state = db.q("SELECT worker_id FROM jobs WHERE id=?", (job_id,)).fetchone()
     worker_id = job_state[0] if job_state else None
+    held_payment = db.q(
+        "SELECT id FROM payments WHERE job_id=? AND status='held' LIMIT 1",
+        (job_id,),
+    ).fetchone()
 
     if status in {"payment_pending", "accepted", "pending_finish", "finished"} and not worker_id:
         return jsonify({"msg": "Bu holatni tanlash uchun avval ishga bajaruvchi biriktirilishi kerak."}), 400
+
+    if held_payment and status in {"active", "blocked"}:
+        refund_payment = app.config.get("FINJOB_REFUND_PAYMENT")
+        if refund_payment:
+            ok, message, _ = refund_payment(job_id)
+            if not ok:
+                return jsonify({"msg": message}), 400
 
     if status == "active":
         db.q("UPDATE jobs SET status='active', worker_id=NULL, finished_at=NULL WHERE id=?", (job_id,)).close()
@@ -983,6 +994,12 @@ def admin_update_job(job_id):
     else:
         finished_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
         db.q("UPDATE jobs SET status='finished', finished_at=? WHERE id=?", (finished_at, job_id)).close()
+        release_payment = app.config.get("FINJOB_RELEASE_PAYMENT")
+        if release_payment:
+            ok, message, _ = release_payment(job_id)
+            if not ok:
+                db.q("UPDATE jobs SET status='accepted', finished_at=NULL WHERE id=?", (job_id,)).close()
+                return jsonify({"msg": message}), 400
 
     return jsonify({"msg": "Ish holati yangilandi."})
 
@@ -993,6 +1010,10 @@ def admin_delete_job(job_id):
     job = db.q("SELECT id FROM jobs WHERE id=?", (job_id,)).fetchone()
     if not job:
         return jsonify({"msg": "Ish topilmadi."}), 404
+
+    held_payment = db.q("SELECT id FROM payments WHERE job_id=? AND status='held' LIMIT 1", (job_id,)).fetchone()
+    if held_payment:
+        return jsonify({"msg": "Bu ishda waiting to‘lovi bor. Avval refund qiling yoki shikoyatni admin orqali hal qiling."}), 409
 
     conn = db.get_connection()
     try:
