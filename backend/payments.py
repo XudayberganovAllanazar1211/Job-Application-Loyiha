@@ -420,6 +420,10 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
     @app.route("/payments/dummy/<int:job_id>", methods=["POST"])
     @auth
     def dummy_payment(job_id):
+        if enforce_block:
+            block_response=enforce_block("full")
+            if block_response: return block_response
+
         job = db.q("SELECT user_id,worker_id,status,COALESCE(agreed_price,price),currency,title FROM jobs WHERE id=?", (job_id,)).fetchone()
         if not job:
             return jsonify({"msg": "Ish topilmadi"}), 404
@@ -518,6 +522,10 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
     @app.route("/payments/release/<int:job_id>", methods=["POST"])
     @auth
     def release_payment_route(job_id):
+        if enforce_block:
+            block_response=enforce_block("full")
+            if block_response: return block_response
+
         job = db.q("SELECT user_id,worker_id,status FROM jobs WHERE id=?", (job_id,)).fetchone()
         if not job or job[1] != request.uid:
             return jsonify({"msg": "Faqat shu ishning hozirgi ishchisi to‘lovni yakunlay oladi"}), 403
@@ -539,14 +547,6 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
     @app.route("/wallet")
     @auth
     def get_wallet():
-        if enforce_block:
-            block_response=enforce_block("full" if "def get_wallet():" != "def withdraw_wallet():
-        if enforce_block:
-            block_response=enforce_block("full" if "def withdraw_wallet():" != "def withdraw_wallet():" else "withdrawal")
-            if block_response: return block_response
-" else "withdrawal")
-            if block_response: return block_response
-
         user = db.q("SELECT COALESCE(balance,0) FROM users WHERE id=?", (request.uid,)).fetchone()
         transactions = db.q(
             """SELECT type,amount,balance_after,job_id,description,created_at
@@ -568,6 +568,10 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
     @app.route("/wallet/withdraw", methods=["POST"])
     @auth
     def withdraw_wallet():
+        if enforce_block:
+            block_response=enforce_block("withdrawal")
+            if block_response: return block_response
+
         data = request.json or {}
         try:
             amount = float(data.get("amount", 0))
