@@ -99,7 +99,7 @@ export default function Chat() {
         const typingInterval = setInterval(loadTyping, 1500)
         const heartbeat = setInterval(() => api("/presence", { method: "POST", token }), 30000)
         loadPresence()
-        api("/presence", { method: "POST", token)
+        api("/presence", { method: "POST", token })
         const handleVisibilityChange = () => {
             if (!document.hidden) {
                 loadXabarlar()
