@@ -233,7 +233,6 @@ export default function PublicProfile() {
                                 </section>
                             </div>
                         </div>
-                    </div>
 
                     <section className="card" style={{ marginTop: 18 }}>
                         <div className="profile-section-head">
@@ -264,6 +263,7 @@ export default function PublicProfile() {
                             </div>
                         )}
                     </section>
+                    </div>
                 )}
             </AppLayout>
         </>
