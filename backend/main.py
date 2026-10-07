@@ -295,6 +295,54 @@ class DB:
         """)
 
         cursor.execute("""
+            CREATE TABLE IF NOT EXISTS job_proposals(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id INTEGER NOT NULL,
+                worker_id INTEGER NOT NULL,
+                price REAL NOT NULL,
+                deadline TEXT NOT NULL,
+                message TEXT DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'pending',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(job_id, worker_id)
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS favorites(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                target_type TEXT NOT NULL,
+                target_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(user_id, target_type, target_id)
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS portfolio_items(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT DEFAULT '',
+                url TEXT DEFAULT '',
+                image_url TEXT DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS typing_states(
+                job_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                updated_at REAL NOT NULL,
+                PRIMARY KEY(job_id, user_id)
+            )
+        """)
+
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS payments(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 payment_uuid TEXT UNIQUE NOT NULL,
