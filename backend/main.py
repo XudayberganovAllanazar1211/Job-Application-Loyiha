@@ -1218,9 +1218,7 @@ def verify_code():
     ud = record["data"]
     try:
         now_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # First user can be registered as admin if table is empty
-        count_users = db.q("SELECT COUNT(*) FROM users").fetchone()[0]
-        assigned_role = "admin" if count_users == 0 else "user"
+        assigned_role = "user"
 
         db.q(
             """INSERT INTO users(username,password,first_name,last_name,birthday,email,bio,skills,created_at,average_rating,role)
