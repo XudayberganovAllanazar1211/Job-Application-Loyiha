@@ -525,6 +525,73 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
         })
 
 
+    @app.route("/wallet/withdraw", methods=["POST"])
+    @auth
+    def withdraw_wallet():
+        data = request.json or {}
+        try:
+            amount = float(data.get("amount", 0))
+        except (TypeError, ValueError):
+            return jsonify({"msg": "Summa noto‘g‘ri"}), 400
+
+        if not amount or amount <= 0:
+            return jsonify({"msg": "Yechib olish summasi 0 dan katta bo‘lishi kerak"}), 400
+        if amount > 1000000000:
+            return jsonify({"msg": "Bir martalik yechib olish 1 000 000 000 UZS dan oshmasligi kerak"}), 400
+
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        conn = db.get_connection()
+        try:
+            cur = conn.cursor()
+            current = cur.execute("SELECT COALESCE(balance,0) FROM users WHERE id=?", (request.uid,)).fetchone()
+            if not current:
+                conn.rollback()
+                return jsonify({"msg": "Foydalanuvchi topilmadi"}), 404
+
+            balance = float(current[0] or 0)
+            if amount > balance:
+                conn.rollback()
+                return jsonify({"msg": "Balansda yetarli mablag‘ yo‘q", "balance": balance}), 400
+
+            cur.execute(
+                "UPDATE users SET balance=ROUND(COALESCE(balance,0)-?,2) WHERE id=? AND COALESCE(balance,0)>=?",
+                (amount, request.uid, amount),
+            )
+            if cur.rowcount != 1:
+                conn.rollback()
+                return jsonify({"msg": "Balans o‘zgardi. Qayta urinib ko‘ring"}), 409
+
+            balance_after = cur.execute(
+                "SELECT COALESCE(balance,0) FROM users WHERE id=?", (request.uid,)
+            ).fetchone()[0]
+
+            _wallet_tx(
+                cur,
+                request.uid,
+                "withdrawal",
+                -amount,
+                balance_after,
+                None,
+                "Test wallet orqali balansdan mablag‘ yechildi",
+                now,
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+        create_notification(
+            request.uid,
+            "wallet_withdrawal",
+            "Mablag‘ yechildi",
+            f"{amount:,.0f} UZS balansingizdan yechildi.",
+            "/profile",
+        )
+        return jsonify({"msg": "ok", "amount": amount, "balance": float(balance_after)})
+
+
     @app.route("/admin/wallet/<int:user_id>", methods=["POST"])
     @admin_required
     def admin_add_wallet(user_id):
