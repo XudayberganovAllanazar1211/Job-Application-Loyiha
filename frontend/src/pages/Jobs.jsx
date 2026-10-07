@@ -237,6 +237,8 @@ export default function Jobs() {
         setJobDetails(null)
     }
 
+    const activeJobDetails = jobDetails || selectedJob
+
     useEffect(() => {
         if (!activeJobDetails?.id) {
             setProposals([])
