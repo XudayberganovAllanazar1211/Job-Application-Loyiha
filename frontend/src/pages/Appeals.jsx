@@ -28,7 +28,6 @@ function formatDate(value) {
 
 export default function Appeals() {
     const token = localStorage.getItem("token") || ""
-    const user = JSON.parse(localStorage.getItem("user") || "null")
     const [data, setData] = useState(null)
     const [selectedBlock, setSelectedBlock] = useState(null)
     const [text, setText] = useState("")
