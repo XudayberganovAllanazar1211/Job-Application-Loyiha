@@ -248,13 +248,23 @@ export default function Chat() {
                                     {message.message && <div>{message.message}</div>}
                                     {message.attachment_url && (
                                         <div style={{ marginTop: message.message ? 8 : 0 }}>
-                                            <button
-                                                type="button"
-                                                className="btn btn-secondary"
-                                                onClick={() => openAttachment(message.attachment_url)}
-                                            >
-                                                {message.attachment_type === "image" ? "Rasmni ochish" : "Fayl: " + (message.attachment_name || "Faylni ochish")}
-                                            </button>
+                                            {message.attachment_type === "image" ? (
+                                                <ChatImage
+                                                    url={message.attachment_url}
+                                                    name={message.attachment_name || "Rasm"}
+                                                    apiBase={API_BASE}
+                                                    token={token}
+                                                    onOpen={openAttachment}
+                                                />
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-secondary"
+                                                    onClick={() => openAttachment(message.attachment_url)}
+                                                >
+                                                    Fayl: {message.attachment_name || "Faylni ochish"}
+                                                </button>
+                                            )}
                                         </div>
                                     )}
                                     {mine && <small className="muted" style={{ display: "block", marginTop: 4 }}>{message.read_at ? "✓✓ Ko‘rildi" : "✓ Yuborildi"}</small>}
@@ -297,5 +307,77 @@ export default function Chat() {
                 </section>
             </div>
         </AppLayout>
+    )
+}
+
+function ChatImage({ url, name, apiBase, token, onOpen }) {
+    const [src, setSrc] = useState("")
+    const [error, setError] = useState(false)
+
+    useEffect(() => {
+        let objectUrl = ""
+
+        const load = async () => {
+            try {
+                const response = await fetch(apiBase + url, {
+                    headers: { Authorization: `Bearer ${token}` }
+                })
+                if (!response.ok) throw new Error("Rasmni yuklab bo‘lmadi")
+                const blob = await response.blob()
+                objectUrl = URL.createObjectURL(blob)
+                setSrc(objectUrl)
+            } catch {
+                setError(true)
+            }
+        }
+
+        load()
+
+        return () => {
+            if (objectUrl) URL.revokeObjectURL(objectUrl)
+        }
+    }, [apiBase, token, url])
+
+    if (error) {
+        return (
+            <button type="button" className="btn btn-secondary" onClick={() => onOpen(url)}>
+                Rasmni ochish: {name}
+            </button>
+        )
+    }
+
+    if (!src) {
+        return <div className="notice" style={{ display: "inline-block" }}>Rasm yuklanmoqda...</div>
+    }
+
+    return (
+        <button
+            type="button"
+            onClick={() => onOpen(url)}
+            style={{
+                display: "block",
+                padding: 0,
+                border: 0,
+                background: "transparent",
+                cursor: "pointer",
+                maxWidth: "min(420px, 100%)",
+                borderRadius: 12,
+                overflow: "hidden"
+            }}
+            aria-label={`Rasmni kattalashtirish: ${name}`}
+        >
+            <img
+                src={src}
+                alt={name}
+                style={{
+                    display: "block",
+                    width: "100%",
+                    maxWidth: 420,
+                    maxHeight: 420,
+                    objectFit: "contain",
+                    borderRadius: 12
+                }}
+            />
+        </button>
     )
 }
