@@ -135,6 +135,12 @@ class DB:
             )
         """)
 
+        job_columns = [row[1] for row in cursor.execute("PRAGMA table_info(jobs)").fetchall()]
+        if "owner_finished" not in job_columns:
+            cursor.execute("ALTER TABLE jobs ADD COLUMN owner_finished INTEGER NOT NULL DEFAULT 0")
+        if "worker_finished" not in job_columns:
+            cursor.execute("ALTER TABLE jobs ADD COLUMN worker_finished INTEGER NOT NULL DEFAULT 0")
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS job_services(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1635,7 +1641,7 @@ def cancel_worker():
     cursor = conn.cursor()
     try:
         cursor.execute(
-            "UPDATE jobs SET worker_id=NULL, status='active', finished_at=NULL WHERE id=? AND user_id=? AND status IN ('payment_pending','accepted')",
+            "UPDATE jobs SET worker_id=NULL, status='active', finished_at=NULL, owner_finished=0, worker_finished=0 WHERE id=? AND user_id=? AND status IN ('payment_pending','accepted')",
             (job_id, request.uid),
         )
         if cursor.rowcount != 1:
@@ -1668,86 +1674,57 @@ def finish():
     job_id = d.get("job_id")
     if not job_id:
         return jsonify({"msg": "Ish identifikatori ko‘rsatilmagan"}), 400
-
     try:
         job_id = int(job_id)
     except (TypeError, ValueError):
         return jsonify({"msg": "Ish identifikatori noto‘g‘ri"}), 400
-
-    job = db.q("SELECT user_id, worker_id, status FROM jobs WHERE id=?", (job_id,)).fetchone()
+    job = db.q("SELECT user_id,worker_id,status,owner_finished,worker_finished,title FROM jobs WHERE id=?", (job_id,)).fetchone()
     if not job:
         return jsonify({"msg": "Ish topilmadi"}), 404
-    if job[0] != request.uid:
-        return jsonify({"msg": "Faqat ish yaratuvchisi yakunlash so'rovini yuborishi mumkin!"}), 403
-    if not job[1]:
+    owner_id, worker_id, status, owner_finished, worker_finished, title = job
+    if request.uid not in (owner_id, worker_id):
+        return jsonify({"msg": "Faqat ish egasi yoki bajaruvchi yakunlashi mumkin"}), 403
+    if not worker_id:
         return jsonify({"msg": "Ishni yakunlashdan oldin bajaruvchi tanlanishi kerak"}), 400
-    if job[2] != "accepted":
-        return jsonify({"msg": "Ish faqat to‘lov amalga oshirilgandan keyin yakunlanishi mumkin"}), 400
+    if status != "accepted":
+        return jsonify({"msg": "Ish hozir yakunlash uchun tayyor emas"}), 400
 
-    result = db.q("UPDATE jobs SET status='pending_finish' WHERE id=?", (job_id,))
-    result.close()
-    return jsonify({"msg": "ok"})
-
-
-@app.route("/confirm_finish", methods=["POST"])
-@auth
-def confirm_finish():
-    d = request.json or {}
-    job_id = d.get("job_id")
-    choice = d.get("choice")
-
-    if not job_id:
-        return jsonify({"msg": "Ish identifikatori ko‘rsatilmagan"}), 400
-
+    conn = db.get_connection()
     try:
-        job_id = int(job_id)
-    except (TypeError, ValueError):
-        return jsonify({"msg": "Ish identifikatori noto‘g‘ri"}), 400
+        cur = conn.cursor()
+        if request.uid == owner_id:
+            cur.execute("UPDATE jobs SET owner_finished=1 WHERE id=? AND status='accepted'", (job_id,))
+        else:
+            cur.execute("UPDATE jobs SET worker_finished=1 WHERE id=? AND status='accepted'", (job_id,))
+        state = cur.execute("SELECT owner_finished,worker_finished FROM jobs WHERE id=?", (job_id,)).fetchone()
+        both_finished = bool(state and state[0] and state[1])
+        if both_finished:
+            now_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            cur.execute("UPDATE jobs SET status='finished',finished_at=? WHERE id=? AND status='accepted'", (now_time, job_id))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
-    job = db.q("SELECT user_id, worker_id, status, title FROM jobs WHERE id=?", (job_id,)).fetchone()
-    if not job:
-        return jsonify({"msg": "Ish topilmadi"}), 404
-    if job[1] != request.uid:
-        return jsonify({"msg": "Ruxsat berilmadi"}), 403
-    if job[2] != "pending_finish":
-        return jsonify({"msg": "Bu ish hozir tasdiqlashni kutmayapti"}), 400
-    if choice not in ("yes", "no"):
-        return jsonify({"msg": "Tanlov faqat ha yoki yo‘q bo‘lishi mumkin"}), 400
-
-    if choice == "yes":
-        now_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        result = db.q("UPDATE jobs SET status='finished', finished_at=? WHERE id=?", (job_id, now_time))
-        result.close()
-
+    if both_finished:
         release_payment = app.config.get("FINJOB_RELEASE_PAYMENT")
         if release_payment:
             ok, message, data = release_payment(job_id)
             if not ok:
-                db.q(
-                    "UPDATE jobs SET status='accepted', finished_at=NULL WHERE id=? AND status='finished'",
-                    (job_id,),
-                ).close()
+                db.q("UPDATE jobs SET status='accepted',finished_at=NULL,owner_finished=0,worker_finished=0 WHERE id=? AND status='finished'", (job_id,)).close()
                 return jsonify({"msg": message}), 400
+        create_notification(owner_id, "job_finished", "Ish yakunlandi", f"«{title}» bo‘yicha ikkala tomon ham ishni yakunladi. Waiting to‘lovi bajaruvchiga o‘tkazildi.", "/jobs")
+        create_notification(worker_id, "job_finished", "To‘lov balansingizga o‘tkazildi", f"«{title}» bo‘yicha ish yakunlandi va waiting to‘lovi balansingizga o‘tkazildi.", "/payments")
+        return jsonify({"msg": "ok", "finished": True})
 
-        create_notification(
-            job[0],
-            "job_finished",
-            "Ish yakunlandi va to‘lov o‘tkazildi",
-            f"Sizning «{job[3]}» nomli ishingiz ikki tomon tasdig‘i bilan yakunlandi. Waiting to‘lovi ishchiga o‘tkazildi.",
-            "/jobs",
-        )
-        return jsonify({"msg": "ok", "status": "finished", "payment_status": "released"})
+    other_id = worker_id if request.uid == owner_id else owner_id
+    create_notification(request.uid, "job_finish_requested", "Yakunlash belgilandi", f"«{title}» bo‘yicha siz ishni yakunladingiz. Ikkinchi tomonning ham yakunlashini kuting.", "/jobs")
+    create_notification(other_id, "job_finish_requested", "Ishni yakunlang", f"«{title}» bo‘yicha ikkinchi tomon ishni yakunladi. Siz ham «Yakunlash» tugmasini bosing.", "/jobs")
+    return jsonify({"msg": "waiting", "finished": False})
 
-    result = db.q(
-        "UPDATE jobs SET status='accepted' WHERE id=? AND status='pending_finish' AND user_id=?",
-        (job_id, request.uid),
-    )
-    updated = result.rowcount
-    result.close()
-    if updated != 1:
-        return jsonify({"msg": "Ish holati o‘zgardi. Qayta urinib ko‘ring"}), 409
-    return jsonify({"msg": "rejected", "status": "accepted"})
-# -------- MESSAGES --------
+
 @app.route("/message", methods=["POST"])
 @auth
 def msg():
