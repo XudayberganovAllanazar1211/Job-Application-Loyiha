@@ -2429,6 +2429,10 @@ def portfolio():
             for x in items
         ])
 
+    count = db.q("SELECT COUNT(*) FROM portfolio_items WHERE user_id=?", (request.uid,)).fetchone()[0]
+    if count >= 3:
+        return jsonify({"msg": "Maksimal 3 ta portfolio qo‘shish mumkin."}), 400
+
     data = request.json or {}
     title = str(data.get("title", "")).strip()
     description = str(data.get("description", "")).strip()
@@ -2463,6 +2467,10 @@ MAX_PORTFOLIO_FILE_SIZE = 10 * 1024 * 1024
 @app.route("/portfolio/upload", methods=["POST"])
 @auth
 def upload_portfolio_file():
+    count = db.q("SELECT COUNT(*) FROM portfolio_items WHERE user_id=?", (request.uid,)).fetchone()[0]
+    if count >= 3:
+        return jsonify({"ok": False, "msg": "Maksimal 3 ta portfolio qo‘shish mumkin."}), 400
+
     upload = request.files.get("file")
     raw_title = str(request.form.get("title", "")).strip()
     description = str(request.form.get("description", "")).strip()
