@@ -2464,16 +2464,20 @@ MAX_PORTFOLIO_FILE_SIZE = 10 * 1024 * 1024
 @auth
 def upload_portfolio_file():
     upload = request.files.get("file")
-    title = str(request.form.get("title", "")).strip()
+    raw_title = str(request.form.get("title", "")).strip()
     description = str(request.form.get("description", "")).strip()
     url = str(request.form.get("url", "")).strip()
 
     if not upload or not upload.filename:
-        return jsonify({"msg": "Portfolio fayli tanlanmadi"}), 400
+        return jsonify({"ok": False, "msg": "Portfolio fayli tanlanmadi"}), 400
+
+    original_filename = upload.filename.strip()
+    fallback_title = os.path.splitext(secure_filename(original_filename))[0].strip()
+    title = raw_title or fallback_title
     if not title or len(title) > 120:
-        return jsonify({"msg": "Portfolio nomi 1–120 belgidan iborat bo‘lishi kerak"}), 400
+        return jsonify({"ok": False, "msg": "Portfolio nomi 1–120 belgidan iborat bo‘lishi kerak"}), 400
     if len(description) > 2000 or len(url) > 1000:
-        return jsonify({"msg": "Portfolio maydonlaridan biri juda uzun"}), 400
+        return jsonify({"ok": False, "msg": "Portfolio maydonlaridan biri juda uzun"}), 400
     if url and not re.fullmatch(r"https?://\S+", url):
         return jsonify({"msg": "Portfolio havolasi noto‘g‘ri"}), 400
 
@@ -2521,14 +2525,23 @@ def upload_portfolio_file():
     file_url = f"/uploads/portfolio/{stored_name}"
     image_url = file_url if extension in PORTFOLIO_IMAGE_EXTENSIONS else ""
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    result = db.q(
-        """INSERT INTO portfolio_items(
-               user_id,title,description,url,image_url,file_url,file_name,created_at,updated_at
-           ) VALUES(?,?,?,?,?,?,?,?,?)""",
-        (request.uid,title,description,url,image_url,file_url,original_name or stored_name,now,now),
-    )
-    item_id = result.lastrowid
-    result.close()
+    try:
+        result = db.q(
+            """INSERT INTO portfolio_items(
+                   user_id,title,description,url,image_url,file_url,file_name,created_at,updated_at
+               ) VALUES(?,?,?,?,?,?,?,?,?)""",
+            (request.uid,title,description,url,image_url,file_url,original_name or stored_name,now,now),
+        )
+        item_id = result.lastrowid
+        result.close()
+    except Exception:
+        if os.path.isfile(filepath):
+            try:
+                os.remove(filepath)
+            except OSError:
+                pass
+        return jsonify({"ok": False, "msg": "Portfolio ma'lumotini saqlashda xatolik yuz berdi"}), 500
+
     return jsonify({
         "ok": True,
         "msg": "Portfolio qo‘shildi.",
