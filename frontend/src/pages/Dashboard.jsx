@@ -275,6 +275,7 @@ export default function Dashboard() {
                             const canFinish = status === "accepted" && ((isMyJob && !job.owner_finished) || (isIAccepted && !job.worker_finished))
                             const statusLabel = {
                                 active: "Faol",
+                                payment_pending: "To‘lov kutilmoqda",
                                 accepted: "Qabul qilingan",
                                 pending_finish: "Tasdiqlash kutilmoqda",
                                 finished: "Yakunlangan"
@@ -493,4 +494,15 @@ export default function Dashboard() {
             </div>
         </AppLayout>
     )
-}
+                                <div className="card dashboard-selected-job" style={{ padding: 16 }}>
+                                    <div className="helper">Tanlangan ish</div>
+                                    <div className="dashboard-job-detail-title">{selectedJob.title}</div>
+                                    <p className="job-desc">{selectedJob.description || "Tavsif kiritilmagan"}</p>
+                                    <div className="meta">
+                                        <span className="chip">💰 {selectedJob.price ?? "-"} {selectedJob.currency || "UZS"}</span>
+                                        <span className="chip">📍 {selectedJob.location || "-"}</span>
+                                        <span className="chip">🧩 {selectedJob.service_name || serviceMap[String(selectedJob.service_id)] || "Noma’lum"}</span>
+                                        <span className={`chip status-chip status-${String(selectedJob.status || "").toLowerCase()}`}>{({ active: "Faol", payment_pending: "To‘lov kutilmoqda", accepted: "Qabul qilingan", pending_finish: "Tasdiqlash kutilmoqda", finished: "Yakunlangan" }[String(selectedJob.status || "").toLowerCase()] || selectedJob.status}</span>
+                                        <span className="chip">📅 {selectedJob.created_at || "Sana noma’lum"}</span>
+                                    </div>
+                                </div>
