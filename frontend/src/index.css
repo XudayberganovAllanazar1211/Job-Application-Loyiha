@@ -1541,3 +1541,7 @@ html[data-theme="dark"] .profile-wallet-empty{border-color:#334155;background:rg
     .jobs-page-size{flex:1}
     .jobs-page-summary{order:3;width:100%;text-align:center;margin-left:0}
 }
+
+.jobs-page-number{width:64px!important;min-width:64px!important;padding:9px 8px!important;text-align:center}
+.jobs-page-total{min-width:36px;text-align:center;color:var(--muted,#64748b);font-weight:800}
+.jobs-page-number::-webkit-inner-spin-button,.jobs-page-number::-webkit-outer-spin-button{opacity:1}
