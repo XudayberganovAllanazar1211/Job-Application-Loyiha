@@ -1550,7 +1550,7 @@ html[data-theme="dark"] .profile-wallet-empty{border-color:#334155;background:rg
 .dashboard-workspace{display:grid;grid-template-columns:minmax(320px,1.2fr) minmax(280px,.9fr) minmax(280px,.9fr);gap:14px;align-items:start}
 .dashboard-job-grid{grid-template-columns:1fr!important}
 .dashboard-job-grid .job-card{width:100%}
-.dashboard-job-details{display:grid;gap:14px;position:sticky;top:var(--sticky-panel-top);max-height:calc(100vh - var(--sticky-panel-top) - 18px);overflow:auto}
+.dashboard-job-details{display:grid;gap:14px;position:sticky;top:var(--sticky-panel-top);max-height:calc(100vh - var(--sticky-panel-top) - 18px);overflow:auto}.jobs-detail-panel{overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
 .dashboard-workspace > .chat-wrap{position:sticky;top:var(--sticky-panel-top);max-height:calc(100vh - var(--sticky-panel-top) - 18px);overflow:auto;align-self:start}
 .dashboard-panel-head h2{margin:3px 0 4px;font:800 21px Manrope,sans-serif}
 .dashboard-panel-head p{margin:0;color:var(--muted,#64748b);font-size:13px;line-height:1.5}
