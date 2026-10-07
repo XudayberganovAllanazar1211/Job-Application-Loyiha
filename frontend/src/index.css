@@ -1550,8 +1550,8 @@ html[data-theme="dark"] .profile-wallet-empty{border-color:#334155;background:rg
 .dashboard-workspace{display:grid;grid-template-columns:minmax(320px,1.2fr) minmax(280px,.9fr) minmax(280px,.9fr);gap:14px;align-items:start}
 .dashboard-job-grid{grid-template-columns:1fr!important}
 .dashboard-job-grid .job-card{width:100%}
-.dashboard-job-details{display:grid;gap:14px;position:sticky;top:24px;max-height:calc(100vh - 48px);overflow:auto}.jobs-detail-panel{min-width:0;position:sticky;top:24px;max-height:calc(100vh - 48px);align-self:start;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
-.dashboard-workspace > .chat-wrap{position:sticky;top:24px;max-height:calc(100vh - 48px);overflow:auto;align-self:start}
+.dashboard-job-details{display:grid;gap:14px;position:sticky;top:96px;max-height:calc(100vh - 112px);align-self:start;min-height:0;overflow:auto;overscroll-behavior:contain}.jobs-detail-panel{min-width:0;position:sticky;top:96px;max-height:calc(100vh - 112px);align-self:start;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
+.dashboard-workspace > .chat-wrap{position:sticky;top:96px;max-height:calc(100vh - 112px);overflow:auto;align-self:start;min-height:0;overscroll-behavior:contain}
 .dashboard-panel-head h2{margin:3px 0 4px;font:800 21px Manrope,sans-serif}
 .dashboard-panel-head p{margin:0;color:var(--muted,#64748b);font-size:13px;line-height:1.5}
 .dashboard-job-detail-body{display:grid;gap:16px}
@@ -1565,7 +1565,7 @@ html[data-theme="dark"] .dashboard-job-detail-section{background:#0f172a;border-
 html[data-theme="dark"] .dashboard-job-detail-section p{color:#cbd5e1}
 html[data-theme="dark"] .dashboard-job-detail-facts>div{border-color:#334155}
 html[data-theme="dark"] .dashboard-job-detail-facts strong{color:#e2e8f0}
-@media(max-width:1100px){.dashboard-workspace{grid-template-columns:minmax(300px,1fr) minmax(280px,.9fr)}.dashboard-workspace>.chat-wrap{grid-column:1/-1;position:sticky;top:24px;max-height:calc(100vh - 48px)}}
+@media(max-width:1100px){.dashboard-workspace{grid-template-columns:minmax(300px,1fr) minmax(280px,.9fr)}.dashboard-job-details,.jobs-detail-panel{top:108px;max-height:calc(100vh - 124px)}.dashboard-workspace>.chat-wrap{grid-column:1/-1;position:sticky;top:108px;max-height:calc(100vh - 124px)}}
 @media(max-width:700px){.dashboard-workspace{grid-template-columns:1fr}.dashboard-job-details,.jobs-detail-panel{position:static;max-height:none}.dashboard-workspace>.chat-wrap{grid-column:auto;position:static;max-height:none}}
 
 
