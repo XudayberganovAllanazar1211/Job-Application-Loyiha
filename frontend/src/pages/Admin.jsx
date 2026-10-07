@@ -231,6 +231,7 @@ export default function Admin() {
                                         <td>
                                             <select className="admin-action-select" value={item.status || "active"} onChange={(event) => updateJobHolat(item, event.target.value)}>
                                                 <option value="active">faol</option>
+                                    <option value="payment_pending">to‘lov kutilmoqda</option>
                                                 <option value="accepted">qabul qilingan</option>
                                                 <option value="pending_finish">tasdiqlash kutilmoqda</option>
                                                 <option value="finished">yakunlangan</option>
