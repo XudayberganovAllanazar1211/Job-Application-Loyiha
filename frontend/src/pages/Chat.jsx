@@ -25,6 +25,7 @@ export default function Chat() {
     const fileInputRef = useRef(null)
     const bottomRef = useRef(null)
     const typingTimerRef = useRef(null)
+    const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/$/, "")
 
     const formatLastSeen = (value) => {
         const lastSeen = new Date(value)
@@ -145,6 +146,19 @@ export default function Chat() {
     useEffect(() => {
         bottomRef.current?.scrollIntoView({ behavior: "smooth" })
     }, [messages])
+
+    const openAttachment = async (url) => {
+        try {
+            const response = await fetch(API_BASE + url, { headers: { Authorization: `Bearer ${token}` } })
+            if (!response.ok) throw new Error("Faylni ochib bo‘lmadi")
+            const blob = await response.blob()
+            const objectUrl = URL.createObjectURL(blob)
+            window.open(objectUrl, "_blank", "noopener,noreferrer")
+            setTimeout(() => URL.revokeObjectURL(objectUrl), 60000)
+        } catch (error) {
+            setNotice(error.message || "Faylni ochib bo‘lmadi")
+        }
+    }
 
     const send = async (e) => {
         e.preventDefault()
