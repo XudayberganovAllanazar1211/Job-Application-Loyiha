@@ -6,6 +6,7 @@ const navItems = [
     ["/", "Boshqaruv paneli", "⌂"],
     ["/create", "Ish yaratish", "+"],
     ["/jobs", "Ishlar", "▤"],
+    ["/payments", "To‘lovlar", "₿"],
     ["/leaderboard", "Reyting jadvali", "★"]
 ]
 
