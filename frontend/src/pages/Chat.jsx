@@ -23,8 +23,29 @@ export default function Chat() {
     const bottomRef = useRef(null)
     const typingTimerRef = useRef(null)
 
+    const formatLastSeen = (value) => {
+        const lastSeen = new Date(value)
+        if (Number.isNaN(lastSeen.getTime())) return ""
+
+        const diffMs = Math.max(0, Date.now() - lastSeen.getTime())
+        const diffMinutes = Math.floor(diffMs / 60000)
+
+        if (diffMinutes < 60) return `${diffMinutes} daqiqa oldin`
+
+        const diffHours = Math.floor(diffMinutes / 60)
+        if (diffHours < 24) return `${diffHours} soat oldin`
+
+        const diffDays = Math.floor(diffHours / 24)
+        if (diffDays < 30) return `${diffDays} kun oldin`
+
+        const diffMonths = Math.floor(diffDays / 30)
+        if (diffMonths < 12) return `${diffMonths} oy oldin`
+
+        const diffYears = Math.floor(diffDays / 365)
+        return `${diffYears} yil oldin`
+    }
+
     const loadXabarlar = async () => {
-        // Skip polling if the browser tab is hidden to save bandwidth and battery
         if (document.hidden) return
         const result = await api(`/messages/${jobId}`, { token })
         if (Array.isArray(result)) setXabarlar(result)
@@ -73,13 +94,12 @@ export default function Chat() {
             loadJob()
         }
 
-        // Smart polling: poll every 3 seconds, and immediately refresh when user returns to tab
         const interval = setInterval(loadXabarlar, 3000)
         const presenceInterval = setInterval(loadPresence, 5000)
         const typingInterval = setInterval(loadTyping, 1500)
         const heartbeat = setInterval(() => api("/presence", { method: "POST", token }), 30000)
         loadPresence()
-        api("/presence", { method: "POST", token })
+        api("/presence", { method: "POST", token)
         const handleVisibilityChange = () => {
             if (!document.hidden) {
                 loadXabarlar()
@@ -160,7 +180,7 @@ export default function Chat() {
                                 <div>
                                     <h2 style={{ margin: 0 }}>{otherName}</h2>
                                     <p className="muted" style={{ margin: 0 }}>
-                                        {otherTyping ? "Yozmoqda..." : otherOnline ? "Online" : otherLastSeen ? `Offline · Oxirgi faollik: ${new Date(otherLastSeen).toLocaleString("uz-UZ", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}` : "Offline"}
+                                        {otherTyping ? "Yozmoqda..." : otherOnline ? "Online" : otherLastSeen ? `Offline · Oxirgi faollik: ${formatLastSeen(otherLastSeen)}` : "Offline"}
                                     </p>
                                 </div>
                             </div>
