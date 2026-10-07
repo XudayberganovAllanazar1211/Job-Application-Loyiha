@@ -574,6 +574,14 @@ export default function Jobs() {
                                 <span className="chip job-service-chip">🧩 {job.service_name || serviceMap[String(job.service_id)] || job.service_id || "Noma’lum"}</span>
                                 <span className={`chip status-chip status-${status}`}><span className="status-dot" />{statusLabel}</span>
 
+                                <span className="chip">📅 {job.created_at || "Sana noma’lum"}</span>
+                                {job.worker_id != null && (
+                                    <span className="chip job-worker-chip">
+                                        👤 Bajaruvchi: <button type="button" className="profile-link-button" onClick={() => navigate(`/profiles/${job.worker_username}`)}>
+                                            {`${job.worker_first || ""} ${job.worker_last || ""}`.trim() || job.worker_username}
+                                        </button>
+                                    </span>
+                                )}
                                 {isMyJob && (
                                     <span className="chip job-worker-chip">
                                         👤 Bajaruvchi: {job.worker_id ? (
@@ -711,7 +719,19 @@ export default function Jobs() {
                         <div className="jobs-page-summary">{filtered.length} ta ish • {currentPage} / {totalPages} sahifa</div>
                         <div className="jobs-page-controls">
                             <button className="btn btn-secondary" disabled={currentPage === 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}>‹</button>
-                            <span className="jobs-page-indicator">{currentPage} / {totalPages}</span>
+                                <input
+                                    className="input jobs-page-number"
+                                    type="number"
+                                    min="1"
+                                    max={totalPages}
+                                    value={currentPage}
+                                    aria-label="Sahifa raqami"
+                                    onChange={(e) => {
+                                        const page = Number(e.target.value)
+                                        if (Number.isFinite(page)) setCurrentPage(Math.min(totalPages, Math.max(1, page)))
+                                    }}
+                                />
+                                <span className="jobs-page-total">/ {totalPages}</span>
                             <button className="btn btn-secondary" disabled={currentPage === totalPages} onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}>›</button>
                         </div>
                     </div>
