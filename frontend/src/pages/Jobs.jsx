@@ -317,24 +317,6 @@ export default function Jobs() {
 
     const hasSearchOrFilters = Boolean(search.trim() || serviceSearch.trim() || activeFilterCount)
 
-    const acceptJob = async (job) => {
-        if (actionJobId) return
-        setActionJobId(job.id)
-        try {
-            const result = await api("/accept_job", {
-                method: "POST",
-                body: { job_id: job.id },
-                token
-            })
-            const accepted = result?.msg === "ok"
-            setNoticeType(accepted ? "ok" : "warn")
-            setNotice(accepted ? "Ish qabul qilindi" : (result?.msg || "Xato"))
-            await load()
-        } finally {
-            setActionJobId(null)
-        }
-    }
-
     // Ish beruvchi uchun ishni tugatish so'rovi
     const finishJobSeeker = async (job) => {
         if (actionJobId) return
