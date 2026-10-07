@@ -22,7 +22,7 @@ if not existing:
     raise SystemExit(1)
 
 db.q(
-    "UPDATE users SET role='admin', password=? WHERE id=?",
+    "UPDATE users SET role='admin', password=?, token_version=COALESCE(token_version,0)+1 WHERE id=?",
     (generate_password_hash(password), existing[0])
 )
 
