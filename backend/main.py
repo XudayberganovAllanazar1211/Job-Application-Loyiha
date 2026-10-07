@@ -776,7 +776,7 @@ def update_report(report_id):
 @admin_required
 def admin_overview():
     users = db.q(
-        """SELECT id, username, first_name, last_name, email, birthday, bio, skills, role, created_at, average_rating
+        """SELECT id, username, first_name, last_name, email, birthday, bio, skills, role, created_at, average_rating, COALESCE(balance,0)
            FROM users ORDER BY id DESC"""
     ).fetchall()
 
@@ -825,7 +825,7 @@ def admin_overview():
             "ratings": len(ratings),
             "reports": len(reports),
         },
-        "users": rows(users, ["id", "username", "first_name", "last_name", "email", "birthday", "bio", "skills", "role", "created_at", "average_rating"]),
+        "users": rows(users, ["id", "username", "first_name", "last_name", "email", "birthday", "bio", "skills", "role", "created_at", "average_rating", "balance"]),
         "jobs": rows(jobs, ["id", "title", "price", "currency", "location", "status", "created_at", "creator_username", "worker_username"]),
         "services": rows(services, ["id", "name", "parent_id", "parent_name", "created_by"]),
         "ratings": rows(ratings, ["id", "job_id", "score", "comment", "created_at", "from_username", "to_username"]),
