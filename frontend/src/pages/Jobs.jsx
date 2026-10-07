@@ -748,3 +748,4 @@ export default function Jobs() {
             </div>
         </AppLayout>
     )
+}
