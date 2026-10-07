@@ -62,6 +62,13 @@ export default function Jobs() {
     const [selectedJob, setSelectedJob] = useState(null)
     const [jobDetails, setJobDetails] = useState(null)
     const [jobDetailsLoading, setJobDetailsLoading] = useState(false)
+    const [proposals, setProposals] = useState([])
+    const [proposalLoading, setProposalLoading] = useState(false)
+    const [proposalModalJob, setProposalModalJob] = useState(null)
+    const [proposalPrice, setProposalPrice] = useState("")
+    const [proposalDeadline, setProposalDeadline] = useState("")
+    const [proposalMessage, setProposalMessage] = useState("")
+    const [proposalActionId, setProposalActionId] = useState(null)
 
     const serviceMap = useMemo(
         () => Object.fromEntries(services.map((service) => [String(service.id), service.name])),
@@ -217,6 +224,28 @@ export default function Jobs() {
         setSelectedJob(job)
         setJobDetails(null)
     }
+
+    useEffect(() => {
+        if (!activeJobDetails?.id) {
+            setProposals([])
+            return
+        }
+
+        let cancelled = false
+        setProposalLoading(true)
+        const loadProposals = async () => {
+            const result = await api(`/jobs/${activeJobDetails.id}/proposals`, { token })
+            if (!cancelled) {
+                setProposals(Array.isArray(result) ? result : [])
+                setProposalLoading(false)
+            }
+        }
+        loadProposals()
+
+        return () => {
+            cancelled = true
+        }
+    }, [activeJobDetails?.id, token])
 
     useEffect(() => {
         if (!selectedJob?.id) return
@@ -422,11 +451,102 @@ export default function Jobs() {
         }
     }
 
+
+    const openProposalModal = (job) => {
+        setProposalModalJob(job)
+        setProposalPrice(String(job.price || ""))
+        setProposalDeadline("")
+        setProposalMessage("")
+    }
+
+    const submitProposal = async (event) => {
+        event.preventDefault()
+        if (!proposalModalJob) return
+
+        const price = Number(proposalPrice)
+        if (!Number.isFinite(price) || price <= 0) {
+            setNoticeType("warn")
+            setNotice("Taklif narxini to‘g‘ri kiriting.")
+            return
+        }
+        if (!proposalDeadline.trim()) {
+            setNoticeType("warn")
+            setNotice("Taklif muddatini kiriting.")
+            return
+        }
+
+        const result = await api(`/jobs/${proposalModalJob.id}/proposals`, {
+            method: "POST",
+            token,
+            body: {
+                price,
+                deadline: proposalDeadline.trim(),
+                message: proposalMessage.trim()
+            }
+        })
+
+        if (result?.ok) {
+            setNoticeType("ok")
+            setNotice("Taklif muvaffaqiyatli yuborildi.")
+            setProposalModalJob(null)
+            const refreshed = await api(`/jobs/${proposalModalJob.id}/proposals`, { token })
+            setProposals(Array.isArray(refreshed) ? refreshed : [])
+            await load()
+        } else {
+            setNoticeType("warn")
+            setNotice(result?.msg || "Taklif yuborilmadi.")
+        }
+    }
+
+    const updateProposal = async (proposal, action) => {
+        if (proposalActionId) return
+        setProposalActionId(proposal.id)
+        const result = await api(`/proposals/${proposal.id}`, {
+            method: "PATCH",
+            token,
+            body: { action }
+        })
+        setProposalActionId(null)
+
+        if (result?.ok) {
+            setNoticeType("ok")
+            setNotice(result?.msg || "Taklif yangilandi.")
+            const refreshed = await api(`/jobs/${proposal.job_id}/proposals`, { token })
+            setProposals(Array.isArray(refreshed) ? refreshed : [])
+            await load()
+        } else {
+            setNoticeType("warn")
+            setNotice(result?.msg || "Taklifni yangilab bo‘lmadi.")
+        }
+    }
+
+    const withdrawProposal = async (proposal) => {
+        if (proposalActionId) return
+        setProposalActionId(proposal.id)
+        const result = await api(`/proposals/${proposal.id}`, {
+            method: "DELETE",
+            token
+        })
+        setProposalActionId(null)
+
+        if (result?.ok) {
+            setNoticeType("ok")
+            setNotice(result?.msg || "Taklif bekor qilindi.")
+            const refreshed = await api(`/jobs/${proposal.job_id}/proposals`, { token })
+            setProposals(Array.isArray(refreshed) ? refreshed : [])
+            await load()
+        } else {
+            setNoticeType("warn")
+            setNotice(result?.msg || "Taklifni bekor qilib bo‘lmadi.")
+        }
+    }
+
     const detailStatus = String(activeJobDetails?.status || "").trim().toLowerCase()
     const detailIsMyJob = String(activeJobDetails?.user_id) === String(user?.id)
     const detailIsWorker = String(activeJobDetails?.worker_id) === String(user?.id)
     const detailIsParticipant = detailIsMyJob || detailIsWorker
-    const detailCanAccept = detailStatus === "active" && !detailIsMyJob && activeJobDetails?.worker_id == null
+    const detailCanPropose = detailStatus === "active" && !detailIsMyJob && activeJobDetails?.worker_id == null
+    const myProposal = proposals.find((item) => String(item.worker_id) === String(user?.id))
     const detailCanFinish = detailStatus === "accepted" && ((detailIsMyJob && !activeJobDetails?.owner_finished) || (detailIsWorker && !activeJobDetails?.worker_finished))
     const detailCanReport = detailIsParticipant && activeJobDetails?.worker_id != null && ["accepted", "pending_finish"].includes(detailStatus)
     const detailStatusLabel = {
@@ -702,12 +822,65 @@ export default function Jobs() {
                                 )}
                             </div>
 
+                            {detailStatus === "active" && (detailIsMyJob || myProposal) && (
+                                <div className="dashboard-job-detail-section" style={{ marginTop: 16 }}>
+                                    <span className="helper">TAKLIFLAR</span>
+                                    {proposalLoading ? (
+                                        <div className="muted" style={{ marginTop: 8 }}>Takliflar yuklanmoqda...</div>
+                                    ) : !proposals.length ? (
+                                        <div className="empty-state" style={{ marginTop: 10, padding: 16 }}>
+                                            <strong>Hali taklif yo‘q.</strong>
+                                            <span>Ijrochilar bu ish uchun o‘z narxi va muddatini yuborishi mumkin.</span>
+                                        </div>
+                                    ) : (
+                                        <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
+                                            {proposals.map((proposal) => (
+                                                <div key={proposal.id} className="card" style={{ margin: 0, padding: 14, border: "1px solid var(--border, #e5e7eb)" }}>
+                                                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+                                                        <div>
+                                                            <strong>{(`${proposal.first_name || ""} ${proposal.last_name || ""}`).trim() || proposal.username}</strong>
+                                                            <div className="muted">@{proposal.username} · {Number(proposal.average_rating || 0).toFixed(1)} ★</div>
+                                                        </div>
+                                                        <strong>{Number(proposal.price || 0).toLocaleString("uz-UZ")} UZS</strong>
+                                                    </div>
+                                                    <div className="meta" style={{ marginTop: 8 }}>
+                                                        <span className="chip">Muddat: {proposal.deadline}</span>
+                                                        <span className="chip">Holat: {({ pending: "Kutilmoqda", accepted: "Qabul qilindi", rejected: "Rad etildi", withdrawn: "Bekor qilindi" })[proposal.status] || proposal.status}</span>
+                                                    </div>
+                                                    {proposal.message && <p style={{ margin: "10px 0 0" }}>{proposal.message}</p>}
+                                                    {detailIsMyJob && proposal.status === "pending" && (
+                                                        <div className="actions" style={{ marginTop: 10 }}>
+                                                            <button className="btn btn-primary" disabled={proposalActionId === proposal.id} onClick={() => updateProposal(proposal, "accept")}>
+                                                                {proposalActionId === proposal.id ? "Saqlanmoqda..." : "Taklifni qabul qilish"}
+                                                            </button>
+                                                            <button className="btn btn-secondary" disabled={proposalActionId === proposal.id} onClick={() => updateProposal(proposal, "reject")}>
+                                                                Rad etish
+                                                            </button>
+                                                            <button className="btn btn-secondary" onClick={() => proposal.username && navigate(`/profiles/${proposal.username}`)}>
+                                                                Profil
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                    {!detailIsMyJob && String(proposal.worker_id) === String(user?.id) && proposal.status === "pending" && (
+                                                        <div className="actions" style={{ marginTop: 10 }}>
+                                                            <button className="btn btn-secondary" disabled={proposalActionId === proposal.id} onClick={() => withdrawProposal(proposal)}>
+                                                                Bekor qilish
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             <div className="dashboard-job-detail-section">
                                 <span className="helper">AMALLAR</span>
                                 <div className="actions" style={{ marginTop: 10 }}>
                                     {detailIsParticipant && <button className="btn btn-secondary" onClick={() => navigate(`/chat/${activeJobDetails.id}`, { state: { job: activeJobDetails } })}>Suhbat</button>}
                                     {detailIsParticipant && detailStatus === "finished" && <button className="btn btn-secondary" onClick={() => navigate(`/rating/${activeJobDetails.id}`, { state: { job: activeJobDetails } })}>Baho</button>}
-                                    {detailCanAccept && <button className="btn btn-primary" disabled={actionJobId === activeJobDetails.id} onClick={() => acceptJob(activeJobDetails)}>{actionJobId === activeJobDetails.id ? "Qabul qilinmoqda..." : "Ishni qabul qilish"}</button>}
+                                    {detailCanPropose && <button className="btn btn-primary" onClick={() => openProposalModal(activeJobDetails)}>{myProposal?.status === "pending" ? "Taklifingizni ko‘rish" : "Taklif yuborish"}</button>}
                                     {detailIsMyJob && detailStatus === "payment_pending" && <button className="btn btn-primary" onClick={() => navigate(`/payments/job/${activeJobDetails.id}`)}>💳 To‘lovni amalga oshirish</button>}
                                     {detailCanReport && <button className="btn btn-secondary" onClick={() => setReportJobId(reportJobId === activeJobDetails.id ? null : activeJobDetails.id)}>⚑ Shikoyat</button>}
                                     {detailIsMyJob && detailCanFinish && <button className="btn btn-warn" onClick={() => cancelWorker(activeJobDetails)}>Ishchini almashtirish</button>}
@@ -740,6 +913,53 @@ export default function Jobs() {
                     )}
                 </aside>
             </div>
+
+            {proposalModalJob && (
+                <div
+                    style={{
+                        position: "fixed",
+                        inset: 0,
+                        zIndex: 1200,
+                        background: "rgba(15, 23, 42, 0.58)",
+                        display: "grid",
+                        placeItems: "center",
+                        padding: 18
+                    }}
+                    onMouseDown={(event) => {
+                        if (event.target === event.currentTarget) setProposalModalJob(null)
+                    }}
+                >
+                    <div className="card" style={{ width: "min(560px, 100%)", margin: 0, maxHeight: "90vh", overflow: "auto" }}>
+                        <div className="section-toolbar">
+                            <div className="page-head">
+                                <span className="profile-eyebrow">TAKLIF YUBORISH</span>
+                                <h2>{proposalModalJob.title}</h2>
+                                <p className="muted">Narxingiz, bajarish muddatingiz va qisqa izohni kiriting.</p>
+                            </div>
+                            <button className="btn btn-secondary" type="button" onClick={() => setProposalModalJob(null)}>×</button>
+                        </div>
+                        <form onSubmit={submitProposal} className="form">
+                            <label className="field">
+                                <span>Taklif narxi (UZS)</span>
+                                <input className="input" type="number" min="1" step="1" value={proposalPrice} onChange={(event) => setProposalPrice(event.target.value)} required />
+                                <small className="muted">E’lon byudjeti: {Number(proposalModalJob.price || 0).toLocaleString("uz-UZ")} UZS</small>
+                            </label>
+                            <label className="field">
+                                <span>Bajarish muddati</span>
+                                <input className="input" type="date" value={proposalDeadline} onChange={(event) => setProposalDeadline(event.target.value)} required />
+                            </label>
+                            <label className="field">
+                                <span>Taklif izohi</span>
+                                <textarea className="textarea" maxLength={3000} rows={5} placeholder="Nima qilishingiz va qanday topshirishingizni qisqacha yozing..." value={proposalMessage} onChange={(event) => setProposalMessage(event.target.value)} />
+                            </label>
+                            <div className="actions">
+                                <button className="btn btn-secondary" type="button" onClick={() => setProposalModalJob(null)}>Bekor qilish</button>
+                                <button className="btn btn-primary" type="submit">Taklifni yuborish</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </AppLayout>
     )
 }
