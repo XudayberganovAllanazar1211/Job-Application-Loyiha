@@ -164,10 +164,38 @@ export default function Chat() {
     const reportMessage = async (message) => {
         if (!message?.id || !message.sender_id || String(message.sender_id) === String(me?.id)) return
 
-        const reason = window.prompt("Xabarni nima sababdan report qilmoqchisiz?")
-        if (reason === null || !reason.trim()) return
+        const reasons = [
+            "Spam",
+            "Haqorat / tahqirlash",
+            "Firibgarlik",
+            "Nomaqbul kontent",
+            "Tahdid",
+            "Reklama",
+            "Shaxsiy ma’lumot tarqatish",
+            "Boshqa sabab"
+        ]
+        const choice = window.prompt(
+            "Xabarni report qilish sababini tanlang:\n\n" +
+            reasons.map((item, index) => `${index + 1}. ${item}`).join("\n") +
+            "\n\nRaqamini kiriting:"
+        )
+        if (choice === null) return
 
-        const details = window.prompt("Qo‘shimcha izoh (ixtiyoriy):") || ""
+        const index = Number(choice) - 1
+        if (!Number.isInteger(index) || index < 0 || index >= reasons.length) {
+            setNotice("Noto‘g‘ri report turi tanlandi.")
+            return
+        }
+
+        let reason = reasons[index]
+        let details = ""
+
+        if (reason === "Boshqa sabab") {
+            reason = window.prompt("Boshqa sababni yozing:") || ""
+            if (!reason.trim()) return
+            reason = reason.trim()
+        }
+
         setReportingMessageId(message.id)
 
         const result = await api("/report", {
@@ -176,8 +204,8 @@ export default function Chat() {
                 job_id: Number(jobId),
                 message_id: Number(message.id),
                 reported_user_id: Number(message.sender_id),
-                reason: reason.trim(),
-                details: details.trim()
+                reason,
+                details
             },
             token
         })
@@ -185,7 +213,6 @@ export default function Chat() {
         setReportingMessageId(null)
         setNotice(result?.msg || "Shikoyat yuborildi.")
     }
-
     const send = async (e) => {
         e.preventDefault()
         if (!text.trim() && !file) return
