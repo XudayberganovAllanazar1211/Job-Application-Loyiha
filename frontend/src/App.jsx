@@ -48,6 +48,7 @@ export default function App() {
 
             <Route path="/leaderboard" element={<Protected><Leaderboard /></Protected>} />
             <Route path="/profile" element={<Protected><Profile /></Protected>} />
+            <Route path="/profile/:username" element={<Protected><PublicProfile /></Protected>} />
             <Route path="/profiles/:username" element={<Protected><PublicProfile /></Protected>} />
             <Route path="/admin" element={<Protected><AdminOnly><Admin /></AdminOnly></Protected>} />
 
