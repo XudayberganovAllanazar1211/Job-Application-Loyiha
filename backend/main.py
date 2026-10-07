@@ -2421,8 +2421,8 @@ def search_jobs():
 
     if page < 1:
         return jsonify({"msg": "Sahifa raqami 1 dan kichik bo‘lishi mumkin emas"}), 400
-    if limit < 5 or limit > 50:
-        return jsonify({"msg": "Bir sahifada 5 dan 50 tagacha ish ko‘rsatish mumkin"}), 400
+    if limit < 1 or limit > 50:
+        return jsonify({"msg": "Bir sahifada 1 dan 50 tagacha ish ko‘rsatish mumkin"}), 400
 
     def parse_price(value, label):
         if value is None or str(value).strip() == "":
