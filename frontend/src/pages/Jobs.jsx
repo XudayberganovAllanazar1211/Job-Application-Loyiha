@@ -207,234 +207,20 @@ export default function Jobs() {
         document.addEventListener("mousedown", handleOutsideClick)
         document.addEventListener("touchstart", handleOutsideClick)
 
-        return () => {
-            document.removeEventListener("mousedown", handleOutsideClick)
-            document.removeEventListener("touchstart", handleOutsideClick)
-        }
-    }, [showServiceMenu, showFilters])
-
-    const selectJob = (job) => {
-        setSelectedJob(job)
-        setJobDetails(null)
-    }
-
-    useEffect(() => {
-        if (!selectedJob?.id) return
-
-        let cancelled = false
-        setJobDetailsLoading(true)
-
-        const loadSelectedJobDetails = async () => {
-            try {
-                const result = await api(`/jobs/${selectedJob.id}`, { token })
-                if (!cancelled && result?.id) {
-                    setJobDetails(result)
-                }
-            } catch {
-                if (!cancelled) setJobDetails(null)
-            } finally {
-                if (!cancelled) setJobDetailsLoading(false)
-            }
-        }
-
-        loadSelectedJobDetails()
-
-        return () => {
-            cancelled = true
-        }
-    }, [selectedJob?.id, token])
-
-    const activeJobDetails = jobDetails || selectedJob
-
-    useEffect(() => {
-        if (!selectedJob?.id && pagedRanked.length > 0) {
-            setSelectedJob(pagedRanked[0].job)
-        }
-    }, [pagedRanked, selectedJob?.id])
-
-    const addServiceFilter = (service) => {
-        setSelectedServices([...selectedServices, service])
-        setServiceSearch("")
-        setShowServiceMenu(true)
-    }
-
-    const removeServiceFilter = (service) => {
-        setSelectedServices(selectedServices.filter((item) => item !== service))
-    }
-
-    const clearAllFilters = () => {
-        setSelectedServices([])
-        setServiceSearch("")
-        setMinPrice("")
-        setMaxPrice("")
-        setTimeFilter("all")
-        setLocationFilter("")
-        setShowServiceMenu(false)
-        setShowFilters(false)
-    }
-
-    const clearServiceFilters = () => {
-        setSelectedServices([])
-        setServiceSearch("")
-        setShowServiceMenu(false)
-    }
-
-    const activeFilterCount =
-        selectedServices.length +
-        (minPrice !== "" ? 1 : 0) +
-        (maxPrice !== "" ? 1 : 0) +
-        (timeFilter !== "all" ? 1 : 0) +
-        (locationFilter.trim() ? 1 : 0)
-
-    const hasSearchOrFilters = Boolean(search.trim() || serviceSearch.trim() || activeFilterCount)
-
-    const acceptJob = async (job) => {
-        if (actionJobId) return
-        setActionJobId(job.id)
-        try {
-            const result = await api("/accept_job", {
-                method: "POST",
-                body: { job_id: job.id },
-                token
-            })
-            const accepted = result?.msg === "ok"
-            setNoticeType(accepted ? "ok" : "warn")
-            setNotice(accepted ? "Ish qabul qilindi" : (result?.msg || "Xato"))
-            await load()
-        } finally {
-            setActionJobId(null)
-        }
-    }
-
-    // Ish beruvchi uchun ishni tugatish so'rovi
-    const finishJobSeeker = async (job) => {
-        if (actionJobId) return
-        setActionJobId(job.id)
-        try {
-            const result = await api("/finish_job", {
-                method: "POST",
-                body: { job_id: job.id },
-                token
-            })
-            const waiting = result?.msg === "waiting"
-            const completed = result?.msg === "ok"
-            setNoticeType((waiting || completed) ? "ok" : "warn")
-            setNotice(
-                completed
-                    ? "Ish yakunlandi. To‘lov bajaruvchiga o‘tkazildi."
-                    : waiting
-                        ? "Siz ishni yakunladingiz. Ikkinchi tomonning ham «Yakunlash» tugmasini bosishini kuting."
-                        : (result?.msg || "Xato")
-            )
-            await load()
-        } finally {
-            setActionJobId(null)
-        }
-    }
-
-    const finishJobWorker = async (jobId) => {
-        if (actionJobId) return
-        setActionJobId(jobId)
-        try {
-            const result = await api("/finish_job", {
-                method: "POST",
-                body: { job_id: jobId },
-                token
-            })
-            const waiting = result?.msg === "waiting"
-            const finished = result?.msg === "ok"
-            setNoticeType((waiting || finished) ? "ok" : "warn")
-            setNotice(
-                finished
-                    ? "Ish yakunlandi. To‘lov bajaruvchiga o‘tkazildi."
-                    : waiting
-                        ? "Siz ishni yakunladingiz. Ikkinchi tomonning ham «Yakunlash» tugmasini bosishini kuting."
-                        : "Ishni yakunlashda xatolik yuz berdi."
-            )
-            await load()
-        } finally {
-            setActionJobId(null)
-        }
-    }
-
-    const cancelWorker = async (job) => {
-        const workerName = ((job.worker_first || "") + " " + (job.worker_last || "")).trim() || job.worker_username || "bajaruvchi"
-        const confirmed = window.confirm(
-            '"' + job.title + '" ishidan "' + workerName + '"ni olib tashlamoqchimisiz? Ish yana barcha foydalanuvchilar uchun ochiladi.'
-        )
-        if (!confirmed) return
-
-        const result = await api("/cancel_worker", {
-            method: "POST",
-            body: { job_id: job.id },
-            token
-        })
-        const cancelled = result?.msg === "ok"
-        setNoticeType(cancelled ? "ok" : "warn")
-        setNotice(
-            cancelled
-                ? "Bajaruvchi bekor qilindi. Ish yana barcha uchun ochiq."
-                : (result?.msg || "Xatolik yuz berdi")
-        )
-        load()
-    }
-
-    const submitReport = async (job) => {
-        const reportedUserId = String(job.user_id) === String(user?.id) ? job.worker_id : job.user_id
-
-        if (!reportedUserId) {
-            setNoticeType("warn")
-            setNotice("Shikoyat qilish uchun ishda boshqa ishtirokchi bo‘lishi kerak.")
-            return
-        }
-
-        if (!reportReason) {
-            setNoticeType("warn")
-            setNotice("Shikoyat sababini tanlang.")
-            return
-        }
-
-        try {
-            const result = await api("/report", {
-                method: "POST",
-                body: {
-                    job_id: job.id,
-                    reported_user_id: Number(reportedUserId),
-                    reason: reportReason,
-                    details: reportDetails.trim()
-                },
-                token
-            })
-
-            if (result?.msg === "Shikoyatingiz qabul qilindi.") {
-                setNoticeType("ok")
-                setNotice("Shikoyatingiz yuborildi.")
-                setReportJobId(null)
-                setReportReason("")
-                setReportDetails("")
-            } else {
-                setNoticeType("warn")
-                setNotice(result?.msg || "Shikoyat yuborishda xatolik yuz berdi.")
-            }
-        } catch {
-            setNoticeType("warn")
-            setNotice("Shikoyat yuborishda xatolik yuz berdi.")
-        }
-    }
-
-    return (
+        return (
         <AppLayout
             title="Ishlar"
-            subtitle="Tizimdagi faol e’lonlar va siz yaratgan yoki qabul qilgan ishlar."
+            subtitle="Tizimdagi ishlarni qidiring, tanlang va to‘liq ma’lumotlarini ko‘ring."
         >
             <div className="card" style={{ marginBottom: 18 }}>
                 <div className="topbar" style={{ marginBottom: 0 }}>
                     <div className="page-head">
                         <h2 style={{ margin: 0 }}>Mavjud ishlar</h2>
                         <p className="muted" style={{ margin: 0 }}>
-                            Ishlarni qidirish, qabul qilish va boshqarish bo‘limi.
+                            Ishlarni qidirish, filtrlash va boshqarish bo‘limi.
                         </p>
                     </div>
+
                     <div className="actions jobs-toolbar">
                         <input
                             className="input jobs-search-input"
@@ -471,7 +257,6 @@ export default function Jobs() {
                                                     className="jobs-selected-chip"
                                                     key={service}
                                                     onClick={() => removeServiceFilter(service)}
-                                                    title="Olib tashlash"
                                                 >
                                                     {service} ×
                                                 </button>
@@ -503,306 +288,326 @@ export default function Jobs() {
                         </div>
 
                         <div className="jobs-filter-wrap" ref={filterRef}>
-                            <button className="btn btn-secondary jobs-filter-button" type="button" onClick={() => setShowFilters(!showFilters)}><span>Filtrlash</span>{activeFilterCount > 0 && <b>{activeFilterCount}</b>}</button>
+                            <button
+                                className="btn btn-secondary jobs-filter-button"
+                                type="button"
+                                onClick={() => setShowFilters((value) => !value)}
+                            >
+                                <span>Filtrlash</span>
+                                {activeFilterCount > 0 && <b>{activeFilterCount}</b>}
+                            </button>
+
                             {showFilters && (
                                 <div className="jobs-filter-panel">
                                     <div className="jobs-filter-title">Ishlarni filtrlash</div>
                                     <div className="jobs-filter-grid">
-                                        <label><span>Minimal narx</span><input className="input" type="number" min="0" placeholder="Masalan: 100000" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} /></label>
-                                        <label><span>Maksimal narx</span><input className="input" type="number" min="0" placeholder="Masalan: 500000" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} /></label>
-                                        <label><span>Joylashuv</span><input className="input" placeholder="Masalan: Toshkent" value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)} /></label>
-                                        <label><span>Vaqt</span><select className="input" value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}><option value="all">Barchasi</option><option value="today">Bugun</option><option value="three_days">Oxirgi 3 kun</option><option value="week">Oxirgi hafta</option><option value="month">Oxirgi oy</option></select></label>
+                                        <label>
+                                            <span>Minimal narx</span>
+                                            <input className="input" type="number" min="0" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} />
+                                        </label>
+                                        <label>
+                                            <span>Maksimal narx</span>
+                                            <input className="input" type="number" min="0" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} />
+                                        </label>
+                                        <label>
+                                            <span>Joylashuv</span>
+                                            <input className="input" placeholder="Masalan: Toshkent" value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)} />
+                                        </label>
+                                        <label>
+                                            <span>Vaqt</span>
+                                            <select className="input" value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}>
+                                                <option value="all">Barchasi</option>
+                                                <option value="today">Bugun</option>
+                                                <option value="three_days">Oxirgi 3 kun</option>
+                                                <option value="week">Oxirgi hafta</option>
+                                                <option value="month">Oxirgi oy</option>
+                                            </select>
+                                        </label>
                                     </div>
-                                    <button className="btn btn-secondary" type="button" onClick={clearAllFilters}>Filtrlarni tozalash</button>
+                                    <button className="btn btn-secondary" type="button" onClick={clearAllFilters}>
+                                        Filtrlarni tozalash
+                                    </button>
                                 </div>
                             )}
                         </div>
 
-                        <button className="btn btn-secondary" onClick={load} disabled={loading}>{loading ? "Yangilanmoqda..." : "Yangilash"}</button>
+                        <button className="btn btn-secondary" onClick={load} disabled={loading}>
+                            {loading ? "Yangilanmoqda..." : "Yangilash"}
+                        </button>
                         <button className="btn btn-primary" onClick={() => navigate("/create")}>
                             Ish yaratish
                         </button>
                     </div>
                 </div>
+
                 <div className="jobs-filter-note">
                     <span><strong>{filtered.length}</strong> ta ish ko‘rsatilmoqda</span>
-                    {activeFilterCount > 0 && <span className="jobs-active-filter-label">{activeFilterCount} ta filtr faol</span>}
-                    {hasSearchOrFilters && <button type="button" className="jobs-clear-inline" onClick={clearAllFilters}>Hammasini tozalash</button>}
+                    {activeFilterCount > 0 && (
+                        <span className="jobs-active-filter-label">{activeFilterCount} ta filtr faol</span>
+                    )}
+                    {hasSearchOrFilters && (
+                        <button type="button" className="jobs-clear-inline" onClick={clearAllFilters}>
+                            Hammasini tozalash
+                        </button>
+                    )}
                 </div>
 
-                {notice && <div className={`notice ${noticeType === "ok" ? "ok" : "warn"}`} style={{ marginTop: 14 }}>{notice}</div>}
-            </div>
-
-            {loading ? (
-                <div className="jobs-loading-grid" aria-label="Ishlar yuklanmoqda">
-                    {Array.from({ length: 6 }).map((_, index) => (
-                        <div className="card job-card jobs-skeleton-card" key={index}>
-                            <div className="skeleton skeleton-line skeleton-title" />
-                            <div className="skeleton skeleton-line" />
-                            <div className="skeleton skeleton-line short" />
-                            <div className="skeleton-row">
-                                <div className="skeleton skeleton-chip" />
-                                <div className="skeleton skeleton-chip" />
-                                <div className="skeleton skeleton-chip" />
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            ) : recommendationData.recommended.length > 0 && (
-                <section className="jobs-recommendations card">
-                    <div className="jobs-recommendations-head">
-                        <div>
-                            <span className="jobs-recommendations-kicker">Siz uchun</span>
-                            <h2>Profilingizga mos ishlar</h2>
-                            <p>Profilingizdagi sohalarga mos keladigan ishlar.</p>
-                        </div>
-                        <span className="jobs-recommendations-count">{recommendationData.recommended.length} ta mos ish</span>
+                {notice && (
+                    <div className={`notice ${noticeType === "ok" ? "ok" : "warn"}`} style={{ marginTop: 14 }}>
+                        {notice}
                     </div>
-                    <div className="job-grid jobs-recommendation-grid">
-                        {recommendationData.recommended.map(({ job, matchedSkills }) => (
-                            <article className="card job-card job-recommended-card" key={job.id} onClick={() => selectJob(job)} style={{ cursor: "pointer" }}>
-                                <div className="job-recommended-label">★ Sizga mos</div>
-                                <h3 className="job-title">{job.title}</h3>
-                                <p className="job-desc">{job.description || "Tavsif kiritilmagan"}</p>
-                                <div className="meta" style={{ marginBottom: 12 }}>
-                                    <span className="chip job-time-chip">🕒 {formatTimeAgo(job.created_at)}</span>
-                                    <span className="chip">💰 {job.price ?? "-"} {job.currency || "UZS"}</span>
-                                    <span className="chip">📍 {job.location || "-"}</span>
-                                    <span className="chip job-service-chip">🧩 {job.service_name || serviceMap[String(job.service_id)] || job.service_id || "Noma’lum"}</span>
-                                </div>
-                                <div className="job-recommended-skills">Mos sohalar: {matchedSkills.join(", ")}</div>
-                                <div className="meta">
-                                    <span className="chip job-worker-chip">
-                                        👤 Yaratuvchi: <button type="button" className="profile-link-button" onClick={(e) => { e.stopPropagation(); navigate(`/profiles/${job.creator_username}`) }}>
-                                            {`${job.creator_first || ""} ${job.creator_last || ""}`.trim() || job.creator_username}
-                                        </button>
-                                    </span>
-                                    <span className="chip job-worker-chip">
-                                        👤 Bajaruvchi: {job.worker_id ? (
-                                            <button type="button" className="profile-link-button" onClick={(e) => { e.stopPropagation(); navigate(`/profiles/${job.worker_username}`) }}>
-                                                {`${job.worker_first || ""} ${job.worker_last || ""}`.trim() || job.worker_username}
-                                            </button>
-                                        ) : "Hali qabul qilinmagan"}
-                                    </span>
-                                </div>
-                            </article>
-                        ))}
-                    </div>
-                </section>
-            )}
-
-            <div className="jobs-split-layout">
-                <div className="jobs-list-panel">
-            <div className="jobs-results-heading">
-                <div>
-                    <h2>Barcha ishlar</h2>
-                    <p>Filtrlaringizga mos barcha mavjud ishlar.</p>
-                </div>
-                {profileSkills.length > 0 && recommendationData.recommended.length === 0 && (
-                    <span className="jobs-profile-note">Profil sohalaringizga mos yangi ish hozircha topilmadi.</span>
                 )}
             </div>
 
-            <div className="job-grid jobs-single-column">
-                {pagedRanked.map(({ job }) => {
-                    const workerName = `${job.worker_first || ""} ${job.worker_last || ""}`.trim() || job.worker_username;
-                    const status = String(job.status || "").trim().toLowerCase()
-                    const isMyJob = String(job.user_id) === String(user?.id)
-                    const isIAccepted = String(job.worker_id) === String(user?.id)
-                    const isParticipant = isMyJob || isIAccepted
-                    const canAccept = status === "active" && !isMyJob && job.worker_id == null
-                    const canReportParticipant = (isMyJob && job.worker_id != null && ["accepted", "pending_finish", "finished"].includes(status)) || isIAccepted
-                    const canFinish = status === "accepted" && ((isMyJob && !job.owner_finished) || (isIAccepted && !job.worker_finished))
-                    const statusLabel = {
-                        active: "Faol",
-                        payment_pending: "To‘lov kutilmoqda",
-                        accepted: "Qabul qilingan",
-                        pending_finish: "Tasdiqlash kutilmoqda",
-                        finished: "Yakunlangan"
-                    }[status] || status
-
-                    return (
-                        <article className={`card job-card ${selectedJob?.id === job.id ? "selected" : ""}`} key={job.id} onClick={() => selectJob(job)} style={{ cursor: "pointer" }}>
-                            <h3 className="job-title">{job.title}</h3>
-                            <p className="job-desc">{job.description || "Tavsif kiritilmagan"}</p>
-                            <div className="meta" style={{ marginBottom: 12 }}>
-                                <span className="chip job-time-chip">🕒 {formatTimeAgo(job.created_at)}</span>
-                                <span className="chip">💰 {job.price ?? "-"} {job.currency || "UZS"}</span>
-                                <span className="chip">📍 {job.location || "-"}</span>
-                                <span className="chip job-service-chip">🧩 {job.service_name || serviceMap[String(job.service_id)] || job.service_id || "Noma’lum"}</span>
-                                <span className={`chip status-chip status-${status}`}><span className="status-dot" />{statusLabel}</span>
-
-                                <span className="chip">📅 {job.created_at || "Sana noma’lum"}</span>
-                                <span className="chip job-worker-chip">
-                                    👤 Yaratuvchi: <button type="button" className="profile-link-button" onClick={(e) => { e.stopPropagation(); navigate(`/profiles/${job.creator_username}`) }}>
-                                        {`${job.creator_first || ""} ${job.creator_last || ""}`.trim() || job.creator_username}
-                                    </button>
-                                </span>
-                                <span className="chip job-worker-chip">
-                                    👤 Bajaruvchi: {job.worker_id ? (
-                                        <button type="button" className="profile-link-button" onClick={(e) => { e.stopPropagation(); navigate(`/profiles/${job.worker_username}`) }}>
-                                            {workerName}
-                                        </button>
-                                    ) : "Hali qabul qilinmagan"}
-                                </span>
-                            </div>
-                            {reportJobId === job.id && canReportParticipant && (
-                                <div className="report-panel">
-                                    <strong>{isMyJob ? "Ishchi haqida shikoyat" : "Ish egasi haqida shikoyat"}</strong>
-                                    <select
-                                        className="select"
-                                        value={reportReason}
-                                        onChange={(e) => setReportReason(e.target.value)}
-                                    >
-                                        <option value="">Sababni tanlang</option>
-                                        <option value="Firibgarlik yoki aldov">Firibgarlik yoki aldov</option>
-                                        <option value="Noto‘g‘ri yoki yolg‘on e’lon">Noto‘g‘ri yoki yolg‘on e’lon</option>
-                                        <option value="Haqorat yoki nomaqbul xatti-harakat">Haqorat yoki nomaqbul xatti-harakat</option>
-                                        <option value="Spam">Spam</option>
-                                        <option value="Boshqa">Boshqa</option>
-                                    </select>
-                                    <textarea
-                                        className="textarea"
-                                        maxLength={2000}
-                                        placeholder="Qo‘shimcha tafsilot..."
-                                        value={reportDetails}
-                                        onChange={(e) => setReportDetails(e.target.value)}
-                                    />
-                                    <div className="actions">
-                                        <button
-                                            type="button"
-                                            className="btn btn-danger"
-                                            disabled={!reportReason}
-                                            onClick={() => submitReport(job)}
-                                        >
-                                            Yuborish
-                                        </button>
-                                        <button type="button" className="btn btn-secondary" onClick={() => setReportJobId(null)}>
-                                            Bekor qilish
-                                        </button>
+            <div
+                className="jobs-new-layout"
+                style={{
+                    display: "grid",
+                    gridTemplateColumns: "minmax(0, 1fr) minmax(420px, 520px)",
+                    gap: 20,
+                    alignItems: "start",
+                    width: "100%"
+                }}
+            >
+                <section
+                    className="jobs-new-list"
+                    style={{
+                        minWidth: 0,
+                        width: "100%"
+                    }}
+                >
+                    {loading ? (
+                        <div className="jobs-loading-grid">
+                            {Array.from({ length: 6 }).map((_, index) => (
+                                <div className="card job-card jobs-skeleton-card" key={index}>
+                                    <div className="skeleton skeleton-line skeleton-title" />
+                                    <div className="skeleton skeleton-line" />
+                                    <div className="skeleton skeleton-line short" />
+                                    <div className="skeleton-row">
+                                        <div className="skeleton skeleton-chip" />
+                                        <div className="skeleton skeleton-chip" />
+                                        <div className="skeleton skeleton-chip" />
                                     </div>
                                 </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <>
+                            {recommendationData.recommended.length > 0 && (
+                                <section className="jobs-recommendations card" style={{ marginBottom: 18 }}>
+                                    <div className="jobs-recommendations-head">
+                                        <div>
+                                            <span className="jobs-recommendations-kicker">Siz uchun</span>
+                                            <h2>Profilingizga mos ishlar</h2>
+                                            <p>Profilingizdagi sohalarga mos keladigan ishlar.</p>
+                                        </div>
+                                        <span className="jobs-recommendations-count">
+                                            {recommendationData.recommended.length} ta mos ish
+                                        </span>
+                                    </div>
+
+                                    <div className="job-grid jobs-recommendation-grid" style={{ gridTemplateColumns: "1fr" }}>
+                                        {recommendationData.recommended.map(({ job, matchedSkills }) => (
+                                            <article
+                                                className={`card job-card job-recommended-card ${selectedJob?.id === job.id ? "selected" : ""}`}
+                                                key={job.id}
+                                                onClick={() => selectJob(job)}
+                                                style={{ cursor: "pointer" }}
+                                            >
+                                                <div className="job-recommended-label">★ Sizga mos</div>
+                                                <h3 className="job-title">{job.title}</h3>
+                                                <p className="job-desc">{job.description || "Tavsif kiritilmagan"}</p>
+                                                <div className="meta">
+                                                    <span className="chip">💰 {job.price ?? "-"} {job.currency || "UZS"}</span>
+                                                    <span className="chip">📍 {job.location || "-"}</span>
+                                                    <span className="chip job-service-chip">
+                                                        🧩 {job.service_name || serviceMap[String(job.service_id)] || "Noma’lum"}
+                                                    </span>
+                                                </div>
+                                                <div className="job-recommended-skills">
+                                                    Mos sohalar: {matchedSkills.join(", ")}
+                                                </div>
+                                            </article>
+                                        ))}
+                                    </div>
+                                </section>
                             )}
 
-                            <div className="actions">
-                                {isParticipant && (
-                                    <button className="btn btn-secondary" onClick={() => navigate(`/chat/${job.id}`, { state: { job } })}>
-                                        Suhbat
-                                    </button>
-                                )}
-                                {isParticipant && status === "finished" && (
-                                    <button className="btn btn-secondary" onClick={() => navigate(`/rating/${job.id}`, { state: { job } })}>
-                                        Baho
-                                    </button>
-                                )}
+                            <section className="card">
+                                <div className="jobs-results-heading">
+                                    <div>
+                                        <h2>Barcha ishlar</h2>
+                                        <p>Filtrlaringizga mos barcha ishlar.</p>
+                                    </div>
+                                    {profileSkills.length > 0 && recommendationData.recommended.length === 0 && (
+                                        <span className="jobs-profile-note">
+                                            Profil sohalaringizga mos yangi ish hozircha topilmadi.
+                                        </span>
+                                    )}
+                                </div>
 
-                                {canAccept && (
-                                    <button className="btn btn-primary" disabled={actionJobId === job.id} onClick={() => acceptJob(job)}>
-                                        {actionJobId === job.id ? "Qabul qilinmoqda..." : "Ishni qabul qilish"}
-                                    </button>
+                                <div className="job-grid jobs-single-column" style={{ gridTemplateColumns: "1fr" }}>
+                                    {pagedRanked.map(({ job }) => {
+                                        const workerName = `${job.worker_first || ""} ${job.worker_last || ""}`.trim() || job.worker_username
+                                        const status = String(job.status || "").trim().toLowerCase()
+                                        const statusLabel = {
+                                            active: "Faol",
+                                            payment_pending: "To‘lov kutilmoqda",
+                                            accepted: "Qabul qilingan",
+                                            pending_finish: "Tasdiqlash kutilmoqda",
+                                            finished: "Yakunlangan"
+                                        }[status] || status
+
+                                        return (
+                                            <article
+                                                className={`card job-card ${selectedJob?.id === job.id ? "selected" : ""}`}
+                                                key={job.id}
+                                                onClick={() => selectJob(job)}
+                                                style={{ cursor: "pointer" }}
+                                            >
+                                                <h3 className="job-title">{job.title}</h3>
+                                                <p className="job-desc">{job.description || "Tavsif kiritilmagan"}</p>
+
+                                                <div className="meta">
+                                                    <span className="chip">🕒 {formatTimeAgo(job.created_at)}</span>
+                                                    <span className="chip">💰 {job.price ?? "-"} {job.currency || "UZS"}</span>
+                                                    <span className="chip">📍 {job.location || "-"}</span>
+                                                    <span className="chip job-service-chip">
+                                                        🧩 {job.service_name || serviceMap[String(job.service_id)] || "Noma’lum"}
+                                                    </span>
+                                                    <span className={`chip status-chip status-${status}`}>
+                                                        <span className="status-dot" />
+                                                        {statusLabel}
+                                                    </span>
+                                                    <span className="chip">
+                                                        📅 {job.created_at || "Sana noma’lum"}
+                                                    </span>
+                                                    <span className="chip job-worker-chip">
+                                                        👤 Yaratuvchi:
+                                                        <button
+                                                            type="button"
+                                                            className="profile-link-button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation()
+                                                                navigate(`/profiles/${job.creator_username}`)
+                                                            }}
+                                                        >
+                                                            {(`${job.creator_first || ""} ${job.creator_last || ""}`).trim() || job.creator_username || "Noma’lum"}
+                                                        </button>
+                                                    </span>
+                                                    <span className="chip job-worker-chip">
+                                                        👤 Bajaruvchi:
+                                                        {job.worker_id ? (
+                                                            <button
+                                                                type="button"
+                                                                className="profile-link-button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation()
+                                                                    navigate(`/profiles/${job.worker_username}`)
+                                                                }}
+                                                            >
+                                                                {workerName}
+                                                            </button>
+                                                        ) : (
+                                                            " Hali qabul qilinmagan"
+                                                        )}
+                                                    </span>
+                                                </div>
+                                            </article>
+                                        )
+                                    })}
+
+                                    {!pagedRanked.length && (
+                                        <div className="empty-state jobs-empty-state">
+                                            <strong>
+                                                {hasSearchOrFilters ? "Sizning mezonlaringiz bo‘yicha ish topilmadi." : "Hozircha faol ishlar yo‘q."}
+                                            </strong>
+                                            <span>
+                                                {hasSearchOrFilters ? "Qidiruv yoki filtrlarni o‘zgartirib ko‘ring." : "Yangi e’lonlar paydo bo‘lishi bilan shu yerda ko‘rinadi."}
+                                            </span>
+                                            {hasSearchOrFilters && (
+                                                <button className="btn btn-secondary" type="button" onClick={clearAllFilters}>
+                                                    Filtrlarni tozalash
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {filtered.length > 0 && (
+                                    <div className="jobs-pagination">
+                                        <div className="jobs-page-size">
+                                            <span>Bir sahifada</span>
+                                            <select className="input" value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
+                                                <option value="5">5 ta</option>
+                                                <option value="10">10 ta</option>
+                                                <option value="20">20 ta</option>
+                                                <option value="50">50 ta</option>
+                                            </select>
+                                            <span>job</span>
+                                        </div>
+                                        <div className="jobs-page-summary">
+                                            {filtered.length} ta ish • {currentPage} / {totalPages} sahifa
+                                        </div>
+                                        <div className="jobs-page-controls">
+                                            <button
+                                                className="btn btn-secondary"
+                                                disabled={currentPage === 1}
+                                                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                                            >
+                                                ‹
+                                            </button>
+                                            <input
+                                                className="input jobs-page-number"
+                                                type="number"
+                                                min="1"
+                                                max={totalPages}
+                                                value={currentPage}
+                                                aria-label="Sahifa raqami"
+                                                onChange={(e) => {
+                                                    const page = Number(e.target.value)
+                                                    if (Number.isFinite(page)) {
+                                                        setCurrentPage(Math.min(totalPages, Math.max(1, page)))
+                                                    }
+                                                }}
+                                            />
+                                            <span className="jobs-page-total">/ {totalPages}</span>
+                                            <button
+                                                className="btn btn-secondary"
+                                                disabled={currentPage === totalPages}
+                                                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                                            >
+                                                ›
+                                            </button>
+                                        </div>
+                                    </div>
                                 )}
-                                {canReportParticipant && (
-                                    <button className="btn btn-secondary" onClick={() => setReportJobId(reportJobId === job.id ? null : job.id)}>
-                                        ⚑ Shikoyat
-                                    </button>
-                                )}
+                            </section>
+                        </>
+                    )}
+                </section>
 
-                                {/* --- SIZ QABUL QILGANSIS CHIP --- */}
-                                {isIAccepted && status === "payment_pending" && (
-                                    <span className="chip job-accepted-chip">
-                                        ⏳ Ish egasining to‘lovi kutilmoqda
-                                    </span>
-                                )}
-
-                                {isIAccepted && status === "accepted" && (
-                                    <span className="chip job-accepted-chip">
-                                        ✅ Siz qabul qilgansiz
-                                    </span>
-                                )}
-
-                                {isMyJob && status === "payment_pending" && (
-                                    <button className="btn btn-primary" onClick={() => navigate("/payments/job/" + job.id)}>
-                                        💳 To‘lovni amalga oshirish
-                                    </button>
-                                )}
-
-                                {/* --- ISHCHINI BEKOR QILISH (Ish egasi uchun) --- */}
-                                {isMyJob && canFinish && (
-                                    <button className="btn btn-warn" onClick={() => cancelWorker(job)}>
-                                        Ishchini almashtirish
-                                    </button>
-                                )}
-
-                                {/* --- FINISH TUGMASI (Ish egasi uchun) --- */}
-                                {isMyJob && canFinish && (
-                                    <button className="btn btn-success" disabled={actionJobId === job.id} onClick={() => finishJobSeeker(job)}>
-                                        {actionJobId === job.id ? "Yuborilmoqda..." : "Yakunlash"}
-                                    </button>
-                                )}
-
-                                {/* --- FINISH TUGMASI (Bajaruvchi uchun) --- */}
-                                {isIAccepted && canFinish && (
-                                    <button className="btn btn-success" disabled={actionJobId === job.id} onClick={() => finishJobWorker(job.id)}>
-                                        {actionJobId === job.id ? "Yakunlanmoqda..." : "Yakunlash"}
-                                    </button>
-                                )}
-
-                            </div>
-                        </article>
-                    )
-                })}
-
-
-                {!loading && filtered.length > 0 && (
-                    <div className="jobs-pagination">
-                        <div className="jobs-page-size">
-                            <span>Bir sahifada</span>
-                            <select className="input" value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
-                                <option value="5">5 ta</option>
-                                <option value="10">10 ta</option>
-                                <option value="20">20 ta</option>
-                                <option value="50">50 ta</option>
-                            </select>
-                            <span>job</span>
-                        </div>
-                        <div className="jobs-page-summary">{filtered.length} ta ish • {currentPage} / {totalPages} sahifa</div>
-                        <div className="jobs-page-controls">
-                            <button className="btn btn-secondary" disabled={currentPage === 1} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}>‹</button>
-                                <input
-                                    className="input jobs-page-number"
-                                    type="number"
-                                    min="1"
-                                    max={totalPages}
-                                    value={currentPage}
-                                    aria-label="Sahifa raqami"
-                                    onChange={(e) => {
-                                        const page = Number(e.target.value)
-                                        if (Number.isFinite(page)) setCurrentPage(Math.min(totalPages, Math.max(1, page)))
-                                    }}
-                                />
-                                <span className="jobs-page-total">/ {totalPages}</span>
-                            <button className="btn btn-secondary" disabled={currentPage === totalPages} onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}>›</button>
-                        </div>
-                    </div>
-                )}
-                {!loading && !filtered.length && (
-    <div className="empty-state jobs-empty-state">
-        <strong>{hasSearchOrFilters ? "Sizning mezonlaringiz bo‘yicha ish topilmadi." : "Hozircha faol ishlar yo‘q."}</strong>
-        <span>{hasSearchOrFilters ? "Qidiruv yoki filtrlarni o‘zgartirib ko‘ring." : "Yangi e’lonlar paydo bo‘lishi bilan shu yerda ko‘rinadi."}</span>
-        {hasSearchOrFilters && <button className="btn btn-secondary" type="button" onClick={clearAllFilters}>Filtrlarni tozalash</button>}
-    </div>
-)}
-                </div>
-                <aside className="card jobs-job-details">
+                <aside
+                    className="card jobs-new-detail"
+                    style={{
+                        minWidth: 0,
+                        width: "100%",
+                        position: "sticky",
+                        top: 18,
+                        alignSelf: "start"
+                    }}
+                >
                     <div className="dashboard-panel-head">
                         <div>
                             <span className="profile-eyebrow">ISH MA'LUMOTI</span>
                             <h2>To‘liq ma’lumot</h2>
-                            <p>Tanlangan jobning barcha tafsilotlari va mavjud amallari.</p>
+                            <p>Chap tomondan job tanlang — barcha tafsilotlar shu yerda ko‘rinadi.</p>
                         </div>
                     </div>
 
-                    {activeJobDetails ? (() => {
+                    {jobDetailsLoading ? (
+                        <div className="empty-state">To‘liq ma’lumot backenddan yuklanmoqda...</div>
+                    ) : activeJobDetails ? (() => {
                         const selectedStatus = String(activeJobDetails.status || "").trim().toLowerCase()
                         const selectedIsMyJob = String(activeJobDetails.user_id) === String(user?.id)
                         const selectedIsWorker = String(activeJobDetails.worker_id) === String(user?.id)
@@ -812,7 +617,10 @@ export default function Jobs() {
                             (selectedIsMyJob && !activeJobDetails.owner_finished) ||
                             (selectedIsWorker && !activeJobDetails.worker_finished)
                         )
-                        const selectedCanReport = selectedParticipant && activeJobDetails.worker_id != null && ["accepted", "pending_finish", "finished"].includes(selectedStatus)
+                        const selectedCanReport = selectedParticipant &&
+                            activeJobDetails.worker_id != null &&
+                            ["accepted", "pending_finish", "finished"].includes(selectedStatus)
+
                         const selectedStatusLabel = {
                             active: "Faol",
                             payment_pending: "To‘lov kutilmoqda",
@@ -860,7 +668,7 @@ export default function Jobs() {
                                             <button
                                                 type="button"
                                                 className="profile-link-button"
-                                                onClick={() => navigate(`/profiles/${activeJobDetails.creator_username}`)}
+                                                onClick={() => activeJobDetails.creator_username && navigate(`/profiles/${activeJobDetails.creator_username}`)}
                                             >
                                                 {(`${activeJobDetails.creator_first || ""} ${activeJobDetails.creator_last || ""}`).trim() || activeJobDetails.creator_username || "Noma’lum"}
                                             </button>
@@ -873,11 +681,13 @@ export default function Jobs() {
                                                 <button
                                                     type="button"
                                                     className="profile-link-button"
-                                                    onClick={() => navigate(`/profiles/${activeJobDetails.worker_username}`)}
+                                                    onClick={() => activeJobDetails.worker_username && navigate(`/profiles/${activeJobDetails.worker_username}`)}
                                                 >
                                                     {(`${activeJobDetails.worker_first || ""} ${activeJobDetails.worker_last || ""}`).trim() || activeJobDetails.worker_username || "Noma’lum"}
                                                 </button>
-                                            ) : "Hali qabul qilinmagan"}
+                                            ) : (
+                                                "Hali qabul qilinmagan"
+                                            )}
                                         </strong>
                                     </div>
                                     {selectedStatus === "accepted" && (
@@ -944,21 +754,18 @@ export default function Jobs() {
                                         )}
 
                                         {selectedIsMyJob && selectedCanFinish && (
-                                            <button
-                                                className="btn btn-warn"
-                                                onClick={() => cancelWorker(activeJobDetails)}
-                                            >
+                                            <button className="btn btn-warn" onClick={() => cancelWorker(activeJobDetails)}>
                                                 Ishchini almashtirish
                                             </button>
                                         )}
 
-                                        {(selectedIsMyJob || selectedIsWorker) && selectedCanFinish && (
+                                        {selectedCanFinish && (selectedIsMyJob || selectedIsWorker) && (
                                             <button
                                                 className="btn btn-success"
                                                 disabled={actionJobId === activeJobDetails.id}
                                                 onClick={() => selectedIsWorker ? finishJobWorker(activeJobDetails.id) : finishJobSeeker(activeJobDetails)}
                                             >
-                                                {actionJobId === activeJobDetails.id ? "Yuborilmoqda..." : "Yakunlash"}
+                                                {actionJobId === activeJobDetails.id ? "Yakunlanmoqda..." : "Yakunlash"}
                                             </button>
                                         )}
 
@@ -984,11 +791,7 @@ export default function Jobs() {
                                     {reportJobId === activeJobDetails.id && selectedCanReport && (
                                         <div className="report-panel" style={{ marginTop: 12 }}>
                                             <strong>{selectedIsMyJob ? "Bajaruvchi haqida shikoyat" : "Ish egasi haqida shikoyat"}</strong>
-                                            <select
-                                                className="select"
-                                                value={reportReason}
-                                                onChange={(e) => setReportReason(e.target.value)}
-                                            >
+                                            <select className="select" value={reportReason} onChange={(e) => setReportReason(e.target.value)}>
                                                 <option value="">Sababni tanlang</option>
                                                 <option value="Firibgarlik yoki aldov">Firibgarlik yoki aldov</option>
                                                 <option value="Noto‘g‘ri yoki yolg‘on e’lon">Noto‘g‘ri yoki yolg‘on e’lon</option>
@@ -1012,11 +815,7 @@ export default function Jobs() {
                                                 >
                                                     Yuborish
                                                 </button>
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-secondary"
-                                                    onClick={() => setReportJobId(null)}
-                                                >
+                                                <button type="button" className="btn btn-secondary" onClick={() => setReportJobId(null)}>
                                                     Bekor qilish
                                                 </button>
                                             </div>
@@ -1027,11 +826,10 @@ export default function Jobs() {
                         )
                     })() : (
                         <div className="empty-state">
-                            To‘liq ma’lumotni ko‘rish uchun chap tomondagi jobni tanlang.
+                            Ishni tanlaganingizda uning to‘liq ma’lumoti shu yerda chiqadi.
                         </div>
                     )}
                 </aside>
-            </div>
             </div>
         </AppLayout>
     )
