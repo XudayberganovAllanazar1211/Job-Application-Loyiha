@@ -89,7 +89,9 @@ export default function Profile() {
     const [walletTransactions, setWalletTransactions] = useState([])
     const [portfolio, setPortfolio] = useState([])
     const [portfolioForm, setPortfolioForm] = useState({ title: "", description: "", url: "" })
+    const [portfolioFile, setPortfolioFile] = useState(null)
     const [portfolioLoading, setPortfolioLoading] = useState(false)
+    const portfolioFileRef = useRef(null)
     const [walletLoading, setWalletLoading] = useState(true)
     const [withdrawOpen, setWithdrawOpen] = useState(false)
     const [withdrawAmount, setWithdrawAmount] = useState("")
@@ -878,14 +880,28 @@ export default function Profile() {
                             {portfolio.map((item) => (
                                 <article key={item.id} className="card" style={{ margin: 0 }}>
                                     <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
-                                        <div>
+                                        <div style={{ minWidth: 0 }}>
                                             <strong>{item.title}</strong>
                                             {item.description && <p style={{ margin: "6px 0 0" }}>{item.description}</p>}
-                                            {item.url && (
-                                                <a href={item.url} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 8 }}>
-                                                    Loyihani ko‘rish →
-                                                </a>
+                                            {item.image_url && (
+                                                <img
+                                                    src={(import.meta.env.VITE_API_URL || "http://localhost:5000") + item.image_url}
+                                                    alt={item.title}
+                                                    style={{ display: "block", width: "100%", maxWidth: 420, maxHeight: 240, objectFit: "cover", borderRadius: 14, marginTop: 10 }}
+                                                />
                                             )}
+                                            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8 }}>
+                                                {item.url && (
+                                                    <a href={item.url} target="_blank" rel="noreferrer">
+                                                        Loyihani ko‘rish →
+                                                    </a>
+                                                )}
+                                                {item.file_url && (
+                                                    <a href={(import.meta.env.VITE_API_URL || "http://localhost:5000") + item.file_url} target="_blank" rel="noreferrer">
+                                                        {item.file_name || "Portfolio faylini ochish"} →
+                                                    </a>
+                                                )}
+                                            </div>
                                         </div>
                                         <button
                                             type="button"
@@ -918,18 +934,56 @@ export default function Profile() {
                         style={{ marginTop: 16 }}
                         onSubmit={async (event) => {
                             event.preventDefault()
-                            if (!portfolioForm.title.trim()) return
+                            if (!portfolioForm.title.trim()) {
+                                setNotice("Portfolio nomini kiriting.")
+                                return
+                            }
+                            if (portfolioFile && portfolioFile.size > 10 * 1024 * 1024) {
+                                setNotice("Portfolio fayli 10 MB dan oshmasligi kerak.")
+                                return
+                            }
+
                             setPortfolioLoading(true)
-                            const result = await api("/portfolio", {
-                                method: "POST",
-                                token: localStorage.getItem("token") || "",
-                                body: portfolioForm
-                            })
+                            const token = localStorage.getItem("token") || ""
+                            let result
+
+                            if (portfolioFile) {
+                                const data = new FormData()
+                                data.append("title", portfolioForm.title)
+                                data.append("description", portfolioForm.description)
+                                data.append("url", portfolioForm.url)
+                                data.append("file", portfolioFile)
+
+                                try {
+                                    const response = await fetch(
+                                        (import.meta.env.VITE_API_URL || "http://localhost:5000") + "/portfolio/upload",
+                                        {
+                                            method: "POST",
+                                            headers: token ? { Authorization: `Bearer ${token}` } : {},
+                                            body: data
+                                        }
+                                    )
+                                    result = await response.json().catch(() => ({}))
+                                    if (!response.ok) result = { ...result, ok: false }
+                                    else result = { ...result, ok: true }
+                                } catch {
+                                    result = { ok: false, msg: "Faylni yuklashda xatolik yuz berdi." }
+                                }
+                            } else {
+                                result = await api("/portfolio", {
+                                    method: "POST",
+                                    token,
+                                    body: portfolioForm
+                                })
+                            }
+
                             setPortfolioLoading(false)
                             if (result?.ok) {
-                                const refreshed = await api("/portfolio", { token: localStorage.getItem("token") || "" })
+                                const refreshed = await api("/portfolio", { token })
                                 setPortfolio(Array.isArray(refreshed) ? refreshed : portfolio)
                                 setPortfolioForm({ title: "", description: "", url: "" })
+                                setPortfolioFile(null)
+                                if (portfolioFileRef.current) portfolioFileRef.current.value = ""
                                 setNotice("Portfolio qo‘shildi.")
                             } else {
                                 setNotice(result?.msg || "Portfolio qo‘shilmadi.")
@@ -949,6 +1003,31 @@ export default function Profile() {
                         <label>
                             <span className="helper profile-label">Qisqa tavsif</span>
                             <textarea className="textarea" maxLength={2000} value={portfolioForm.description} onChange={(e) => setPortfolioForm({ ...portfolioForm, description: e.target.value })} placeholder="Loyihada nima qildingiz?" />
+                        </label>
+                        <label>
+                            <span className="helper profile-label">Portfolio fayli</span>
+                            <input
+                                ref={portfolioFileRef}
+                                className="input"
+                                type="file"
+                                accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp"
+                                onChange={(event) => {
+                                    const file = event.target.files?.[0] || null
+                                    if (!file) {
+                                        setPortfolioFile(null)
+                                        return
+                                    }
+                                    if (file.size > 10 * 1024 * 1024) {
+                                        event.target.value = ""
+                                        setPortfolioFile(null)
+                                        setNotice("Portfolio fayli 10 MB dan oshmasligi kerak.")
+                                        return
+                                    }
+                                    setPortfolioFile(file)
+                                    setNotice("")
+                                }}
+                            />
+                            <span className="helper">PDF, PNG, JPG yoki WEBP. Maksimal hajm: 10 MB.</span>
                         </label>
                         <button className="btn btn-primary" type="submit" disabled={portfolioLoading}>
                             {portfolioLoading ? "Saqlanmoqda..." : "Portfolio qo‘shish"}
