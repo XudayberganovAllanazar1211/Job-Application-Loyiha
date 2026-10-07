@@ -541,6 +541,9 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
             return jsonify({"msg": "Bir martalik yechib olish 1 000 000 000 UZS dan oshmasligi kerak"}), 400
 
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        withdrawal_fee = 0.0
+        withdrawal_net = round(amount - withdrawal_fee, 2)
+
         conn = db.get_connection()
         try:
             cur = conn.cursor()
@@ -550,13 +553,13 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
                 return jsonify({"msg": "Foydalanuvchi topilmadi"}), 404
 
             balance = float(current[0] or 0)
-            if amount > balance:
+            if withdrawal_net > balance:
                 conn.rollback()
                 return jsonify({"msg": "Balansda yetarli mablag‘ yo‘q", "balance": balance}), 400
 
             cur.execute(
                 "UPDATE users SET balance=ROUND(COALESCE(balance,0)-?,2) WHERE id=? AND COALESCE(balance,0)>=?",
-                (amount, request.uid, amount),
+                (withdrawal_net, request.uid, withdrawal_net),
             )
             if cur.rowcount != 1:
                 conn.rollback()
@@ -570,10 +573,10 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
                 cur,
                 request.uid,
                 "withdrawal",
-                -amount,
+                -withdrawal_net,
                 balance_after,
                 None,
-                "Test wallet orqali balansdan mablag‘ yechildi",
+                "Test wallet orqali balansdan mablag‘ yechildi (qo‘shimcha withdrawal komissiyasi 0%)",
                 now,
             )
             conn.commit()
@@ -590,7 +593,13 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
             f"{amount:,.0f} UZS balansingizdan yechildi.",
             "/profile",
         )
-        return jsonify({"msg": "ok", "amount": amount, "balance": float(balance_after)})
+        return jsonify({
+            "msg": "ok",
+            "amount": withdrawal_net,
+            "requested_amount": amount,
+            "withdrawal_fee": withdrawal_fee,
+            "balance": float(balance_after),
+        })
 
 
     @app.route("/admin/wallet/<int:user_id>", methods=["POST"])
