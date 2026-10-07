@@ -463,6 +463,21 @@ class DB:
                 cursor.execute("ALTER TABLE messages ADD COLUMN read_at TEXT")
             except Exception:
                 pass
+        if "attachment_url" not in existing_message_cols:
+            try:
+                cursor.execute("ALTER TABLE messages ADD COLUMN attachment_url TEXT DEFAULT ''")
+            except Exception:
+                pass
+        if "attachment_name" not in existing_message_cols:
+            try:
+                cursor.execute("ALTER TABLE messages ADD COLUMN attachment_name TEXT DEFAULT ''")
+            except Exception:
+                pass
+        if "attachment_type" not in existing_message_cols:
+            try:
+                cursor.execute("ALTER TABLE messages ADD COLUMN attachment_type TEXT DEFAULT ''")
+            except Exception:
+                pass
 
         if "created_at" not in existing_rating_cols:
             try:
