@@ -209,6 +209,9 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
             "currency": "UZS",
             "checkout_url": build_checkout_url(payment_uuid, price),
             "title": title,
+            "commission_percent": _commission_preview(float(price))[0],
+            "commission_amount": _commission_preview(float(price))[1],
+            "worker_amount": _commission_preview(float(price))[2],
         })
 
     @app.route("/payments/<payment_uuid>")
