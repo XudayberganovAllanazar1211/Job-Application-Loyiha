@@ -1433,7 +1433,8 @@ def get_jobs():
     r = db.q(
         """
         SELECT j.id, j.title, j.price, j.currency, j.location, j.status, j.user_id, j.worker_id,
-               u.first_name, u.last_name, u.username, j.description, j.service_id,
+               w.first_name, w.last_name, w.username,
+               j.description, j.service_id,
                COALESCE(
                    (SELECT GROUP_CONCAT(
                        CASE WHEN js.service_id IS NOT NULL THEN ss.name ELSE js.custom_service END,
@@ -1444,9 +1445,11 @@ def get_jobs():
                     WHERE js.job_id = j.id),
                    COALESCE(NULLIF(s.name, ''), j.custom_service)
                ) as service_name,
-               j.created_at, j.owner_finished, j.worker_finished
+               j.created_at, j.owner_finished, j.worker_finished,
+               c.first_name as creator_first, c.last_name as creator_last, c.username as creator_username
         FROM jobs j
-        LEFT JOIN users u ON j.worker_id = u.id
+        LEFT JOIN users w ON j.worker_id = w.id
+        LEFT JOIN users c ON j.user_id = c.id
         LEFT JOIN services s ON j.service_id = s.id
         WHERE j.status = 'active'
            OR (
@@ -1479,10 +1482,12 @@ def get_jobs():
                 "created_at",
                 "owner_finished",
                 "worker_finished",
+                "creator_first",
+                "creator_last",
+                "creator_username",
             ],
         )
     )
-
 
 @app.route("/jobs/<int:job_id>")
 @auth
