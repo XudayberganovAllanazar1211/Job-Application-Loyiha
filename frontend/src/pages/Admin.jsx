@@ -226,10 +226,17 @@ export default function Admin() {
                 <div className="card admin-stat"><span>Baholar</span><strong>{stats.ratings ?? 0}</strong></div>
                 <div className="card admin-stat"><span>Waiting escrow</span><strong>{Number(walletSummary?.escrow_balance || 0).toLocaleString("uz-UZ")} UZS</strong></div>
                 <div className="card admin-stat"><span>FinJob daromadi</span><strong>{Number(walletSummary?.platform_balance || 0).toLocaleString("uz-UZ")} UZS</strong></div>
+                <div className="card admin-stat"><span>Ochiq shikoyatlar</span><strong>{stats.pending_reports ?? 0}</strong></div>
+                <div className="card admin-stat"><span>Bloklangan ishlar</span><strong>{stats.blocked_jobs ?? 0}</strong></div>
+                <div className="card admin-stat"><span>Administratorlar</span><strong>{stats.admins ?? 0}</strong></div>
             </div>
 
             <div className="card admin-panel">
                 <div className="admin-toolbar-note">Bu yerda platformadagi asosiy maʼlumotlarni boshqarishingiz mumkin.</div>
+                <div className="admin-toolbar" style={{display:"flex",gap:10,alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap"}}>
+                    <strong>Admin 2.0</strong>
+                    <button className="btn btn-secondary" onClick={load}>Yangilash</button>
+                </div>
                 <div className="admin-tabs">
                     {tabs.map(([key, label]) => (
                         <button key={key} className={tab === key ? "admin-tab active" : "admin-tab"} onClick={() => setTab(key)}>
