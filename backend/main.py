@@ -1013,8 +1013,8 @@ def admin_update_user(user_id):
         return jsonify({"msg": "Bu foydalanuvchi nomi yoki elektron pochta boshqa foydalanuvchida mavjud."}), 409
 
     if password:
-        if len(password) < 8:
-            return jsonify({"msg": "Yangi parol kamida 8 ta belgidan iborat bo'lishi kerak."}), 400
+        if len(password) < 8 or len(password) > 256:
+            return jsonify({"msg": "Yangi parol 8–256 belgidan iborat bo‘lishi kerak."}), 400
 
         hashed = generate_password_hash(password)
         db.q(
@@ -1048,6 +1048,13 @@ def admin_delete_user(user_id):
 
     if target[1] == "admin":
         return jsonify({"msg": "Boshqa administratorni o‘chirish uchun avval uning rolini foydalanuvchiga o‘zgartiring."}), 400
+
+    held_payment = db.q(
+        "SELECT id FROM payments WHERE (payer_id=? OR payee_id=?) AND status='held' LIMIT 1",
+        (user_id, user_id),
+    ).fetchone()
+    if held_payment:
+        return jsonify({"msg": "Bu foydalanuvchiga tegishli waiting to‘lovi mavjud. Avval ishni refund yoki yakunlash orqali hal qiling."}), 409
 
     conn = db.get_connection()
     try:
@@ -1238,12 +1245,14 @@ def admin_delete_rating(rating_id):
 @app.route("/login", methods=["POST"])
 def login():
     d = request.json or {}
-    username_or_email = d.get("username", "").strip()
+    username_or_email = str(d.get("username", "")).strip()
     login_email = username_or_email.lower()
-    password = d.get("password", "")
+    password = str(d.get("password", ""))
 
     if not username_or_email or not password:
         return jsonify({"msg": "Foydalanuvchi nomi/elektron pochta va parol kiritilishi shart!"}), 400
+    if len(username_or_email) > 254:
+        return jsonify({"msg": "Foydalanuvchi nomi yoki elektron pochta juda uzun"}), 400
 
     if len(password) < 8 or len(password) > 256:
         return jsonify({"msg": "Parol 8–256 belgidan iborat bo‘lishi kerak"}), 400
