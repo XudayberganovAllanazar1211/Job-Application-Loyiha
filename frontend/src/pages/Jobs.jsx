@@ -582,13 +582,6 @@ export default function Jobs() {
                                 <span className={`chip status-chip status-${status}`}><span className="status-dot" />{statusLabel}</span>
 
                                 <span className="chip">📅 {job.created_at || "Sana noma’lum"}</span>
-                                {job.worker_id != null && (
-                                    <span className="chip job-worker-chip">
-                                        👤 Bajaruvchi: <button type="button" className="profile-link-button" onClick={() => navigate(`/profiles/${job.worker_username}`)}>
-                                            {`${job.worker_first || ""} ${job.worker_last || ""}`.trim() || job.worker_username}
-                                        </button>
-                                    </span>
-                                )}
                                 <span className="chip job-worker-chip">
                                     👤 Yaratuvchi: <button type="button" className="profile-link-button" onClick={(e) => { e.stopPropagation(); navigate(`/profiles/${job.creator_username}`) }}>
                                         {`${job.creator_first || ""} ${job.creator_last || ""}`.trim() || job.creator_username}
@@ -601,21 +594,6 @@ export default function Jobs() {
                                         </button>
                                     ) : "Hali qabul qilinmagan"}
                                 </span>
-                                {isMyJob && (
-                                    <span className="chip job-worker-chip">
-                                        👤 Bajaruvchi: {job.worker_id ? (
-                                            <button
-                                                type="button"
-                                                className="profile-link-button"
-                                                onClick={() => navigate(`/profiles/${job.worker_username}`)}
-                                            >
-                                                {workerName}
-                                            </button>
-                                        ) : "Hali qabul qilinmagan"}
-                                    </span>
-                                )}
-                            </div>
-
                             {reportJobId === job.id && canReportParticipant && (
                                 <div className="report-panel">
                                     <strong>{isMyJob ? "Ishchi haqida shikoyat" : "Ish egasi haqida shikoyat"}</strong>
