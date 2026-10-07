@@ -114,7 +114,38 @@ def register_payment_routes(app, db, auth, admin_required, create_notification):
         if str(currency).upper() != "UZS":
             return jsonify({"msg": "Click orqali hozircha faqat UZS to‘lovlari qabul qilinadi"}), 400
         if not CLICK_SERVICE_ID or not CLICK_MERCHANT_ID or not CLICK_SECRET_KEY:
-            return jsonify({"msg": "Click to‘lov tizimi merchant ma’lumotlari bilan sozlanmagan"}), 503
+            existing = db.q(
+                "SELECT payment_uuid,amount,currency,status FROM payments WHERE job_id=? AND provider='dummy'",
+                (job_id,),
+            ).fetchone()
+            if existing:
+                return jsonify({
+                    "msg": "ok",
+                    "status": existing[3],
+                    "payment_uuid": existing[0],
+                    "amount": existing[1],
+                    "currency": existing[2],
+                    "provider": "dummy",
+                    "title": title,
+                })
+            payment_uuid = str(uuid.uuid4())
+            now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            result = db.q(
+                """INSERT INTO payments(
+                    payment_uuid,job_id,payer_id,payee_id,amount,currency,provider,status,created_at
+                ) VALUES(?,?,?,?,?,?,?,?,?)""",
+                (payment_uuid,job_id,owner_id,worker_id,float(price),"UZS","dummy","pending",now),
+            )
+            result.close()
+            return jsonify({
+                "msg": "ok",
+                "status": "pending",
+                "payment_uuid": payment_uuid,
+                "amount": float(price),
+                "currency": "UZS",
+                "provider": "dummy",
+                "title": title,
+            })
 
         existing = db.q(
             "SELECT payment_uuid,amount,currency,status FROM payments WHERE job_id=? AND provider='click'",
