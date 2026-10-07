@@ -1354,3 +1354,168 @@ html[data-theme="dark"] .notification-head>div>span{
         grid-template-columns: 1fr;
     }
 }
+
+
+/* Wallet */
+.profile-wallet-card{
+    padding:24px;
+    border-radius:24px;
+    border:1px solid #bfdbfe;
+    background:linear-gradient(135deg,#eff6ff 0%,#ffffff 55%,#ecfeff 100%);
+    box-shadow:0 18px 45px rgba(37,99,235,.12);
+    overflow:hidden;
+    position:relative;
+}
+.profile-wallet-card::after{
+    content:"";
+    position:absolute;
+    width:220px;
+    height:220px;
+    border-radius:50%;
+    right:-90px;
+    top:-120px;
+    background:rgba(37,99,235,.10);
+    pointer-events:none;
+}
+.profile-wallet-top{
+    position:relative;
+    z-index:1;
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:22px;
+}
+.profile-wallet-eyebrow{
+    display:block;
+    color:#2563eb;
+    font-size:10px;
+    font-weight:900;
+    letter-spacing:1.5px;
+    margin-bottom:5px;
+}
+.profile-wallet-top h3{
+    margin:0;
+    font:800 22px Manrope,sans-serif;
+    color:#172033;
+}
+.profile-wallet-top p{
+    margin:6px 0 0;
+    color:#64748b;
+    font-size:13px;
+}
+.profile-wallet-balance{
+    min-width:220px;
+    text-align:right;
+    padding:15px 18px;
+    border-radius:18px;
+    background:rgba(255,255,255,.78);
+    border:1px solid rgba(147,197,253,.65);
+    box-shadow:0 10px 25px rgba(37,99,235,.09);
+}
+.profile-wallet-balance span{
+    display:block;
+    color:#64748b;
+    font-size:11px;
+    font-weight:700;
+}
+.profile-wallet-balance strong{
+    display:inline-block;
+    margin-top:4px;
+    font:800 clamp(28px,4vw,40px)/1 Manrope,sans-serif;
+    letter-spacing:-1.3px;
+    color:#1d4ed8;
+}
+.profile-wallet-balance small{
+    margin-left:7px;
+    color:#2563eb;
+    font-size:12px;
+    font-weight:900;
+}
+.profile-wallet-controls{
+    position:relative;
+    z-index:1;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    margin-top:18px;
+}
+.profile-wallet-withdraw-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:11px 17px;
+    border-radius:12px;
+    background:#172033;
+    color:#fff;
+    font-weight:800;
+    cursor:pointer;
+    box-shadow:0 10px 22px rgba(15,23,42,.16);
+}
+.profile-wallet-withdraw-btn:hover{background:#0f172a;transform:translateY(-1px)}
+.profile-wallet-withdraw-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.profile-wallet-controls>span{color:#64748b;font-size:12px}
+.profile-withdraw-box{
+    position:relative;
+    z-index:1;
+    display:flex;
+    align-items:end;
+    gap:10px;
+    margin-top:15px;
+    padding:15px;
+    border-radius:16px;
+    background:rgba(255,255,255,.72);
+    border:1px dashed #93c5fd;
+}
+.profile-withdraw-field{flex:1;min-width:0}
+.profile-withdraw-field label{display:block;margin-bottom:6px;color:#475569;font-size:12px;font-weight:800}
+.profile-withdraw-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+.profile-wallet-history{
+    position:relative;
+    z-index:1;
+    margin-top:20px;
+    padding-top:19px;
+    border-top:1px solid rgba(148,163,184,.28);
+}
+.profile-wallet-history-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:11px}
+.profile-wallet-history-head h4{margin:0;font:800 16px Manrope,sans-serif;color:#172033}
+.profile-wallet-history-head>span{padding:5px 9px;border-radius:999px;background:rgba(255,255,255,.75);border:1px solid #dbeafe;color:#2563eb;font-size:11px;font-weight:800}
+.profile-wallet-transactions{display:grid;gap:8px}
+.profile-wallet-transaction{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 11px;border-radius:13px;background:rgba(255,255,255,.72);border:1px solid rgba(226,232,240,.9)}
+.profile-wallet-transaction-icon{width:32px;height:32px;display:grid;place-items:center;border-radius:10px;font:800 16px Manrope,sans-serif}
+.profile-wallet-transaction-icon.income{background:#dcfce7;color:#15803d}
+.profile-wallet-transaction-icon.outcome{background:#fee2e2;color:#dc2626}
+.profile-wallet-transaction-text{display:grid;gap:3px;min-width:0}
+.profile-wallet-transaction-text strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#334155;font-size:12px}
+.profile-wallet-transaction-text span{color:#94a3b8;font-size:11px}
+.profile-wallet-transaction-amount{font-size:12px;font-weight:900;white-space:nowrap}
+.profile-wallet-transaction-amount.income{color:#15803d}
+.profile-wallet-transaction-amount.outcome{color:#dc2626}
+.profile-wallet-empty{padding:18px;text-align:center;border:1px dashed #cbd5e1;border-radius:13px;color:#94a3b8;font-size:12px;background:rgba(255,255,255,.5)}
+
+html[data-theme="dark"] .profile-wallet-card{background:linear-gradient(135deg,#172554 0%,#111827 60%,#082f49 100%);border-color:#315a9d;box-shadow:0 18px 45px rgba(0,0,0,.25)}
+html[data-theme="dark"] .profile-wallet-card::after{background:rgba(59,130,246,.10)}
+html[data-theme="dark"] .profile-wallet-top h3{color:#f8fafc}
+html[data-theme="dark"] .profile-wallet-top p{color:#94a3b8}
+html[data-theme="dark"] .profile-wallet-balance{background:rgba(15,23,42,.65);border-color:#315a9d}
+html[data-theme="dark"] .profile-wallet-balance strong{color:#93c5fd}
+html[data-theme="dark"] .profile-wallet-balance small,.profile-wallet-eyebrow{color:#93c5fd}
+html[data-theme="dark"] .profile-wallet-controls>span{color:#94a3b8}
+html[data-theme="dark"] .profile-withdraw-box{background:rgba(15,23,42,.55);border-color:#315a9d}
+html[data-theme="dark"] .profile-withdraw-field label{color:#cbd5e1}
+html[data-theme="dark"] .profile-wallet-history{border-color:#263244}
+html[data-theme="dark"] .profile-wallet-history-head h4{color:#f8fafc}
+html[data-theme="dark"] .profile-wallet-history-head>span{background:#172554;border-color:#315a9d;color:#93c5fd}
+html[data-theme="dark"] .profile-wallet-transaction{background:rgba(15,23,42,.55);border-color:#334155}
+html[data-theme="dark"] .profile-wallet-transaction-text strong{color:#e2e8f0}
+html[data-theme="dark"] .profile-wallet-empty{border-color:#334155;background:rgba(15,23,42,.4)}
+
+@media(max-width:700px){
+    .profile-wallet-top{flex-direction:column}
+    .profile-wallet-balance{width:100%;min-width:0;text-align:left}
+    .profile-wallet-controls{align-items:stretch;flex-direction:column}
+    .profile-wallet-withdraw-btn{width:100%}
+    .profile-withdraw-box{align-items:stretch;flex-direction:column}
+    .profile-withdraw-row{grid-template-columns:1fr}
+    .profile-wallet-transaction{grid-template-columns:32px minmax(0,1fr);}
+    .profile-wallet-transaction-amount{grid-column:2}
+}
