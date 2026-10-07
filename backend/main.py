@@ -1943,7 +1943,7 @@ def profile_avatar(filename):
 def profile():
     if request.method == "GET":
         u = db.q(
-            "SELECT id, username, first_name, last_name, email, birthday, bio, skills, created_at, average_rating, role, avatar_url FROM users WHERE id=?",
+            "SELECT id, username, first_name, last_name, email, birthday, bio, skills, created_at, average_rating, role, avatar_url, COALESCE(balance, 0) FROM users WHERE id=?",
             (request.uid,),
         ).fetchone()
         if not u:
@@ -1958,6 +1958,7 @@ def profile():
         avg_rating = round(rating_res, 1) if rating_res is not None else 0.0
         user_role = u[10] if len(u) > 10 and u[10] else "user"
         avatar_url = u[11] if len(u) > 11 and u[11] else ""
+        balance = float(u[12] or 0)
 
         return jsonify({
             "id": u[0],
@@ -1975,6 +1976,7 @@ def profile():
             "completed_jobs_count": completed_jobs_count,
             "avg_rating": avg_rating,
             "avatar_url": avatar_url,
+            "balance": balance,
         })
 
     elif request.method == "PUT":
