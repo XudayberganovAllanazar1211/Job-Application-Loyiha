@@ -1715,8 +1715,8 @@ def add_job():
     now_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     insert_result = db.q(
-        """INSERT INTO jobs(user_id,service_id,custom_service,title,description,price,location,worker_id,status,created_at,currency)
-           VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+        """INSERT INTO jobs(user_id,service_id,custom_service,title,description,price,location,worker_id,status,created_at,currency,agreed_price)
+           VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             request.uid,
             primary_service_id,
@@ -1729,6 +1729,7 @@ def add_job():
             "active",
             now_time,
             currency,
+            None,
         ),
     )
     job_id = insert_result.lastrowid
@@ -1757,9 +1758,10 @@ def add_job():
 def get_jobs():
     r = db.q(
         """
-        SELECT j.id, j.title, j.price, j.currency, j.location, j.status, j.user_id, j.worker_id,
+        SELECT j.id, j.title, COALESCE(j.agreed_price, j.price) as price, j.currency, j.location, j.status, j.user_id, j.worker_id,
                w.first_name, w.last_name, w.username,
                j.description, j.service_id,
+               (SELECT COUNT(*) FROM job_proposals jp WHERE jp.job_id=j.id AND jp.status='pending') as proposal_count,
                COALESCE(
                    (SELECT GROUP_CONCAT(
                        CASE WHEN js.service_id IS NOT NULL THEN ss.name ELSE js.custom_service END,
@@ -1803,6 +1805,7 @@ def get_jobs():
                 "worker_username",
                 "description",
                 "service_id",
+                "proposal_count",
                 "service_name",
                 "created_at",
                 "owner_finished",
@@ -1819,8 +1822,9 @@ def get_jobs():
 def get_job_detail(job_id):
     r = db.q(
         """
-        SELECT j.id, j.title, j.price, j.currency, j.location, j.status, j.user_id, j.worker_id,
+        SELECT j.id, j.title, COALESCE(j.agreed_price, j.price) as price, j.currency, j.location, j.status, j.user_id, j.worker_id,
                u.first_name, u.last_name, u.username, j.description, j.service_id,
+               (SELECT COUNT(*) FROM job_proposals jp WHERE jp.job_id=j.id AND jp.status='pending') as proposal_count,
                COALESCE(
                    (SELECT GROUP_CONCAT(
                        CASE WHEN js.service_id IS NOT NULL THEN ss.name ELSE js.custom_service END,
@@ -1861,13 +1865,14 @@ def get_job_detail(job_id):
         "worker_username": r[10],
         "description": r[11],
         "service_id": r[12],
-        "service_name": r[13],
-        "created_at": r[14],
-        "owner_finished": r[15],
-        "worker_finished": r[16],
-        "creator_first": r[17],
-        "creator_last": r[18],
-        "creator_username": r[19],
+        "proposal_count": r[13],
+        "service_name": r[14],
+        "created_at": r[15],
+        "owner_finished": r[16],
+        "worker_finished": r[17],
+        "creator_first": r[18],
+        "creator_last": r[19],
+        "creator_username": r[20],
     })
 
 
