@@ -398,6 +398,19 @@ class DB:
         )
         cursor.execute("INSERT OR IGNORE INTO platform_wallet(id,balance,escrow_balance) VALUES(1,0,0)")
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS admin_audit_log(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                admin_id INTEGER NOT NULL,
+                action TEXT NOT NULL,
+                target_type TEXT DEFAULT '',
+                target_id INTEGER,
+                details TEXT DEFAULT '',
+                created_at TEXT NOT NULL
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_admin_audit_created ON admin_audit_log(created_at DESC)")
+
         # Dynamic migrations for any existing tables missing new columns
         cursor.execute("PRAGMA table_info(users)")
         existing_user_cols = [row[1] for row in cursor.fetchall()]
@@ -411,6 +424,7 @@ class DB:
             ("token_version", "ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0"),
             ("balance", "ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0"),
             ("last_seen_at", "ALTER TABLE users ADD COLUMN last_seen_at TEXT DEFAULT ''"),
+            ("is_blocked", "ALTER TABLE users ADD COLUMN is_blocked INTEGER NOT NULL DEFAULT 0"),
         ]
         for col_name, sql in migrations:
             if col_name not in existing_user_cols:
@@ -860,11 +874,13 @@ def auth(f):
                 audience="finjob-client",
             )
             uid = int(d["id"])
-            user = db.q("SELECT role, COALESCE(token_version,0) FROM users WHERE id=?", (uid,)).fetchone()
+            user = db.q("SELECT role, COALESCE(token_version,0), COALESCE(is_blocked,0) FROM users WHERE id=?", (uid,)).fetchone()
             if not user:
                 return jsonify({"msg": "Kirish tokeni yaroqsiz"}), 401
             if int(d.get("ver", -1)) != int(user[1] or 0):
                 return jsonify({"msg": "Sessiya muddati tugagan. Qayta kiring."}), 401
+            if int(user[2] or 0) == 1 and (user[0] or "user") != "admin":
+                return jsonify({"msg": "Hisobingiz administrator tomonidan bloklangan."}), 403
             request.uid = uid
             request.user_role = user[0] or "user"
         except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, KeyError, TypeError, ValueError):
@@ -889,6 +905,24 @@ def admin_required(f):
 
 def rows(r, cols):
     return [dict(zip(cols, i)) for i in r]
+
+
+def admin_audit(action, target_type="", target_id=None, details=""):
+    try:
+        db.q(
+            """INSERT INTO admin_audit_log(admin_id,action,target_type,target_id,details,created_at)
+               VALUES(?,?,?,?,?,?)""",
+            (
+                int(getattr(request, "uid", 0) or 0),
+                str(action)[:120],
+                str(target_type)[:40],
+                target_id,
+                str(details)[:2000],
+                datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            ),
+        ).close()
+    except Exception:
+        app.logger.exception("Admin audit log yozilmadi")
 
 
 def create_notification(user_id, notification_type, title, message, link=""):
@@ -1088,12 +1122,128 @@ def update_report(report_id):
     return jsonify({"msg":"Shikoyat holati yangilandi","status":status})
 
 
+@app.route("/admin/analytics")
+@admin_required
+def admin_analytics():
+    payments = db.q(
+        """SELECT status, COUNT(*), COALESCE(SUM(amount),0)
+           FROM payments GROUP BY status"""
+    ).fetchall()
+    wallet = db.q(
+        "SELECT COALESCE(balance,0), COALESCE(escrow_balance,0) FROM platform_wallet WHERE id=1"
+    ).fetchone()
+    tx = db.q(
+        """SELECT type, COUNT(*),
+                  COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END),0),
+                  COALESCE(SUM(CASE WHEN amount < 0 THEN -amount ELSE 0 END),0)
+           FROM wallet_transactions GROUP BY type"""
+    ).fetchall()
+    top_services = db.q(
+        """SELECT COALESCE(s.name, NULLIF(j.custom_service,''), 'Noma'), COUNT(*)
+           FROM jobs j
+           LEFT JOIN services s ON s.id=j.service_id
+           GROUP BY COALESCE(s.id, NULLIF(j.custom_service,''))
+           ORDER BY COUNT(*) DESC LIMIT 8"""
+    ).fetchall()
+    return jsonify({
+        "payments":[{"status":x[0],"count":x[1],"amount":float(x[2] or 0)} for x in payments],
+        "wallet":{"balance":float(wallet[0] or 0) if wallet else 0,"escrow_balance":float(wallet[1] or 0) if wallet else 0},
+        "transactions":[{"type":x[0],"count":x[1],"inflow":float(x[2] or 0),"outflow":float(x[3] or 0)} for x in tx],
+        "top_services":[{"name":x[0],"total":x[1]} for x in top_services],
+    })
+
+
+@app.route("/admin/audit-log")
+@admin_required
+def admin_audit_log():
+    try:
+        page=max(1,int(request.args.get("page",1)))
+        limit=min(100,max(10,int(request.args.get("limit",25))))
+    except (TypeError,ValueError):
+        return jsonify({"msg":"Pagination parametrlari noto‘g‘ri"}),400
+    search=str(request.args.get("q","")).strip()[:100]
+    where=""
+    params=[]
+    if search:
+        where="WHERE a.action LIKE ? OR a.target_type LIKE ? OR a.details LIKE ? OR u.username LIKE ?"
+        value=f"%{search}%"
+        params=[value,value,value,value]
+    total=db.q(
+        f"SELECT COUNT(*) FROM admin_audit_log a LEFT JOIN users u ON u.id=a.admin_id {where}",
+        tuple(params)
+    ).fetchone()[0]
+    items=db.q(
+        f"""SELECT a.id,a.action,a.target_type,a.target_id,a.details,a.created_at,u.username
+            FROM admin_audit_log a
+            LEFT JOIN users u ON u.id=a.admin_id
+            {where}
+            ORDER BY a.id DESC LIMIT ? OFFSET ?""",
+        tuple(params+[limit,(page-1)*limit])
+    ).fetchall()
+    return jsonify({
+        "items":rows(items,["id","action","target_type","target_id","details","created_at","admin_username"]),
+        "page":page,"limit":limit,"total":total,"pages":max(1,(total+limit-1)//limit)
+    })
+
+
+@app.route("/admin/search")
+@admin_required
+def admin_search():
+    q=str(request.args.get("q","")).strip()[:100]
+    if len(q)<2:
+        return jsonify({"users":[],"jobs":[],"services":[],"reports":[]})
+    like=f"%{q}%"
+    users=db.q(
+        """SELECT id,username,first_name,last_name,email,role,COALESCE(is_blocked,0)
+           FROM users WHERE username LIKE ? OR email LIKE ? OR first_name LIKE ? OR last_name LIKE ?
+           ORDER BY id DESC LIMIT 12""",(like,like,like,like)
+    ).fetchall()
+    jobs=db.q(
+        """SELECT j.id,j.title,j.status,u.username
+           FROM jobs j LEFT JOIN users u ON u.id=j.user_id
+           WHERE j.title LIKE ? OR j.description LIKE ? OR u.username LIKE ?
+           ORDER BY j.id DESC LIMIT 12""",(like,like,like)
+    ).fetchall()
+    services=db.q("SELECT id,name,parent_id FROM services WHERE name LIKE ? ORDER BY id DESC LIMIT 12",(like,)).fetchall()
+    reports=db.q(
+        """SELECT r.id,r.reason,r.details,r.status,u.username
+           FROM reports r LEFT JOIN users u ON u.id=r.reporter_id
+           WHERE r.reason LIKE ? OR r.details LIKE ? OR u.username LIKE ?
+           ORDER BY r.id DESC LIMIT 12""",(like,like,like)
+    ).fetchall()
+    return jsonify({
+        "users":[{"id":x[0],"username":x[1],"name":f"{x[2] or ''} {x[3] or ''}".strip(),"email":x[4],"role":x[5],"is_blocked":int(x[6] or 0)} for x in users],
+        "jobs":[{"id":x[0],"title":x[1],"status":x[2],"username":x[3] or ""} for x in jobs],
+        "services":[{"id":x[0],"name":x[1],"parent_id":x[2]} for x in services],
+        "reports":[{"id":x[0],"reason":x[1],"details":x[2],"status":x[3],"username":x[4] or ""} for x in reports],
+    })
+
+
+@app.route("/admin/user/<int:user_id>/status", methods=["PATCH"])
+@admin_required
+def admin_user_status(user_id):
+    value=(request.json or {}).get("is_blocked")
+    blocked=1 if value is True or str(value).lower() in ("1","true","yes") else 0
+    if user_id==int(request.uid):
+        return jsonify({"msg":"O‘zingizni bloklay olmaysiz."}),400
+    target=db.q("SELECT id,role,COALESCE(is_blocked,0),username FROM users WHERE id=?",(user_id,)).fetchone()
+    if not target:
+        return jsonify({"msg":"Foydalanuvchi topilmadi."}),404
+    if target[1]=="admin" and blocked:
+        return jsonify({"msg":"Administrator hisobini bloklash mumkin emas."}),400
+    db.q("UPDATE users SET is_blocked=?, token_version=COALESCE(token_version,0)+1 WHERE id=?",(blocked,user_id)).close()
+    admin_audit("user_block" if blocked else "user_unblock","user",user_id,f"@{target[3]}")
+    create_notification(user_id,"account_moderation","Hisob holati o‘zgardi",
+                        "Administrator hisobingizni blokladi." if blocked else "Administrator hisobingizni qayta faollashtirdi.","/profile")
+    return jsonify({"msg":"Foydalanuvchi "+("bloklandi." if blocked else "qayta faollashtirildi."),"is_blocked":blocked})
+
+
 # -------- ADMIN --------
 @app.route("/admin/overview")
 @admin_required
 def admin_overview():
     users = db.q(
-        """SELECT id, username, first_name, last_name, email, birthday, bio, skills, role, created_at, average_rating, COALESCE(balance,0)
+        """SELECT id, username, first_name, last_name, email, birthday, bio, skills, role, created_at, average_rating, COALESCE(balance,0), COALESCE(is_blocked,0)
            FROM users ORDER BY id DESC"""
     ).fetchall()
 
@@ -1155,7 +1305,7 @@ def admin_overview():
             "blocked_jobs": sum(1 for j in jobs if str(j[5]).lower() == "blocked"),
             "admins": sum(1 for u in users if str(u[8]).lower() == "admin"),
         },
-        "users": rows(users, ["id", "username", "first_name", "last_name", "email", "birthday", "bio", "skills", "role", "created_at", "average_rating", "balance"]),
+        "users": rows(users, ["id", "username", "first_name", "last_name", "email", "birthday", "bio", "skills", "role", "created_at", "average_rating", "balance", "is_blocked"]),
         "jobs": rows(jobs, ["id", "title", "price", "currency", "location", "status", "created_at", "creator_username", "worker_username"]),
         "services": rows(services, ["id", "name", "parent_id", "parent_name", "created_by"]),
         "ratings": rows(ratings, ["id", "job_id", "score", "comment", "created_at", "from_username", "to_username"]),
@@ -1207,6 +1357,7 @@ def admin_user_role():
         return jsonify({"msg": "Foydalanuvchi topilmadi."}), 404
 
     db.q("UPDATE users SET role=?, token_version=COALESCE(token_version,0)+1 WHERE id=?", (role, user_id)).close()
+    admin_audit("user_role_update","user",user_id,f"role={role}")
     return jsonify({"msg": "Foydalanuvchi roli yangilandi."})
 
 
@@ -1271,6 +1422,7 @@ def admin_update_user(user_id):
             (username, email, first_name, last_name, birthday, bio, skills, user_id)
         ).close()
 
+    admin_audit("user_update","user",user_id,f"@{username}")
     return jsonify({"msg": "Foydalanuvchi ma'lumotlari yangilandi."})
 
 
@@ -1310,6 +1462,7 @@ def admin_delete_user(user_id):
     finally:
         conn.close()
 
+    admin_audit("user_delete","user",user_id,"Admin foydalanuvchini o‘chirdi.")
     return jsonify({"msg": "Foydalanuvchi va unga bog'liq ma'lumotlar o'chirildi."})
 
 
@@ -1367,6 +1520,7 @@ def admin_update_job(job_id):
                 db.q("UPDATE jobs SET status='accepted', finished_at=NULL WHERE id=?", (job_id,)).close()
                 return jsonify({"msg": message}), 400
 
+    admin_audit("job_status_update","job",job_id,f"status={status}")
     return jsonify({"msg": "Ish holati yangilandi."})
 
 
@@ -1395,6 +1549,7 @@ def admin_delete_job(job_id):
     finally:
         conn.close()
 
+    admin_audit("job_delete","job",job_id,"Admin jobni o‘chirdi.")
     return jsonify({"msg": "Ish o‘chirildi."})
 
 
@@ -1434,6 +1589,7 @@ def admin_create_service():
     new_id = result.lastrowid
     result.close()
 
+    admin_audit("service_create","service",new_id,name)
     return jsonify({"msg": "Xizmat qo‘shildi.", "id": new_id}), 201
 
 
@@ -1456,6 +1612,7 @@ def admin_delete_service(service_id):
         return jsonify({"msg": "Bu xizmat mavjud joblarda ishlatilgan, o'chirib bo'lmaydi."}), 409
 
     db.q("DELETE FROM services WHERE id=?", (service_id,)).close()
+    admin_audit("service_delete","service",service_id,"Admin xizmatni o‘chirdi.")
     return jsonify({"msg": "Xizmat o‘chirildi."})
 
 
@@ -1476,6 +1633,7 @@ def admin_delete_rating(rating_id):
         ).fetchone()[0]
         db.q("UPDATE users SET average_rating=? WHERE id=?", (round(float(average), 2), target[0])).close()
 
+    admin_audit("rating_delete","rating",rating_id,"Admin bahoni o‘chirdi.")
     return jsonify({"msg": "Baho o‘chirildi."})
 
 
