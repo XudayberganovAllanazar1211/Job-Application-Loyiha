@@ -483,7 +483,46 @@ export default function Dashboard() {
                                 <div><span>Soha</span><strong>{selectedJob.service_name || serviceMap[String(selectedJob.service_id)] || "Noma’lum"}</strong></div>
                                 <div><span>Yaratilgan</span><strong>{selectedJob.created_at || "—"}</strong></div>
                                 <div><span>Holat</span><strong>{({ active: "Faol", payment_pending: "To‘lov kutilmoqda", accepted: "Qabul qilingan", pending_finish: "Tasdiqlash kutilmoqda", finished: "Yakunlangan" }[String(selectedJob.status || "").toLowerCase()] || selectedJob.status || "—")}</strong></div>
-                                <div><span>Bajaruvchi</span><strong>{selectedJob.worker_id ? (((selectedJob.worker_first || "") + " " + (selectedJob.worker_last || "")).trim() || selectedJob.worker_username) : "Hali qabul qilinmagan"}</strong></div>
+                                <div>
+                                    <span>Yaratuvchi</span>
+                                    <strong>
+                                        {selectedJob.creator_username ? (
+                                            <button
+                                                type="button"
+                                                className="profile-link-button"
+                                                onClick={() => navigate(`/profiles/${selectedJob.creator_username}`)}
+                                            >
+                                                {((selectedJob.creator_first || "") + " " + (selectedJob.creator_last || "")).trim() || selectedJob.creator_username}
+                                            </button>
+                                        ) : "Noma’lum"}
+                                    </strong>
+                                </div>
+                                <div>
+                                    <span>Bajaruvchi</span>
+                                    <strong>
+                                        {selectedJob.worker_id ? (
+                                            <button
+                                                type="button"
+                                                className="profile-link-button"
+                                                onClick={() => selectedJob.worker_username && navigate(`/profiles/${selectedJob.worker_username}`)}
+                                            >
+                                                {((selectedJob.worker_first || "") + " " + (selectedJob.worker_last || "")).trim() || selectedJob.worker_username}
+                                            </button>
+                                        ) : "Hali qabul qilinmagan"}
+                                    </strong>
+                                </div>
+                                {String(selectedJob.status || "").toLowerCase() === "accepted" && (
+                                    <>
+                                        <div>
+                                            <span>Yaratuvchi yakunladi</span>
+                                            <strong>{selectedJob.owner_finished ? "Ha" : "Yo‘q"}</strong>
+                                        </div>
+                                        <div>
+                                            <span>Bajaruvchi yakunladi</span>
+                                            <strong>{selectedJob.worker_finished ? "Ha" : "Yo‘q"}</strong>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </div>
                     ) : (
