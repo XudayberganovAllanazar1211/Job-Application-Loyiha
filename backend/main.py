@@ -1940,6 +1940,48 @@ def profile_avatar(filename):
     return send_from_directory(PROFILE_UPLOAD_DIR, filename)
 
 
+# -------- PUBLIC PROFILES --------
+@app.route("/profiles/<string:username>", methods=["GET"])
+@auth
+def public_profile(username):
+    username = username.strip()
+    if not username:
+        return jsonify({"msg": "Foydalanuvchi nomi kiritilmagan"}), 400
+
+    u = db.q(
+        """SELECT id, username, first_name, last_name, bio, skills, created_at,
+                  average_rating, role, avatar_url
+           FROM users
+           WHERE username=?""",
+        (username,),
+    ).fetchone()
+    if not u:
+        return jsonify({"msg": "Foydalanuvchi topilmadi"}), 404
+
+    created_jobs_count = db.q("SELECT COUNT(*) FROM jobs WHERE user_id=?", (u[0],)).fetchone()[0]
+    completed_jobs_count = db.q(
+        "SELECT COUNT(*) FROM jobs WHERE worker_id=? AND status='finished'", (u[0],)
+    ).fetchone()[0]
+    rating_res = db.q("SELECT AVG(score) FROM ratings WHERE to_user=?", (u[0],)).fetchone()[0]
+    avg_rating = round(float(rating_res), 1) if rating_res is not None else 0.0
+
+    return jsonify({
+        "id": u[0],
+        "username": u[1],
+        "first_name": u[2] or "",
+        "last_name": u[3] or "",
+        "bio": u[4] or "",
+        "skills": u[5] or "",
+        "created_at": u[6] or "",
+        "average_rating": avg_rating,
+        "avg_rating": avg_rating,
+        "role": u[8] or "user",
+        "avatar_url": u[9] or "",
+        "created_jobs_count": created_jobs_count,
+        "completed_jobs_count": completed_jobs_count,
+    })
+
+
 # -------- PROFILE --------
 @app.route("/profile", methods=["GET", "PUT"])
 @auth
