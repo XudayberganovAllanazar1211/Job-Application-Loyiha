@@ -42,16 +42,33 @@ export default function Payments() {
             setLoading(true)
             setError("")
             if (jobId) {
-                const result = await api("/payments/create/" + jobId, {
-                    method: "POST",
-                    token
-                })
-                if (result?.payment_uuid) {
-                    setPayment(result)
-                } else if (result?.msg === "already_paid") {
-                    setPayment({ status: "paid" })
-                } else if (result?.msg) {
-                    setError(result.msg)
+                const access = await api("/payments/job/" + jobId, { token })
+
+                if (access?.ok === false && [403, 404].includes(Number(access.status))) {
+                    navigate("/payments", {
+                        replace: true,
+                        state: { notice: "Bu to‘lov mavjud emas yoki sizga tegishli emas." }
+                    })
+                    return
+                }
+
+                if (access?.payment_uuid) {
+                    setPayment(access)
+                } else if (access?.payment_ready) {
+                    const result = await api("/payments/create/" + jobId, {
+                        method: "POST",
+                        token
+                    })
+
+                    if (result?.payment_uuid) {
+                        setPayment(result)
+                    } else if (result?.msg === "already_paid") {
+                        setPayment({ status: "paid" })
+                    } else {
+                        setError(result?.msg || "To‘lovni yaratib bo‘lmadi.")
+                    }
+                } else if (access?.msg) {
+                    setError(access.msg)
                 }
             }
             await loadHistory()
