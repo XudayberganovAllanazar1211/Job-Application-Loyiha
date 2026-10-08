@@ -55,7 +55,21 @@ export default function Chat() {
     const loadXabarlar = async () => {
         if (document.hidden) return
         const result = await api(`/messages/${jobId}`, { token })
-        if (Array.isArray(result)) setXabarlar(result)
+        if (Array.isArray(result)) {
+            setXabarlar(result)
+            const otherMessage = result.find((message) => String(message.sender_id) !== String(me?.id))
+            if (otherMessage?.sender_avatar_url !== undefined) {
+                setOtherAvatarUrl(otherMessage.sender_avatar_url || "")
+            }
+        }
+    }
+
+    const loadOtherProfile = async (username) => {
+        if (!username) return
+        const profile = await api(`/profiles/${encodeURIComponent(username)}`, { token })
+        if (profile?.id && profile.username === username) {
+            setOtherAvatarUrl(profile.avatar_url || "")
+        }
     }
 
     const loadPresence = async () => {
@@ -90,9 +104,10 @@ export default function Chat() {
                 : ([jobData.creator_first, jobData.creator_last].filter(Boolean).join(" ") || jobData.creator_username)
             const targetUsername = jobData.user_id === me?.id ? jobData.worker_username : jobData.creator_username
             if (targetName) setOtherName(targetName)
-            if (targetUsername) setOtherUsername(targetUsername)
-            const targetAvatar = jobData.user_id === me?.id ? jobData.worker_avatar_url : jobData.creator_avatar_url
-            if (targetAvatar !== undefined) setOtherAvatarUrl(targetAvatar || "")
+            if (targetUsername) {
+                setOtherUsername(targetUsername)
+                await loadOtherProfile(targetUsername)
+            }
             if (targetId && targetId !== "null" && targetId !== "undefined") {
                 setReceiverId(targetId)
             }
@@ -141,7 +156,10 @@ export default function Chat() {
                 : ([currentJob.creator_first, currentJob.creator_last].filter(Boolean).join(" ") || currentJob.creator_username)
             const targetUsername = currentJob.user_id === me?.id ? currentJob.worker_username : currentJob.creator_username
             if (targetName) setOtherName(targetName)
-            if (targetUsername) setOtherUsername(targetUsername)
+            if (targetUsername) {
+                setOtherUsername(targetUsername)
+                loadOtherProfile(targetUsername)
+            }
             if (targetId && targetId !== "null" && targetId !== "undefined") {
                 setReceiverId(targetId)
             }
