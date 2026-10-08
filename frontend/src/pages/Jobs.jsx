@@ -182,9 +182,6 @@ export default function Jobs() {
         const isDetailOpen = isMobile && Boolean(selectedJob?.id)
         if (!isDetailOpen) return undefined
 
-        const previousOverflow = document.body.style.overflow
-        document.body.style.overflow = "hidden"
-
         const handleEscape = (event) => {
             if (event.key === "Escape") {
                 setSelectedJob(null)
@@ -195,7 +192,6 @@ export default function Jobs() {
         document.addEventListener("keydown", handleEscape)
 
         return () => {
-            document.body.style.overflow = previousOverflow
             document.removeEventListener("keydown", handleEscape)
         }
     }, [isMobile, selectedJob?.id])
