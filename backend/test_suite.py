@@ -1213,9 +1213,6 @@ class JobPlatformTestCase(unittest.TestCase):
         self.assertEqual(profile.status_code, 401)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
     def test_12_deep_regression(self):
         def register_user(username, email):
             sent = self.client.post(
@@ -1379,3 +1376,107 @@ if __name__ == "__main__":
         self.assertEqual(self.client.delete(f"/admin/job/{deep_job_id}", headers={"Authorization": f"Bearer {admin_token}"}).status_code, 200)
         self.assertEqual(self.client.delete(f"/admin/job/{chat_job_id}", headers={"Authorization": f"Bearer {admin_token}"}).status_code, 200)
         self.assertEqual(self.client.delete(f"/admin/job/{cleanup_job_id}", headers={"Authorization": f"Bearer {admin_token}"}).status_code, 200)
+
+
+    def test_13_security_and_privacy_regressions(self):
+        admin_token = self.client.post(
+            "/login",
+            json={"username": "tester_creator", "password": "Password123!"}
+        ).get_json()["token"]
+        worker_token = self.client.post(
+            "/login",
+            json={"username": "tester_worker", "password": "Password123!"}
+        ).get_json()["token"]
+        outsider_token = self.client.post(
+            "/login",
+            json={"username": "tester_outsider", "password": "Password123!"}
+        ).get_json()["token"]
+
+        worker_profile = self.client.get(
+            "/profile", headers={"Authorization": f"Bearer {worker_token}"}
+        ).get_json()
+        worker_id = worker_profile["id"]
+
+        public_profile = self.client.get(
+            f"/profiles/{worker_profile['username']}",
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
+        self.assertEqual(public_profile.status_code, 200)
+        self.assertEqual(public_profile.get_json().get("email"), worker_profile["email"])
+
+        outsider_public_profile = self.client.get(
+            f"/profiles/{worker_profile['username']}",
+            headers={"Authorization": f"Bearer {outsider_token}"}
+        )
+        self.assertEqual(outsider_public_profile.status_code, 200)
+        self.assertEqual(outsider_public_profile.get_json().get("email"), "")
+
+        no_shared_presence = self.client.get(
+            f"/presence/{worker_id}",
+            headers={"Authorization": f"Bearer {outsider_token}"}
+        )
+        self.assertEqual(no_shared_presence.status_code, 403)
+
+        active_job = self.client.post(
+            "/job",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={
+                "service_id": 1,
+                "title": "Security Presence Job",
+                "description": "Security regression job",
+                "price": 250000,
+                "location": "Remote",
+            }
+        )
+        self.assertEqual(active_job.status_code, 200)
+        jobs = self.client.get("/jobs", headers={"Authorization": f"Bearer {admin_token}"}).get_json()
+        security_job_id = [item["id"] for item in jobs if item["title"] == "Security Presence Job"][0]
+
+        accepted = self.client.post(
+            "/accept_job",
+            headers={"Authorization": f"Bearer {worker_token}"},
+            json={"job_id": security_job_id},
+        )
+        self.assertEqual(accepted.status_code, 200)
+
+        shared_presence = self.client.get(
+            f"/presence/{worker_id}?job_id={security_job_id}",
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
+        self.assertEqual(shared_presence.status_code, 200)
+
+        chat_forbidden = self.client.get(
+            f"/messages/{security_job_id}",
+            headers={"Authorization": f"Bearer {outsider_token}"}
+        )
+        self.assertEqual(chat_forbidden.status_code, 403)
+
+        payment_forbidden = self.client.get(
+            f"/payments/job/{security_job_id}",
+            headers={"Authorization": f"Bearer {outsider_token}"}
+        )
+        self.assertEqual(payment_forbidden.status_code, 404)
+
+        malformed_profile = self.client.put(
+            "/profile",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"username": {"bad": "type"}, "email": "tester_creator@example.com"},
+        )
+        self.assertEqual(malformed_profile.status_code, 400)
+
+        malformed_rating = self.client.post(
+            "/rating",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"job_id": security_job_id, "to_user": worker_id, "score": 10, "comment": {"bad": "type"}},
+        )
+        self.assertIn(malformed_rating.status_code, (400, 409))
+
+        rate_reverse = self.client.get(
+            "/reverse-geocode?lat=41.3&lon=69.2",
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
+        self.assertIn(rate_reverse.status_code, (200, 404, 502))
+
+
+if __name__ == "__main__":
+    unittest.main()
