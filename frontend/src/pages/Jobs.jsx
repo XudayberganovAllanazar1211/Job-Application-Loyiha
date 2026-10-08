@@ -55,6 +55,7 @@ export default function Jobs() {
     const navigate = useNavigate()
     const serviceSearchRef = useRef(null)
     const filterRef = useRef(null)
+    const detailPanelRef = useRef(null)
 
     const [reportJobId, setReportJobId] = useState(null)
     const [reportReason, setReportReason] = useState("")
@@ -85,7 +86,7 @@ export default function Jobs() {
         [services]
     )
 
-    const load = async (requestedPage = currentPage) => {
+    const loadJobs = async (requestedPage = currentPage) => {
         setLoading(true)
         try {
             const query = new URLSearchParams()
@@ -97,22 +98,19 @@ export default function Jobs() {
             if (maxPrice !== "") query.set("max_price", maxPrice)
             if (timeFilter !== "all") query.set("time_filter", timeFilter)
             if (savedOnly) query.set("saved_only", "1")
-            const selectedIds = services.filter((service) => selectedServices.includes(String(service.name).trim())).map((service) => Number(service.id)).filter((id) => Number.isFinite(id))
+            const selectedIds = services
+                .filter((service) => selectedServices.includes(String(service.name).trim()))
+                .map((service) => Number(service.id))
+                .filter((id) => Number.isFinite(id))
             if (selectedIds.length) query.set("service_ids", [...new Set(selectedIds)].join(","))
-            const [jobResult, serviceResult, profileResult, favoriteResult, savedResult, recentResult] = await Promise.all([
-                api("/jobs?" + query.toString(), { token }),
-                api("/services", { token }),
-                api("/profile", { token }),
-                api("/favorites?target_type=job", { token }),
-                api("/saved-searches", { token }),
-                api("/recently-viewed", { token })
-            ])
+
+            const jobResult = await api("/jobs?" + query.toString(), { token })
             if (jobResult?.items && Array.isArray(jobResult.items)) {
                 setJobs(jobResult.items)
                 setTotalItems(Number(jobResult.pagination?.total || 0))
                 setServerTotalPages(Math.max(1, Number(jobResult.pagination?.total_pages || 1)))
                 const returnedPage = Number(jobResult.pagination?.page || requestedPage)
-                if (returnedPage !== currentPage) setCurrentPage(returnedPage)
+                if (returnedPage !== requestedPage) setCurrentPage(returnedPage)
             } else if (Array.isArray(jobResult)) {
                 setJobs(jobResult)
                 setTotalItems(jobResult.length)
@@ -121,24 +119,51 @@ export default function Jobs() {
                 setNoticeType("warn")
                 setNotice(jobResult.msg)
             }
-            if (Array.isArray(serviceResult)) setServices(serviceResult)
-            if (Array.isArray(favoriteResult)) setFavoriteJobIds(favoriteResult.filter((item) => item.target_type === "job").map((item) => Number(item.target_id)).filter((id) => Number.isFinite(id)))
-            if (Array.isArray(savedResult)) setSavedSearches(savedResult)
-            if (Array.isArray(recentResult)) setRecentlyViewed(recentResult)
-            if (profileResult?.id) {
-                localStorage.setItem("user", JSON.stringify(profileResult))
-                const skills = Array.isArray(profileResult.skills) ? profileResult.skills : typeof profileResult.skills === "string" ? profileResult.skills.split(",") : []
-                setProfileSkills(skills.map((skill) => String(skill).trim()).filter(Boolean))
-            }
         } catch {
             setNoticeType("warn")
-            setNotice("Ma'lumotlarni yuklashda xatolik yuz berdi.")
+            setNotice("Ishlarni yuklashda xatolik yuz berdi.")
         } finally {
             setLoading(false)
         }
     }
+
+    const loadSupportingData = async () => {
+        try {
+            const [serviceResult, profileResult, favoriteResult, savedResult, recentResult] = await Promise.all([
+                api("/services", { token }),
+                api("/profile", { token }),
+                api("/favorites?target_type=job", { token }),
+                api("/saved-searches", { token }),
+                api("/recently-viewed", { token })
+            ])
+            if (Array.isArray(serviceResult)) setServices(serviceResult)
+            if (Array.isArray(favoriteResult)) {
+                setFavoriteJobIds(
+                    favoriteResult
+                        .filter((item) => item.target_type === "job")
+                        .map((item) => Number(item.target_id))
+                        .filter((id) => Number.isFinite(id))
+                )
+            }
+            if (Array.isArray(savedResult)) setSavedSearches(savedResult)
+            if (Array.isArray(recentResult)) setRecentlyViewed(recentResult)
+            if (profileResult?.id) {
+                localStorage.setItem("user", JSON.stringify(profileResult))
+                const skills = Array.isArray(profileResult.skills)
+                    ? profileResult.skills
+                    : typeof profileResult.skills === "string"
+                        ? profileResult.skills.split(",")
+                        : []
+                setProfileSkills(skills.map((skill) => String(skill).trim()).filter(Boolean))
+            }
+        } catch {
+            setNoticeType("warn")
+            setNotice("Profil va qo‘shimcha ma’lumotlarni yuklashda xatolik yuz berdi.")
+        }
+    }
+
     useEffect(() => {
-        load(1)
+        loadSupportingData()
     }, [])
 
     useEffect(() => {
@@ -148,6 +173,36 @@ export default function Jobs() {
         mediaQuery.addEventListener("change", handleChange)
         return () => mediaQuery.removeEventListener("change", handleChange)
     }, [])
+
+    useEffect(() => {
+        const isDetailOpen = isMobile && Boolean(selectedJob?.id)
+        if (!isDetailOpen) return undefined
+
+        const previousOverflow = document.body.style.overflow
+        const previousTouchAction = document.body.style.touchAction
+        document.body.style.overflow = "hidden"
+        document.body.style.touchAction = "none"
+
+        const handleEscape = (event) => {
+            if (event.key === "Escape") {
+                setSelectedJob(null)
+                setJobDetails(null)
+                setProposals([])
+            }
+        }
+        document.addEventListener("keydown", handleEscape)
+
+        return () => {
+            document.body.style.overflow = previousOverflow
+            document.body.style.touchAction = previousTouchAction
+            document.removeEventListener("keydown", handleEscape)
+        }
+    }, [isMobile, selectedJob?.id])
+
+    useEffect(() => {
+        if (!isMobile || !selectedJob?.id || !detailPanelRef.current) return
+        detailPanelRef.current.scrollTop = 0
+    }, [isMobile, selectedJob?.id])
 
     const availableServices = useMemo(() => {
         const leafServices = services
@@ -196,9 +251,12 @@ export default function Jobs() {
 
     useEffect(() => {
         const timer = setTimeout(() => {
-            if (currentPage !== 1) { setCurrentPage(1); return }
-            load(1)
-        }, 300)
+            if (currentPage !== 1) {
+                setCurrentPage(1)
+                return
+            }
+            loadJobs(1)
+        }, 250)
         return () => clearTimeout(timer)
     }, [search, selectedServices, minPrice, maxPrice, timeFilter, locationFilter, savedOnly, pageSize, currentPage])
 
@@ -408,7 +466,7 @@ export default function Jobs() {
                         ? "Siz ishni yakunladingiz. Ikkinchi tomonning ham «Yakunlash» tugmasini bosishini kuting."
                         : (result?.msg || "Xato")
             )
-            await load()
+            await loadJobs(currentPage)
         } finally {
             setActionJobId(null)
         }
@@ -433,7 +491,7 @@ export default function Jobs() {
                         ? "Siz ishni yakunladingiz. Ikkinchi tomonning ham «Yakunlash» tugmasini bosishini kuting."
                         : "Ishni yakunlashda xatolik yuz berdi."
             )
-            await load()
+            await loadJobs(currentPage)
         } finally {
             setActionJobId(null)
         }
@@ -458,7 +516,7 @@ export default function Jobs() {
                 ? "Bajaruvchi bekor qilindi. Ish yana barcha uchun ochiq."
                 : (result?.msg || "Xatolik yuz berdi")
         )
-        load()
+        loadJobs(currentPage)
     }
 
     const submitReport = async (job) => {
@@ -572,7 +630,7 @@ export default function Jobs() {
                 setProposalModalExisting(null)
                 const refreshed = await api(`/jobs/${jobId}/proposals`, { token })
                 setProposals(Array.isArray(refreshed) ? refreshed : [])
-                await load()
+                await loadJobs(currentPage)
             } else {
                 setNoticeType("warn")
                 setNotice(result?.msg || "Taklif yuborilmadi.")
@@ -597,7 +655,7 @@ export default function Jobs() {
             setNotice(result?.msg || "Taklif yangilandi.")
             const refreshed = await api(`/jobs/${proposal.job_id}/proposals`, { token })
             setProposals(Array.isArray(refreshed) ? refreshed : [])
-            await load()
+            await loadJobs(currentPage)
         } else {
             setNoticeType("warn")
             setNotice(result?.msg || "Taklifni yangilab bo‘lmadi.")
@@ -618,7 +676,7 @@ export default function Jobs() {
             setNotice(result?.msg || "Taklif bekor qilindi.")
             const refreshed = await api(`/jobs/${proposal.job_id}/proposals`, { token })
             setProposals(Array.isArray(refreshed) ? refreshed : [])
-            await load()
+            await loadJobs(currentPage)
         } else {
             setNoticeType("warn")
             setNotice(result?.msg || "Taklifni bekor qilib bo‘lmadi.")
@@ -714,7 +772,7 @@ export default function Jobs() {
                                 </div>
                             )}
                         </div>
-                        <button className="btn btn-secondary" onClick={() => load(currentPage)} disabled={loading}>{loading ? "Yangilanmoqda..." : "Yangilash"}</button>
+                        <button className="btn btn-secondary" onClick={() => loadJobs(currentPage)} disabled={loading}>{loading ? "Yangilanmoqda..." : "Yangilash"}</button>
                         <button className="btn btn-primary" onClick={() => navigate("/create")}>Ish yaratish</button>
                     </div>
                 </div>
@@ -792,7 +850,7 @@ export default function Jobs() {
                                         </div>
                                         <span className="jobs-recommendations-count">{recommendationData.recommended.length} ta mos ish</span>
                                     </div>
-                                    <div className="job-grid" style={{ gridTemplateColumns: "1fr" }}>
+                                    <div className="job-grid">
                                         {recommendationData.recommended.map(({ job, matchedSkills }) => (
                                             <article className={`card job-card job-recommended-card ${selectedJob?.id === job.id ? "selected" : ""}`} key={job.id} onClick={() => selectJob(job)} style={{ cursor: "pointer" }}>
                                                 <div className="job-recommended-label">★ Sizga mos</div>
@@ -829,7 +887,7 @@ export default function Jobs() {
                                 <div className="jobs-results-heading">
                                     <div><h2>Barcha ishlar</h2><p>Filtrlaringizga mos barcha ishlar.</p></div>
                                 </div>
-                                <div className="job-grid" style={{ gridTemplateColumns: "1fr" }}>
+                                <div className="job-grid jobs-results-grid">
                                     {pagedRanked.map(({ job }) => (
                                         <article
                                             className={`card job-card ${selectedJob?.id === job.id ? "selected" : ""}`}
@@ -837,12 +895,11 @@ export default function Jobs() {
                                             onClick={() => selectJob(job)}
                                             style={{ cursor: "pointer" }}
                                         >
-                                            <div style={{ display: "flex", gap: 10, alignItems: "flex-start", justifyContent: "space-between" }}>
+                                            <div className="jobs-job-card-head">
                                                 <h3 className="job-title" style={{ margin: 0 }}>{job.title}</h3>
                                                 <button
                                                     type="button"
-                                                    className="btn btn-secondary"
-                                                    style={{ minWidth: 44, padding: "8px 10px" }}
+                                                    className="btn btn-secondary jobs-favorite-button"
                                                     aria-label={favoriteJobIds.includes(Number(job.id)) ? "Saqlangan ishni olib tashlash" : "Ishni saqlash"}
                                                     onClick={(event) => { event.stopPropagation(); toggleFavoriteJob(job.id) }}
                                                 >
@@ -937,7 +994,11 @@ export default function Jobs() {
                     />
                 )}
                 <aside
+                    ref={detailPanelRef}
                     className={"card jobs-detail-panel " + (activeJobDetails ? "has-active-job" : "")}
+                    role={isMobile && activeJobDetails ? "dialog" : undefined}
+                    aria-modal={isMobile && activeJobDetails ? "true" : undefined}
+                    aria-label={isMobile && activeJobDetails ? "Ish tafsilotlari" : undefined}
                 >
                     <div className="dashboard-panel-head jobs-detail-panel-head">
                         <div>
