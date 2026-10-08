@@ -78,8 +78,17 @@ _RATE_LIMIT_RULES = {
     "/forgot-password/reset": (10, 900),
     "/message": (60, 60),
     "/report": (10, 600),
+    "/rating": (20, 600),
+    "/job": (20, 60),
+    "/favorites": (120, 60),
+    "/profile/avatar": (5, 300),
+    "/portfolio/upload": (5, 300),
+    "/proposals/": (60, 60),
+    "/portfolio/": (60, 60),
     "/wallet/withdraw": (10, 600),
+    "/payments/create/": (10, 60),
     "/payments/dummy/": (10, 60),
+    "/reverse-geocode": (20, 60),
 }
 
 
@@ -124,7 +133,12 @@ def _rate_limited(path):
 def apply_rate_limits():
     if request.method == "OPTIONS":
         return None
-    blocked, retry_after = _rate_limited(request.path) if request.method in {"POST", "PATCH"} else (False, 0)
+    if request.method in {"POST", "PATCH", "DELETE"}:
+        blocked, retry_after = _rate_limited(request.path)
+    elif request.method == "GET" and request.path == "/reverse-geocode":
+        blocked, retry_after = _rate_limited(request.path)
+    else:
+        blocked, retry_after = False, 0
     if blocked:
         response = jsonify({"msg": "Juda ko‘p so‘rov yuborildi. Birozdan keyin qayta urinib ko‘ring."})
         response.status_code = 429
@@ -454,8 +468,14 @@ class DB:
                 value TEXT NOT NULL
             )
         """)
+        try:
+            initial_commission = float(os.environ.get("FINJOB_COMMISSION_PERCENT", "10"))
+        except (TypeError, ValueError):
+            initial_commission = 10.0
+        initial_commission = max(0.0, min(100.0, initial_commission))
         cursor.execute(
-            "INSERT OR IGNORE INTO platform_settings(key,value) VALUES('commission_percent','10')"
+            "INSERT OR IGNORE INTO platform_settings(key,value) VALUES('commission_percent',?)",
+            (str(round(initial_commission, 2)),)
         )
         cursor.execute("INSERT OR IGNORE INTO platform_wallet(id,balance,escrow_balance) VALUES(1,0,0)")
 
@@ -1904,6 +1924,28 @@ def admin_delete_user(user_id):
     if held_payment:
         return jsonify({"msg": "Bu foydalanuvchiga tegishli waiting to‘lovi mavjud. Avval ishni refund yoki yakunlash orqali hal qiling."}), 409
 
+    profile_files_to_remove = []
+    profile_row = db.q("SELECT avatar_url FROM users WHERE id=?", (user_id,)).fetchone()
+    if profile_row and profile_row[0]:
+        profile_files_to_remove.append(profile_row[0])
+
+    for row in db.q(
+        "SELECT file_url,image_url FROM portfolio_items WHERE user_id=?",
+        (user_id,),
+    ).fetchall():
+        profile_files_to_remove.extend([row[0], row[1]])
+
+    for row in db.q(
+        """SELECT m.attachment_url
+           FROM messages m
+           LEFT JOIN jobs j ON j.id=m.job_id
+           WHERE (m.sender_id=? OR m.receiver_id=? OR j.user_id=? OR j.worker_id=?)
+             AND m.attachment_url!=''""",
+        (user_id, user_id, user_id, user_id),
+    ).fetchall():
+        if row[0]:
+            profile_files_to_remove.append(row[0])
+
     conn = db.get_connection()
     try:
         cur = conn.cursor()
@@ -1927,6 +1969,11 @@ def admin_delete_user(user_id):
         raise
     finally:
         conn.close()
+
+    for stored_url in set(profile_files_to_remove):
+        _remove_stored_upload(stored_url, "/uploads/profile_pictures/", PROFILE_UPLOAD_DIR)
+        _remove_stored_upload(stored_url, "/uploads/portfolio/", PORTFOLIO_UPLOAD_DIR)
+        _remove_stored_upload(stored_url, "/uploads/chat/", CHAT_UPLOAD_DIR)
 
     admin_audit("user_delete","user",user_id,"Admin foydalanuvchini o‘chirdi.")
     return jsonify({"msg": "Foydalanuvchi va unga bog'liq ma'lumotlar o'chirildi."})
@@ -2001,6 +2048,11 @@ def admin_delete_job(job_id):
     if held_payment:
         return jsonify({"msg": "Bu ishda waiting to‘lovi bor. Avval refund qiling yoki shikoyatni admin orqali hal qiling."}), 409
 
+    attachment_urls_to_remove = [
+        row[0]
+        for row in db.q("SELECT attachment_url FROM messages WHERE job_id=? AND attachment_url!=''", (job_id,)).fetchall()
+        if row[0]
+    ]
     conn = db.get_connection()
     try:
         cur = conn.cursor()
@@ -2018,6 +2070,9 @@ def admin_delete_job(job_id):
         raise
     finally:
         conn.close()
+
+    for attachment_url in attachment_urls_to_remove:
+        _remove_stored_upload(attachment_url, "/uploads/chat/", CHAT_UPLOAD_DIR)
 
     admin_audit("job_delete","job",job_id,"Admin jobni o‘chirdi.")
     return jsonify({"msg": "Ish o‘chirildi."})
@@ -2310,7 +2365,7 @@ def verify_code():
     if not d or "email" not in d or "code" not in d:
         return jsonify({"msg": "Elektron pochta va tasdiqlash kodi talab qilinadi"}), 400
 
-    email = d["email"].strip().lower()
+    email = str(d["email"]).strip().lower()
     code = str(d["code"]).strip()
 
     if email not in pending_verifications:
@@ -3132,9 +3187,18 @@ def cancel_worker():
         (job_id,),
     ).fetchone()
 
+    attachment_urls_to_remove = []
     conn = db.get_connection()
     cursor = conn.cursor()
     try:
+        attachment_urls_to_remove = [
+            row[0]
+            for row in cursor.execute(
+                "SELECT attachment_url FROM messages WHERE job_id=? AND attachment_url!=''",
+                (job_id,),
+            ).fetchall()
+            if row[0]
+        ]
         cursor.execute(
             "UPDATE jobs SET worker_id=NULL, status='active', finished_at=NULL, owner_finished=0, worker_finished=0 WHERE id=? AND user_id=? AND status IN ('payment_pending','accepted')",
             (job_id, request.uid),
@@ -3152,6 +3216,9 @@ def cancel_worker():
         return jsonify({"msg": "Bajaruvchini bekor qilishda xatolik yuz berdi"}), 500
     finally:
         conn.close()
+
+    for attachment_url in attachment_urls_to_remove:
+        _remove_stored_upload(attachment_url, "/uploads/chat/", CHAT_UPLOAD_DIR)
 
     if held_payment:
         create_notification(
@@ -3735,6 +3802,17 @@ def update_presence():
 @app.route("/presence/<int:user_id>")
 @auth
 def get_presence(user_id):
+    if user_id != request.uid:
+        raw_job_id = request.args.get("job_id")
+        try:
+            presence_job_id = int(raw_job_id)
+        except (TypeError, ValueError):
+            return jsonify({"msg":"Presence ma’lumotini olish uchun chat identifikatori talab qilinadi"}),403
+
+        chat_job = _chat_participant(presence_job_id, request.uid)
+        if not chat_job or user_id not in chat_job:
+            return jsonify({"msg":"Presence ma’lumotiga ruxsat berilmadi"}),403
+
     row = db.q("SELECT last_seen_at FROM users WHERE id=?", (user_id,)).fetchone()
     if not row:
         return jsonify({"msg":"Foydalanuvchi topilmadi"}),404
@@ -3794,7 +3872,7 @@ def add_rating():
     job_id = d.get("job_id")
     to_user = d.get("to_user")
     score = d.get("score")
-    comment = d.get("comment", "").strip()
+    comment = str(d.get("comment", "")).strip()
 
     if not job_id or to_user is None or score is None:
         return jsonify({"msg": "Ish identifikatori, baho beriladigan foydalanuvchi va ball kiritilishi shart"}), 400
@@ -3808,6 +3886,8 @@ def add_rating():
 
     if score < 1 or score > 10:
         return jsonify({"msg": "Baho 1 dan 10 gacha bo'lishi kerak"}), 400
+    if len(comment) > 2000:
+        return jsonify({"msg": "Izoh 2000 belgidan oshmasligi kerak"}), 400
 
     if request.uid == to_user:
         return jsonify({"msg": "O'zingizga baho bera olmaysiz!"}), 400
@@ -3885,6 +3965,26 @@ PROFILE_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "u
 os.makedirs(PROFILE_UPLOAD_DIR, exist_ok=True)
 ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 MAX_PROFILE_IMAGE_SIZE = 5 * 1024 * 1024
+
+
+def _remove_stored_upload(url, prefix, base_dir):
+    if not url or not isinstance(url, str) or not url.startswith(prefix):
+        return
+    relative = url[len(prefix):].lstrip("/")
+    if not relative or "/" in relative or "\\" in relative:
+        return
+    root = os.path.abspath(base_dir)
+    path = os.path.abspath(os.path.join(root, relative))
+    try:
+        if os.path.commonpath([root, path]) != root:
+            return
+    except ValueError:
+        return
+    if os.path.isfile(path):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
 
 
 @app.route("/profile/avatar", methods=["POST"])
@@ -3979,11 +4079,14 @@ def public_profile(username):
         (u[0],),
     ).fetchall()
 
+    visible_email = u[4] or "" if (u[0] == request.uid or getattr(request, "user_role", "user") == "admin") else ""
+
     return jsonify({
         "id": u[0],
         "username": u[1],
         "first_name": u[2] or "",
         "last_name": u[3] or "",
+        "email": visible_email,
         "bio": u[6] or "",
         "skills": u[7] or "",
         "created_at": u[8] or "",
@@ -4058,8 +4161,8 @@ def profile():
 
     elif request.method == "PUT":
         d = request.json or {}
-        username = d.get("username", "").strip()
-        email = d.get("email", "").strip().lower()
+        username = str(d.get("username", "")).strip()
+        email = str(d.get("email", "")).strip().lower()
 
         if not username or not email:
             return jsonify({"msg": "Foydalanuvchi nomi va elektron pochta kiritilishi shart"}), 400
@@ -4089,13 +4192,13 @@ def profile():
                SET first_name=?, last_name=?, birthday=?, username=?, email=?, bio=?, skills=? 
                WHERE id=?""",
             (
-                d.get("first_name", "").strip(),
-                d.get("last_name", "").strip(),
-                d.get("birthday", "").strip(),
+                first_name,
+                last_name,
+                birthday,
                 username,
                 email,
-                d.get("bio", "").strip(),
-                d.get("skills", "").strip(),
+                bio,
+                skills,
                 request.uid,
             ),
         )
