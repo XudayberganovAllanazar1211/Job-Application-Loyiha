@@ -1006,7 +1006,7 @@ class JobPlatformTestCase(unittest.TestCase):
             headers={"Authorization": f"Bearer {worker_token}"}
         ).get_json()["id"]
         seen = self.client.get(
-            f"/presence/{worker_id}",
+            f"/presence/{worker_id}?job_id={job_id}",
             headers={"Authorization": f"Bearer {owner_token}"}
         )
         self.assertEqual(seen.status_code, 200)
