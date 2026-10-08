@@ -4216,22 +4216,25 @@ def profile():
         if exists_e:
             return jsonify({"msg": "Ushbu elektron pochta allaqachon ro‘yxatdan o‘tgan!"}), 400
 
-        result = db.q(
-            """UPDATE users 
-               SET first_name=?, last_name=?, birthday=?, username=?, email=?, bio=?, skills=? 
-               WHERE id=?""",
-            (
-                first_name,
-                last_name,
-                birthday,
-                username,
-                email,
-                bio,
-                skills,
-                request.uid,
-            ),
-        )
-        result.close()
+        try:
+            result = db.q(
+                """UPDATE users
+                   SET first_name=?, last_name=?, birthday=?, username=?, email=?, bio=?, skills=?
+                   WHERE id=?""",
+                (
+                    first_name,
+                    last_name,
+                    birthday,
+                    username,
+                    email,
+                    bio,
+                    skills,
+                    request.uid,
+                ),
+            )
+            result.close()
+        except sqlite3.IntegrityError:
+            return jsonify({"msg": "Foydalanuvchi nomi yoki elektron pochta boshqa hisobda band"}), 409
 
         return jsonify({"msg": "ok"})
 
