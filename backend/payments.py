@@ -168,7 +168,7 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
         return jsonify({"msg": "To‘lov topilmadi"}), 404
 
 
-@app.route("/payments/create/<int:job_id>", methods=["POST"])
+    @app.route("/payments/create/<int:job_id>", methods=["POST"])
     @auth
     def create_payment(job_id):
         job = db.q(
