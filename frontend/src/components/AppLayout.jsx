@@ -21,19 +21,38 @@ export default function AppLayout({ title, subtitle, children }) {
     const [showMobileMenu, setShowMobileMenu] = useState(false)
     const notificationRef = useRef(null)
     const token = localStorage.getItem("token") || ""
-    const user = JSON.parse(localStorage.getItem("user") || "null")
+    const [user, setUser] = useState(() => JSON.parse(localStorage.getItem("user") || "null"))
     const isAdmin = user?.role === "admin"
     const mobileNavItems = [navItems[0], navItems[2], navItems[1], navItems[3]]
     const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(" ") || user?.username || "Mehmon"
     const initials = fullName.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()
     const avatarSrc = user?.avatar_url
-        ? (import.meta.env.VITE_API_URL || "http://localhost:5000") + user.avatar_url
+        ? (user.avatar_url.startsWith("http://") || user.avatar_url.startsWith("https://")
+            ? user.avatar_url
+            : (import.meta.env.VITE_API_URL || "http://localhost:5000") + user.avatar_url)
         : ""
 
     useEffect(() => {
         document.documentElement.dataset.theme = theme
         localStorage.setItem("finjob-theme", theme)
     }, [theme])
+
+    useEffect(() => {
+        let alive = true
+        const loadCurrentProfile = async () => {
+            if (!token) return
+            const profile = await api("/profile", { token })
+            if (alive && profile?.id) {
+                setUser(profile)
+                localStorage.setItem("user", JSON.stringify(profile))
+                localStorage.setItem("foydalanuvchi", JSON.stringify(profile))
+            }
+        }
+        loadCurrentProfile()
+        return () => {
+            alive = false
+        }
+    }, [token])
 
     useEffect(() => {
         let alive = true
