@@ -258,6 +258,17 @@ export default function Chat() {
                     <div className="section-toolbar" style={{ marginBottom: 0 }}>
                         <div className="page-head">
                             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                {otherAvatarUrl ? (
+                                    <img
+                                        className="chat-header-avatar"
+                                        src={getAvatarSrc(otherAvatarUrl, API_BASE)}
+                                        alt={otherName}
+                                    />
+                                ) : (
+                                    <div className="chat-header-avatar chat-header-avatar-fallback">
+                                        {getInitials(otherName)}
+                                    </div>
+                                )}
                                 <span className="profile-online-dot" style={{ opacity: otherOnline || otherTyping ? 1 : 0.35 }} />
                                 <div>
                                     <button
