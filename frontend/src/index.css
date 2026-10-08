@@ -2499,13 +2499,14 @@ html[data-theme="dark"] .jobs-checkbox-row{
     }
     .notification-panel{
         position:fixed;
-        left:8px;
-        right:8px;
+        left:50%;
+        right:auto;
         top:78px;
         bottom:auto;
-        width:auto;
+        width:min(340px,calc(100vw - 28px));
         max-width:none;
-        max-height:min(68dvh,520px);
+        max-height:min(62dvh,460px);
+        transform:translateX(-50%);
         border-radius:18px;
         z-index:2000;
         display:flex;
@@ -2538,10 +2539,12 @@ html[data-theme="dark"] .jobs-checkbox-row{
 }
 @media(max-width:480px){
     .notification-panel{
-        left:6px;
-        right:6px;
-        top:74px;
-        max-height:min(72dvh,540px);
+        left:50%;
+        right:auto;
+        top:72px;
+        width:min(340px,calc(100vw - 24px));
+        max-height:min(64dvh,440px);
+        transform:translateX(-50%);
         border-radius:16px;
     }
     .notification-item{
