@@ -953,8 +953,8 @@ export default function Jobs() {
                         <div className="dashboard-job-detail-body">
                             <div>
                                 <span className="helper">ISH NOMI</span>
-                                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-                                    <h2 className="dashboard-job-detail-title" style={{ marginBottom: 0 }}>{activeJobDetails.title}</h2>
+                                <div className="jobs-detail-title-row">
+                                    <h2 className="dashboard-job-detail-title">{activeJobDetails.title}</h2>
                                     <button
                                         type="button"
                                         className="btn btn-secondary"
@@ -1015,7 +1015,7 @@ export default function Jobs() {
                                         <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
                                             {proposals.map((proposal) => (
                                                 <div key={proposal.id} className="card" style={{ margin: 0, padding: 14, border: "1px solid var(--border, #e5e7eb)" }}>
-                                                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+                                                    <div className="jobs-proposal-head">
                                                         <div>
                                                             <strong>{(`${proposal.first_name || ""} ${proposal.last_name || ""}`).trim() || proposal.username}</strong>
                                                             <div className="muted">@{proposal.username} · {Number(proposal.average_rating || 0).toFixed(1)} ★</div>
