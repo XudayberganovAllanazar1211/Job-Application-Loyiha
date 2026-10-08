@@ -241,7 +241,7 @@ export default function Register() {
 
                             <div style={{ textAlign: "center", marginTop: 16 }}>
                                 <div className="muted" style={{ fontSize: 13, marginBottom: 4 }}>Google account bilan</div>
-                                <GoogleAuthButton onSuccess={handleGoogleSuccess} disabled={loading || !acceptedPolicies} />
+                                <GoogleAuthButton onSuccess={handleGoogleSuccess} disabled={loading} />
                                 <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
                                     Google orqali kirilganda email tasdiqlash kodi talab qilinmaydi.
                                 </div>
