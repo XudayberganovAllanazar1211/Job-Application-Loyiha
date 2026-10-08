@@ -1558,5 +1558,98 @@ class JobPlatformTestCase(unittest.TestCase):
         main.db.q("DELETE FROM jobs WHERE id=?", (job_id,)).close()
 
 
+    def test_99_server_search_saved_and_recent(self):
+        login = self.client.post(
+            "/login",
+            json={"username": "tester_creator", "password": "Password123!"}
+        )
+        self.assertEqual(login.status_code, 200)
+        token = login.get_json()["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        created = self.client.post(
+            "/job",
+            headers=headers,
+            json={
+                "service_id": 1,
+                "title": "Server Search Unique",
+                "description": "Backend search pagination regression",
+                "price": 123000,
+                "location": "Tashkent, Yunusobod"
+            }
+        )
+        self.assertEqual(created.status_code, 200)
+
+        search = self.client.get(
+            "/jobs?page=1&page_size=1&search=Server%20Search",
+            headers=headers
+        )
+        self.assertEqual(search.status_code, 200)
+        search_data = search.get_json()
+        self.assertEqual(search_data["pagination"]["total"], 1)
+        self.assertEqual(len(search_data["items"]), 1)
+        self.assertEqual(search_data["items"][0]["title"], "Server Search Unique")
+
+        price_filtered = self.client.get(
+            "/jobs?page=1&page_size=10&min_price=200000",
+            headers=headers
+        )
+        self.assertEqual(price_filtered.status_code, 200)
+        self.assertFalse(any(item["title"] == "Server Search Unique" for item in price_filtered.get_json()["items"]))
+
+        job_id = search_data["items"][0]["id"]
+        favorite = self.client.post(
+            "/favorites",
+            headers=headers,
+            json={"target_type": "job", "target_id": job_id}
+        )
+        self.assertEqual(favorite.status_code, 200)
+
+        saved_only = self.client.get(
+            "/jobs?page=1&page_size=10&saved_only=1",
+            headers=headers
+        )
+        self.assertEqual(saved_only.status_code, 200)
+        self.assertTrue(any(item["id"] == job_id for item in saved_only.get_json()["items"]))
+
+        saved = self.client.post(
+            "/saved-searches",
+            headers=headers,
+            json={
+                "name": "Backend jobs",
+                "filters": {
+                    "search": "Server Search",
+                    "min_price": "100000",
+                    "max_price": "200000",
+                    "time_filter": "month",
+                    "location": "Tashkent",
+                    "service_ids": [1]
+                }
+            }
+        )
+        self.assertEqual(saved.status_code, 201)
+        saved_id = saved.get_json()["id"]
+
+        saved_list = self.client.get("/saved-searches", headers=headers)
+        self.assertEqual(saved_list.status_code, 200)
+        self.assertTrue(any(item["id"] == saved_id and item["filters"]["search"] == "Server Search" for item in saved_list.get_json()))
+
+        recent = self.client.post(
+            f"/recently-viewed/{job_id}",
+            headers=headers
+        )
+        self.assertEqual(recent.status_code, 200)
+
+        recent_list = self.client.get("/recently-viewed", headers=headers)
+        self.assertEqual(recent_list.status_code, 200)
+        self.assertTrue(any(item["job_id"] == job_id for item in recent_list.get_json()))
+
+        deleted = self.client.delete(
+            f"/saved-searches/{saved_id}",
+            headers=headers
+        )
+        self.assertEqual(deleted.status_code, 200)
+
+
 if __name__ == "__main__":
     unittest.main()
