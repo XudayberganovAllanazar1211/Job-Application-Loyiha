@@ -137,7 +137,7 @@ export default function Jobs() {
         }
     }
     useEffect(() => {
-        load()
+        load(1)
     }, [])
 
     const availableServices = useMemo(() => {
@@ -191,7 +191,7 @@ export default function Jobs() {
             load(1)
         }, 300)
         return () => clearTimeout(timer)
-    }, [search, selectedServices, minPrice, maxPrice, timeFilter, locationFilter, savedOnly, pageSize])
+    }, [search, selectedServices, minPrice, maxPrice, timeFilter, locationFilter, savedOnly, pageSize, currentPage])
 
     useEffect(() => {
         if (currentPage > totalPages) setCurrentPage(totalPages)
@@ -730,7 +730,27 @@ export default function Jobs() {
                         <button type="button" className="btn btn-secondary" onClick={saveCurrentSearch}>Qidiruvni saqlash</button>
                         {selectedSavedSearch && <button type="button" className="btn btn-secondary" onClick={() => removeSavedSearch(selectedSavedSearch)}>O‘chirish</button>}
                     </div>
-                </div>}
+                </div>
+                {recentlyViewed.length > 0 && (
+                    <div className="jobs-recently-viewed">
+                        <div>
+                            <span className="helper">Yaqinda ko‘rilganlar</span>
+                            <p className="muted">Oxirgi ko‘rgan ishlaringizga tez qayting.</p>
+                        </div>
+                        <div className="jobs-recent-list">
+                            {recentlyViewed.slice(0, 6).map((item) => (
+                                <button key={item.job_id} type="button" className="jobs-recent-item" onClick={() => {
+                                    const found = jobs.find((job) => Number(job.id) === Number(item.job_id))
+                                    if (found) selectJob(found)
+                                    else navigate("/jobs")
+                                }}>
+                                    <strong>{item.title || "Ish"}</strong>
+                                    <span>{item.location || "Joylashuv ko‘rsatilmagan"}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div
