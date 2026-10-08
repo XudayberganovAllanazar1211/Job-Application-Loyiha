@@ -3363,7 +3363,8 @@ def get_messages(job_id):
     items = db.q(
         """SELECT m.id,m.sender_id,m.receiver_id,m.job_id,m.message,m.sent_at,m.read_at,
                   m.attachment_url,m.attachment_name,m.attachment_type,
-                  CASE WHEN m.sender_id=u.id THEN TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')) ELSE '' END AS sender_name
+                  CASE WHEN m.sender_id=u.id THEN TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')) ELSE '' END AS sender_name,
+                  COALESCE(u.avatar_url,'') AS sender_avatar_url
            FROM messages m
            LEFT JOIN users u ON u.id=m.sender_id
            WHERE m.job_id=? ORDER BY m.id ASC LIMIT 500""",
@@ -3375,7 +3376,7 @@ def get_messages(job_id):
             "id": x[0], "sender_id": x[1], "receiver_id": x[2], "job_id": x[3],
             "message": x[4] or "", "sent_at": x[5] or "", "read_at": x[6],
             "attachment_url": x[7] or "", "attachment_name": x[8] or "", "attachment_type": x[9] or "",
-            "sender_name": x[10] or ""
+            "sender_name": x[10] or "", "sender_avatar_url": x[11] or ""
         }
         for x in items
     ])
