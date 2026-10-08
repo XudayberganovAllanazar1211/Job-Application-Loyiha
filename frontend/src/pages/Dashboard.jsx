@@ -54,6 +54,7 @@ export default function Dashboard() {
     const token = localStorage.getItem("token") || ""
     const user = JSON.parse(localStorage.getItem("user") || localStorage.getItem("foydalanuvchi") || "null")
     const navigate = useNavigate()
+    const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/$/, "")
 
 
     const serviceMap = useMemo(
@@ -86,6 +87,22 @@ export default function Dashboard() {
 
         if (profileResult?.id) {
             localStorage.setItem("foydalanuvchi", JSON.stringify(profileResult))
+        }
+    }
+
+    const openChatAttachment = async (url) => {
+        try {
+            const response = await fetch(API_BASE + url, {
+                headers: { Authorization: `Bearer ${token}` }
+            })
+            if (!response.ok) throw new Error("Faylni ochib bo‘lmadi")
+            const blob = await response.blob()
+            const objectUrl = URL.createObjectURL(blob)
+            window.open(objectUrl, "_blank", "noopener,noreferrer")
+            setTimeout(() => URL.revokeObjectURL(objectUrl), 60000)
+        } catch (error) {
+            setNoticeType("warn")
+            setNotice(error.message || "Faylni ochib bo‘lmadi")
         }
     }
 
@@ -643,7 +660,17 @@ export default function Dashboard() {
                                     return (
                                         <div className={`message ${mine ? "me" : "them"}`} key={index}>
                                             <div className="message-meta">{mine ? "Siz" : (message.sender_name || "Foydalanuvchi")} • {message.sent_at}</div>
-                                            <div>{message.message}</div>
+                                            {message.message && <div>{message.message}</div>}
+                                            {message.attachment_url && (
+                                                <DashboardChatAttachment
+                                                    url={message.attachment_url}
+                                                    name={message.attachment_name || "Fayl"}
+                                                    type={message.attachment_type || ""}
+                                                    apiBase={API_BASE}
+                                                    token={token}
+                                                    onOpen={openChatAttachment}
+                                                />
+                                            )}
                                         </div>
                                     )
                                 })}
@@ -707,5 +734,85 @@ export default function Dashboard() {
             </div>
         )}
         </AppLayout>
+    )
+function DashboardChatAttachment({ url, name, type, apiBase, token, onOpen }) {
+    const [src, setSrc] = useState("")
+    const [error, setError] = useState(false)
+    const isImage = type === "image"
+
+    useEffect(() => {
+        if (!isImage) return undefined
+        let objectUrl = ""
+        let cancelled = false
+
+        const load = async () => {
+            try {
+                const response = await fetch(apiBase + url, {
+                    headers: { Authorization: `Bearer ${token}` }
+                })
+                if (!response.ok) throw new Error("Rasmni yuklab bo‘lmadi")
+                const blob = await response.blob()
+                if (cancelled) return
+                objectUrl = URL.createObjectURL(blob)
+                setSrc(objectUrl)
+            } catch {
+                if (!cancelled) setError(true)
+            }
+        }
+
+        load()
+        return () => {
+            cancelled = true
+            if (objectUrl) URL.revokeObjectURL(objectUrl)
+        }
+    }, [apiBase, token, url, isImage])
+
+    if (isImage && src && !error) {
+        return (
+            <button
+                type="button"
+                onClick={() => onOpen(url)}
+                style={{
+                    display: "block",
+                    padding: 0,
+                    marginTop: 8,
+                    border: 0,
+                    background: "transparent",
+                    cursor: "pointer",
+                    maxWidth: "min(420px, 100%)",
+                    borderRadius: 12,
+                    overflow: "hidden"
+                }}
+                aria-label={`Rasmni kattalashtirish: ${name}`}
+            >
+                <img
+                    src={src}
+                    alt={name}
+                    style={{
+                        display: "block",
+                        width: "100%",
+                        maxWidth: 420,
+                        maxHeight: 300,
+                        objectFit: "contain",
+                        borderRadius: 12
+                    }}
+                />
+            </button>
+        )
+    }
+
+    if (isImage && !error && !src) {
+        return <div className="notice" style={{ display: "inline-block", marginTop: 8 }}>Rasm yuklanmoqda...</div>
+    }
+
+    return (
+        <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ marginTop: 8 }}
+            onClick={() => onOpen(url)}
+        >
+            {isImage ? `Rasmni ochish: ${name}` : `Fayl: ${name}`}
+        </button>
     )
 }
