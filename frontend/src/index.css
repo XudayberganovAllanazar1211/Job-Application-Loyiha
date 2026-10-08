@@ -521,6 +521,10 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 @media(max-width:520px){.jobs-toolbar>.btn{flex:initial;width:100%}}
 
 
+.jobs-controls-card{position:relative!important;z-index:60!important;overflow:visible!important}
+.jobs-controls-card .jobs-toolbar{position:relative;z-index:61}
+.jobs-controls-card .jobs-service-search,
+.jobs-controls-card .jobs-filter-wrap{z-index:62}
 .jobs-filter-wrap{position:relative}
 .jobs-filter-panel{position:absolute;z-index:35;right:0;top:calc(100% + 8px);width:min(430px,calc(100vw - 32px));padding:16px;background:#fff;border:1px solid #e2e8f0;border-radius:16px;box-shadow:0 20px 45px rgba(15,23,42,.14)}
 .jobs-filter-title{margin-bottom:12px;font:800 14px Manrope,sans-serif;color:#172033}
