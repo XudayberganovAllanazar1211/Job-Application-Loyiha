@@ -2056,6 +2056,22 @@ html[data-theme="dark"] .appeals-hero p{color:#cbd5e1}
     background: rgba(127, 127, 127, 0.10);
     white-space: nowrap;
 }
+.dashboard-chat-message-row{
+    display:flex;
+    align-items:flex-end;
+    justify-content:flex-start;
+    gap:8px;
+    margin-bottom:8px;
+}
+.dashboard-chat-message-row.mine{
+    justify-content:flex-end;
+}
+.dashboard-chat-message-row.theirs{
+    justify-content:flex-start;
+}
+.dashboard-chat-message-row .message{
+    min-width:0;
+}
 .chat-message-row {
     display: flex;
     align-items: flex-end;
