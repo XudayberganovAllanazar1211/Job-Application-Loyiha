@@ -55,6 +55,13 @@ export default function Chat() {
     const loadXabarlar = async () => {
         if (document.hidden) return
         const result = await api(`/messages/${jobId}`, { token })
+        if (result?.ok === false && Number(result.status) === 403) {
+            navigate("/conversations", {
+                replace: true,
+                state: { notice: "Bu suhbat mavjud emas yoki siz uning ishtirokchisi emassiz." }
+            })
+            return
+        }
         if (Array.isArray(result)) {
             setXabarlar(result)
             const otherMessage = result.find((message) => String(message.sender_id) !== String(me?.id))
@@ -96,6 +103,13 @@ export default function Chat() {
 
     const loadJob = async () => {
         const jobData = await api(`/jobs/${jobId}`, { token })
+        if (jobData?.ok === false && Number(jobData.status) === 404) {
+            navigate("/conversations", {
+                replace: true,
+                state: { notice: "Bu ish yoki suhbat topilmadi." }
+            })
+            return
+        }
         if (jobData?.id) {
             setJob(jobData)
             const targetId = String(jobData.user_id === me?.id ? jobData.worker_id : jobData.user_id)
