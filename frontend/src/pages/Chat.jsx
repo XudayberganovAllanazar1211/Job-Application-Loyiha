@@ -27,6 +27,9 @@ export default function Chat() {
     const [reportingMessageId, setReportingMessageId] = useState(null)
     const fileInputRef = useRef(null)
     const bottomRef = useRef(null)
+    const messageListRef = useRef(null)
+    const shouldStickToBottomRef = useRef(true)
+    const initialMessagesLoadedRef = useRef(false)
     const typingTimerRef = useRef(null)
     const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/$/, "")
 
@@ -181,8 +184,23 @@ export default function Chat() {
     }, [location.state])
 
     useEffect(() => {
-        bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+        if (!messages.length) return
+
+        if (!initialMessagesLoadedRef.current) {
+            initialMessagesLoadedRef.current = true
+            shouldStickToBottomRef.current = true
+        }
+
+        if (shouldStickToBottomRef.current) {
+            bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+        }
     }, [messages])
+
+    const handleMessageListScroll = (event) => {
+        const element = event.currentTarget
+        const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight
+        shouldStickToBottomRef.current = distanceFromBottom <= 80
+    }
 
     const openAttachment = async (url) => {
         try {
@@ -335,7 +353,12 @@ export default function Chat() {
                         </div>
                     </div>
 
-                    <div className="message-list" style={{ minHeight: "400px" }}>
+                    <div
+                        ref={messageListRef}
+                        className="message-list"
+                        style={{ minHeight: "400px" }}
+                        onScroll={handleMessageListScroll}
+                    >
                         {messages.map((message, index) => {
                             const myName = `${me?.first_name || ""} ${me?.last_name || ""}`.trim() || me?.username
                             const mine = message.sender_name === myName || String(message.sender_id) === String(me?.id)
