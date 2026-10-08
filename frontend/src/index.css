@@ -2638,3 +2638,105 @@ html[data-theme="dark"] .jobs-checkbox-row{
         overflow-x:hidden;
     }
 }
+
+
+/* Mobile Jobs detail: foreground modal with backdrop */
+.jobs-detail-loading-note{
+    display:inline-flex;
+    align-items:center;
+    margin:0 0 10px;
+    padding:6px 10px;
+    border-radius:999px;
+    background:#eff6ff;
+    border:1px solid #dbeafe;
+    color:#2563eb;
+    font-size:10px;
+    font-weight:800;
+}
+.jobs-detail-backdrop{
+    display:none;
+}
+@media(max-width:760px){
+    .jobs-detail-backdrop{
+        display:block;
+        position:fixed;
+        inset:0;
+        z-index:1990;
+        background:rgba(15,23,42,.58);
+        backdrop-filter:blur(2px);
+        -webkit-backdrop-filter:blur(2px);
+    }
+    .jobs-detail-panel.has-active-job{
+        display:flex!important;
+        position:fixed!important;
+        left:8px!important;
+        right:8px!important;
+        top:72px!important;
+        bottom:10px!important;
+        width:auto!important;
+        max-height:none!important;
+        height:auto!important;
+        margin:0!important;
+        z-index:2000!important;
+        overflow:hidden!important;
+        flex-direction:column;
+        border-radius:20px!important;
+        box-shadow:0 28px 80px rgba(15,23,42,.34);
+    }
+    .jobs-detail-panel.has-active-job .jobs-detail-panel-head{
+        position:sticky;
+        top:0;
+        z-index:2;
+        flex:0 0 auto;
+        padding-bottom:12px;
+        background:var(--card,#fff);
+    }
+    .jobs-detail-panel.has-active-job .dashboard-job-detail-body{
+        min-height:0;
+        overflow-y:auto;
+        overflow-x:hidden;
+        padding-right:2px;
+        -webkit-overflow-scrolling:touch;
+        overscroll-behavior:contain;
+    }
+    .jobs-detail-panel.has-active-job .jobs-detail-title-row{
+        gap:8px;
+    }
+    .jobs-detail-panel.has-active-job .jobs-detail-title-row .btn{
+        flex:0 0 auto;
+    }
+    .jobs-detail-panel.has-active-job .actions{
+        flex-wrap:wrap;
+    }
+    .jobs-detail-panel.has-active-job .actions .btn{
+        flex:1 1 140px;
+        width:auto;
+        min-width:0;
+    }
+    .jobs-detail-loading-note{
+        margin-bottom:8px;
+    }
+}
+@media(max-width:480px){
+    .jobs-detail-panel.has-active-job{
+        left:6px!important;
+        right:6px!important;
+        top:66px!important;
+        bottom:8px!important;
+        border-radius:18px!important;
+    }
+    .jobs-detail-panel.has-active-job .jobs-detail-panel-head{
+        padding:12px 12px 10px;
+    }
+    .jobs-detail-panel.has-active-job .dashboard-job-detail-body{
+        padding-bottom:4px;
+    }
+    .jobs-detail-panel.has-active-job .actions .btn{
+        flex-basis:100%;
+    }
+}
+html[data-theme="dark"] .jobs-detail-loading-note{
+    background:#172554;
+    border-color:#1e3a8a;
+    color:#93c5fd;
+}
