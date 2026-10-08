@@ -1448,6 +1448,30 @@ class JobPlatformTestCase(unittest.TestCase):
         chat_forbidden = self.client.get(
             f"/messages/{security_job_id}",
             headers={"Authorization": f"Bearer {outsider_token}"}
+        )
+        self.assertEqual(chat_forbidden.status_code, 403)
+
+        payment_forbidden = self.client.get(
+            f"/payments/job/{security_job_id}",
+            headers={"Authorization": f"Bearer {outsider_token}"}
+        )
+        self.assertEqual(payment_forbidden.status_code, 404)
+
+        malformed_profile = self.client.put(
+            "/profile",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"username": {"bad": "type"}, "email": "tester_creator@example.com"},
+        )
+        self.assertEqual(malformed_profile.status_code, 400)
+
+        malformed_rating = self.client.post(
+            "/rating",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"job_id": security_job_id, "to_user": worker_id, "score": 10, "comment": {"bad": "type"}},
+        )
+        self.assertIn(malformed_rating.status_code, (400, 409))
+
+
 
     def test_14_payment_receipt_and_finance_summary(self):
         owner_token = self.client.post(
@@ -1471,9 +1495,9 @@ class JobPlatformTestCase(unittest.TestCase):
         ).get_json()["id"]
 
         now = "2026-10-08T00:00:00+00:00"
-        cursor = main.db.get_connection()
+        conn = main.db.get_connection()
         try:
-            job_id = cursor.execute(
+            job_id = conn.execute(
                 """INSERT INTO jobs(
                     user_id,service_id,title,description,price,currency,location,
                     worker_id,status,created_at,finished_at,custom_service,agreed_price
@@ -1485,7 +1509,7 @@ class JobPlatformTestCase(unittest.TestCase):
                 ),
             ).lastrowid
             payment_uuid = "test-receipt-payment-uuid"
-            cursor.execute(
+            conn.execute(
                 """INSERT INTO payments(
                     payment_uuid,job_id,payer_id,payee_id,amount,currency,provider,status,
                     provider_transaction_id,created_at,paid_at,released_at,refunded_at
@@ -1495,9 +1519,9 @@ class JobPlatformTestCase(unittest.TestCase):
                     "test-provider-tx",now,now,now,None
                 ),
             )
-            cursor.commit()
+            conn.commit()
         finally:
-            cursor.close()
+            conn.close()
 
         receipt = self.client.get(
             f"/payments/{payment_uuid}/receipt",
@@ -1533,3 +1557,6 @@ class JobPlatformTestCase(unittest.TestCase):
         main.db.q("DELETE FROM payments WHERE payment_uuid=?", (payment_uuid,)).close()
         main.db.q("DELETE FROM jobs WHERE id=?", (job_id,)).close()
 
+
+if __name__ == "__main__":
+    unittest.main()
