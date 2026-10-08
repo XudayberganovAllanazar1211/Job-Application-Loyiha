@@ -3249,7 +3249,12 @@ def _chat_file_type(stream):
 
 def _chat_participant(job_id, user_id):
     return db.q(
-        "SELECT user_id, worker_id FROM jobs WHERE id=? AND (user_id=? OR worker_id=?)",
+        """SELECT user_id, worker_id
+           FROM jobs
+           WHERE id=?
+             AND worker_id IS NOT NULL
+             AND status NOT IN ('active', 'blocked')
+             AND (user_id=? OR worker_id=?)""",
         (job_id, user_id, user_id),
     ).fetchone()
 
@@ -3751,9 +3756,9 @@ def typing(job_id):
     if block_response: return block_response
 
     
-    job = db.q("SELECT user_id,worker_id FROM jobs WHERE id=?", (job_id,)).fetchone()
-    if not job or request.uid not in (job[0],job[1]):
-        return jsonify({"msg":"Ruxsat berilmadi"}),403
+    job = _chat_participant(job_id, request.uid)
+    if not job:
+        return jsonify({"msg":"Bu chatga kirish huquqingiz yo‘q"}),403
     now=time.time()
     conn=db.get_connection()
     try:
