@@ -35,18 +35,18 @@ export async function api(path, { method = "GET", body = null, token = "", signa
             return {
                 ...data,
                 ok: false,
-                status: response.status,
+                http_status: response.status,
                 msg: data?.msg || `Server xatosi (${response.status})`
             }
         }
 
         if (Array.isArray(data)) {
             data.ok = true
-            data.status = response.status
+            data.http_status = response.status
             return data
         }
 
-        return { ...data, ok: true, status: response.status }
+        return { ...data, ok: true, http_status: response.status }
     } catch (error) {
         if (error?.name === "AbortError") {
             return { ok: false, msg: "So'rov bekor qilindi." }
