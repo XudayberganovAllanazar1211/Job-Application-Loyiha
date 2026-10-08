@@ -150,6 +150,40 @@ export default function PublicProfile() {
                             </div>
                         </section>
 
+                        <section className="card profile-verification-card">
+                            <div className="profile-section-head">
+                                <div>
+                                    <span className="profile-eyebrow">ISHONCH</span>
+                                    <h3 className="section-title">Tasdiqlash va reputatsiya</h3>
+                                </div>
+                                <span className="profile-count">{(profile.verification?.badges || []).length + (profile.reputation?.badges || []).length}</span>
+                            </div>
+                            <div className="profile-verification-grid">
+                                <div>
+                                    <div className="profile-verification-title">Tasdiqlanganlar</div>
+                                    <div className="profile-badge-list">
+                                        {(profile.verification?.badges || []).length ? profile.verification.badges.map((badge) => (
+                                            <span key={badge.key} className="profile-trust-badge">{badge.label}</span>
+                                        )) : <span className="muted">Hali tasdiqlash belgisi yo‘q.</span>}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div className="profile-verification-title">Reputatsiya</div>
+                                    <div className="profile-reputation-metrics">
+                                        <strong>{Number(profile.reputation?.average_rating || 0).toFixed(1)} ★</strong>
+                                        <span>{profile.reputation?.reviews_count || 0} sharh</span>
+                                        <span>{Number(profile.reputation?.success_rate || 0).toFixed(0)}% success</span>
+                                        <span>{profile.reputation?.completed_worker_jobs || 0} yakunlangan ish</span>
+                                    </div>
+                                </div>
+                            </div>
+                            {(profile.reputation?.badges || []).length > 0 && (
+                                <div className="profile-badge-list" style={{ marginTop: 12 }}>
+                                    {profile.reputation.badges.map((badge) => <span key={badge.key} className="profile-trust-badge reputation">{badge.label}</span>)}
+                                </div>
+                            )}
+                        </section>
+
                         <div className="profile-content-grid">
                             <section className="card">
                                 <div className="profile-section-head">

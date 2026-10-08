@@ -514,6 +514,26 @@ class DB:
         cursor.execute("INSERT OR IGNORE INTO platform_wallet(id,balance,escrow_balance) VALUES(1,0,0)")
 
         cursor.execute("""
+            CREATE TABLE IF NOT EXISTS disputes(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id INTEGER NOT NULL,
+                opened_by INTEGER NOT NULL,
+                against_user_id INTEGER NOT NULL,
+                category TEXT NOT NULL,
+                description TEXT NOT NULL,
+                evidence TEXT DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'open',
+                admin_response TEXT DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                resolved_at TEXT,
+                resolved_by INTEGER
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_disputes_job_status ON disputes(job_id,status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_disputes_opened_by ON disputes(opened_by,created_at DESC)")
+
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS admin_audit_log(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 admin_id INTEGER NOT NULL,
@@ -570,6 +590,10 @@ class DB:
             ("token_version", "ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0"),
             ("balance", "ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0"),
             ("last_seen_at", "ALTER TABLE users ADD COLUMN last_seen_at TEXT DEFAULT ''"),
+            ("email_verified", "ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 1"),
+            ("phone_verified", "ALTER TABLE users ADD COLUMN phone_verified INTEGER NOT NULL DEFAULT 0"),
+            ("identity_verified", "ALTER TABLE users ADD COLUMN identity_verified INTEGER NOT NULL DEFAULT 0"),
+            ("verification_updated_at", "ALTER TABLE users ADD COLUMN verification_updated_at TEXT DEFAULT ''"),
             ("is_blocked", "ALTER TABLE users ADD COLUMN is_blocked INTEGER NOT NULL DEFAULT 0"),
             ("auth_provider", "ALTER TABLE users ADD COLUMN auth_provider TEXT DEFAULT 'password'"),
             ("google_sub", "ALTER TABLE users ADD COLUMN google_sub TEXT DEFAULT ''"),
@@ -671,6 +695,7 @@ class DB:
         # Database Indexes
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_rating ON users(average_rating DESC);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_user_status ON jobs(user_id, status);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_worker_status ON jobs(worker_id, status);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_service ON jobs(service_id);")
@@ -1219,6 +1244,235 @@ def notify_matching_users(job_id, job_title, creator_id):
         if matched:
             create_notification(user_id, "matching_job", "Sizga mos yangi ish", f"Sizning sohalaringizga mos yangi ish yaratildi: {job_title}", "/jobs")
 
+
+def _verification_payload(user_id):
+    row = db.q(
+        """SELECT email_verified, phone_verified, identity_verified, auth_provider, verification_updated_at
+           FROM users WHERE id=?""",
+        (user_id,),
+    ).fetchone()
+    if not row:
+        return {
+            "email_verified": False,
+            "phone_verified": False,
+            "identity_verified": False,
+            "badges": [],
+            "updated_at": "",
+        }
+    email_verified = bool(row[0])
+    phone_verified = bool(row[1])
+    identity_verified = bool(row[2])
+    badges = []
+    if email_verified:
+        badges.append({"key": "email_verified", "label": "Email tasdiqlangan", "description": "Elektron pochta manzili tasdiqlangan."})
+    if phone_verified:
+        badges.append({"key": "phone_verified", "label": "Telefon tasdiqlangan", "description": "Telefon raqami administrator tomonidan tasdiqlangan."})
+    if identity_verified:
+        badges.append({"key": "identity_verified", "label": "Shaxs tasdiqlangan", "description": "Shaxsni tasdiqlash jarayoni administrator tomonidan yakunlangan."})
+    return {
+        "email_verified": email_verified,
+        "phone_verified": phone_verified,
+        "identity_verified": identity_verified,
+        "badges": badges,
+        "updated_at": row[4] or "",
+    }
+
+
+def _reputation_payload(user_id):
+    rating = db.q(
+        "SELECT AVG(score), COUNT(*) FROM ratings WHERE to_user=?",
+        (user_id,),
+    ).fetchone()
+    average_rating = round(float(rating[0]), 1) if rating and rating[0] is not None else 0.0
+    reviews_count = int(rating[1] or 0) if rating else 0
+    worker_jobs = int(db.q("SELECT COUNT(*) FROM jobs WHERE worker_id=?", (user_id,)).fetchone()[0] or 0)
+    completed_worker_jobs = int(db.q(
+        "SELECT COUNT(*) FROM jobs WHERE worker_id=? AND status='finished'", (user_id,)
+    ).fetchone()[0] or 0)
+    client_jobs = int(db.q("SELECT COUNT(*) FROM jobs WHERE user_id=?", (user_id,)).fetchone()[0] or 0)
+    completed_client_jobs = int(db.q(
+        "SELECT COUNT(*) FROM jobs WHERE user_id=? AND status='finished'", (user_id,)
+    ).fetchone()[0] or 0)
+    success_rate = round((completed_worker_jobs / worker_jobs) * 100, 1) if worker_jobs else 0.0
+    badges = []
+    if completed_worker_jobs >= 20:
+        badges.append({"key": "experienced", "label": "Tajribali", "description": "20 yoki undan ko‘p ishni muvaffaqiyatli yakunlagan."})
+    if completed_worker_jobs >= 10 and success_rate >= 90:
+        badges.append({"key": "top_provider", "label": "Top Provider", "description": "Kamida 10 ta ish va 90% yoki undan yuqori success rate."})
+    if reviews_count >= 5 and average_rating >= 4.5:
+        badges.append({"key": "trusted", "label": "Ishonchli", "description": "Kamida 5 ta sharh va 4.5+ o‘rtacha reyting."})
+    return {
+        "average_rating": average_rating,
+        "reviews_count": reviews_count,
+        "worker_jobs": worker_jobs,
+        "completed_worker_jobs": completed_worker_jobs,
+        "client_jobs": client_jobs,
+        "completed_client_jobs": completed_client_jobs,
+        "success_rate": success_rate,
+        "badges": badges,
+    }
+
+
+@app.route("/verification", methods=["GET"])
+@auth
+def get_verification():
+    return jsonify(_verification_payload(request.uid))
+
+
+@app.route("/admin/user/<int:user_id>/verification", methods=["PATCH"])
+@admin_required
+def update_user_verification(user_id):
+    data = request.json or {}
+    target = db.q("SELECT id FROM users WHERE id=?", (user_id,)).fetchone()
+    if not target:
+        return jsonify({"msg": "Foydalanuvchi topilmadi"}), 404
+    allowed = {"email_verified", "phone_verified", "identity_verified"}
+    updates = {key: bool(data[key]) for key in allowed if key in data}
+    if not updates:
+        return jsonify({"msg": "Tasdiqlash maydoni kiritilmagan"}), 400
+    assignments = ", ".join(f"{key}=?" for key in updates)
+    values = [int(value) for value in updates.values()]
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    values.extend([now, user_id])
+    db.q(
+        f"UPDATE users SET {assignments}, verification_updated_at=? WHERE id=?",
+        tuple(values),
+    ).close()
+    admin_audit("verification_update", "user", user_id, json.dumps(updates, ensure_ascii=False))
+    return jsonify({"msg": "Tasdiqlash holati yangilandi", **_verification_payload(user_id)})
+
+
+@app.route("/reputation", methods=["GET"])
+@auth
+def get_my_reputation():
+    return jsonify(_reputation_payload(request.uid))
+
+
+@app.route("/disputes", methods=["GET", "POST"])
+@auth
+def disputes():
+    if request.method == "GET":
+        rows_data = db.q(
+            """SELECT d.id,d.job_id,d.opened_by,d.against_user_id,d.category,d.description,d.evidence,
+                      d.status,d.admin_response,d.created_at,d.updated_at,d.resolved_at,
+                      j.title,j.status,u.username
+               FROM disputes d
+               JOIN jobs j ON j.id=d.job_id
+               LEFT JOIN users u ON u.id=d.against_user_id
+               WHERE d.opened_by=? OR d.against_user_id=?
+               ORDER BY d.id DESC LIMIT 100""",
+            (request.uid, request.uid),
+        ).fetchall()
+        return jsonify([{
+            "id": row[0], "job_id": row[1], "opened_by": row[2], "against_user_id": row[3],
+            "category": row[4], "description": row[5], "evidence": row[6] or "",
+            "status": row[7], "admin_response": row[8] or "", "created_at": row[9],
+            "updated_at": row[10], "resolved_at": row[11], "job_title": row[12] or "",
+            "job_status": row[13] or "", "against_username": row[14] or "",
+        } for row in rows_data])
+
+    data = request.json or {}
+    try:
+        job_id = int(data.get("job_id"))
+    except (TypeError, ValueError):
+        return jsonify({"msg": "Ish identifikatori noto‘g‘ri"}), 400
+    category = str(data.get("category", "")).strip()
+    description = str(data.get("description", "")).strip()
+    evidence = str(data.get("evidence", "")).strip()
+    if category not in {"payment", "quality", "deadline", "communication", "other"}:
+        return jsonify({"msg": "Nizo kategoriyasi noto‘g‘ri"}), 400
+    if not description or len(description) > 3000:
+        return jsonify({"msg": "Nizo tavsifi 1–3000 belgidan iborat bo‘lishi kerak"}), 400
+    if len(evidence) > 3000:
+        return jsonify({"msg": "Dalillar 3000 belgidan oshmasligi kerak"}), 400
+
+    job = db.q("SELECT user_id,worker_id,status,title FROM jobs WHERE id=?", (job_id,)).fetchone()
+    if not job:
+        return jsonify({"msg": "Ish topilmadi"}), 404
+    owner_id, worker_id, job_status, job_title = job
+    if not worker_id or request.uid not in (owner_id, worker_id):
+        return jsonify({"msg": "Faqat ish ishtirokchilari nizo ochishi mumkin"}), 403
+    if job_status not in ("payment_pending", "accepted", "pending_finish", "finished"):
+        return jsonify({"msg": "Bu ish holatida nizo ochish mumkin emas"}), 400
+    existing = db.q(
+        "SELECT id FROM disputes WHERE job_id=? AND status IN ('open','reviewing')",
+        (job_id,),
+    ).fetchone()
+    if existing:
+        return jsonify({"msg": "Bu ish bo‘yicha allaqachon ochiq nizo mavjud", "dispute_id": existing[0]}), 409
+
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    against_user = worker_id if request.uid == owner_id else owner_id
+    result = db.q(
+        """INSERT INTO disputes(job_id,opened_by,against_user_id,category,description,evidence,status,created_at,updated_at)
+           VALUES(?,?,?,?,?,?, 'open', ?, ?)""",
+        (job_id, request.uid, against_user, category, description, evidence, now, now),
+    )
+    dispute_id = result.lastrowid
+    result.close()
+    for admin in db.q("SELECT id FROM users WHERE role='admin'").fetchall():
+        create_notification(
+            admin[0],
+            "dispute",
+            "Yangi nizo",
+            f"{job_title}: yangi nizo ochildi.",
+            "/disputes",
+        )
+    return jsonify({"msg": "Nizo muvaffaqiyatli ochildi", "id": dispute_id}), 201
+
+
+@app.route("/admin/disputes")
+@admin_required
+def admin_disputes():
+    rows_data = db.q(
+        """SELECT d.id,d.job_id,d.opened_by,d.against_user_id,d.category,d.description,d.evidence,
+                  d.status,d.admin_response,d.created_at,d.updated_at,d.resolved_at,
+                  j.title,ou.username,au.username
+           FROM disputes d
+           JOIN jobs j ON j.id=d.job_id
+           LEFT JOIN users ou ON ou.id=d.opened_by
+           LEFT JOIN users au ON au.id=d.against_user_id
+           ORDER BY CASE d.status WHEN 'open' THEN 0 WHEN 'reviewing' THEN 1 ELSE 2 END, d.id DESC
+           LIMIT 200"""
+    ).fetchall()
+    return jsonify([{
+        "id": r[0], "job_id": r[1], "opened_by": r[2], "against_user_id": r[3],
+        "category": r[4], "description": r[5], "evidence": r[6] or "",
+        "status": r[7], "admin_response": r[8] or "", "created_at": r[9],
+        "updated_at": r[10], "resolved_at": r[11], "job_title": r[12] or "",
+        "opened_by_username": r[13] or "", "against_username": r[14] or "",
+    } for r in rows_data])
+
+
+@app.route("/admin/disputes/<int:dispute_id>", methods=["PATCH"])
+@admin_required
+def update_dispute(dispute_id):
+    data = request.json or {}
+    status = str(data.get("status", "")).strip()
+    response = str(data.get("admin_response", "")).strip()
+    if status not in {"open", "reviewing", "resolved", "rejected"}:
+        return jsonify({"msg": "Nizo holati noto‘g‘ri"}), 400
+    if len(response) > 3000:
+        return jsonify({"msg": "Admin javobi juda uzun"}), 400
+    dispute = db.q(
+        "SELECT opened_by,against_user_id,job_id,status FROM disputes WHERE id=?",
+        (dispute_id,),
+    ).fetchone()
+    if not dispute:
+        return jsonify({"msg": "Nizo topilmadi"}), 404
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    resolved_at = now if status in {"resolved", "rejected"} else None
+    db.q(
+        """UPDATE disputes SET status=?,admin_response=?,updated_at=?,resolved_at=?,resolved_by=?
+           WHERE id=?""",
+        (status, response, now, resolved_at, request.uid if resolved_at else None, dispute_id),
+    ).close()
+    if status in {"resolved", "rejected"}:
+        title = "Nizo hal qilindi" if status == "resolved" else "Nizo rad etildi"
+        for uid in {dispute[0], dispute[1]}:
+            create_notification(uid, "dispute_update", title, response or "Administrator nizo bo‘yicha qaror chiqardi.", "/disputes")
+    admin_audit("dispute_status_update", "dispute", dispute_id, f"status={status}")
+    return jsonify({"msg": "Nizo yangilandi", "status": status})
 
 register_payment_routes(app, db, auth, admin_required, create_notification, admin_audit, enforce_block)
 
@@ -4388,6 +4642,8 @@ def public_profile(username):
         "avg_rating": avg_rating,
         "role": u[10] or "user",
         "avatar_url": u[11] or "",
+        "verification": _verification_payload(u[0]),
+        "reputation": _reputation_payload(u[0]),
         "created_jobs_count": created_jobs_count,
         "completed_jobs_count": completed_jobs_count,
         "reviews_count": reviews_count,
@@ -4445,6 +4701,8 @@ def profile():
             "avg_rating": avg_rating,
             "avatar_url": avatar_url,
             "balance": balance,
+            "verification": _verification_payload(request.uid),
+            "reputation": _reputation_payload(request.uid),
             "active_blocks": [_block_payload(x) for x in _active_block_row(request.uid)],
             "portfolio": [
                 {"id": x[0], "title": x[1], "description": x[2], "url": x[3], "image_url": x[4],

@@ -122,7 +122,9 @@ export default function Profile() {
                     completed_jobs_count: result.completed_jobs_count || 0,
                     avg_rating: result.avg_rating || 0,
                     balance: Number(result.balance) || 0,
-                    role: result.role || "user"
+                    role: result.role || "user",
+                    verification: result.verification || { badges: [] },
+                    reputation: result.reputation || { badges: [], reviews_count: 0, success_rate: 0, completed_worker_jobs: 0 }
                 }
 
                 const profileSkills = Array.isArray(result.skills)
@@ -553,6 +555,39 @@ export default function Profile() {
                         </div>
                     </section>
 
+                    <section className="card profile-verification-card" style={{ marginBottom: 18 }}>
+                        <div className="profile-section-head">
+                            <div>
+                                <span className="profile-eyebrow">ISHONCH</span>
+                                <h3 className="section-title">Tasdiqlash va reputatsiya</h3>
+                            </div>
+                            <button className="btn btn-secondary" type="button" onClick={() => window.location.assign("/disputes")}>Nizolar markazi</button>
+                        </div>
+                        <div className="profile-verification-grid">
+                            <div>
+                                <div className="profile-verification-title">Tasdiqlash</div>
+                                <div className="profile-badge-list">
+                                    {(form.verification?.badges || []).length ? form.verification.badges.map((badge) => (
+                                        <span key={badge.key} className="profile-trust-badge">{badge.label}</span>
+                                    )) : <span className="muted">Tasdiqlash ma’lumotlari yuklanmoqda.</span>}
+                                </div>
+                            </div>
+                            <div>
+                                <div className="profile-verification-title">Reputatsiya</div>
+                                <div className="profile-reputation-metrics">
+                                    <strong>{Number(form.reputation?.average_rating || form.avg_rating || 0).toFixed(1)} ★</strong>
+                                    <span>{form.reputation?.reviews_count || 0} sharh</span>
+                                    <span>{Number(form.reputation?.success_rate || 0).toFixed(0)}% success</span>
+                                    <span>{form.reputation?.completed_worker_jobs || form.completed_jobs_count || 0} yakunlangan ish</span>
+                                </div>
+                            </div>
+                        </div>
+                        {(form.reputation?.badges || []).length > 0 && (
+                            <div className="profile-badge-list" style={{ marginTop: 12 }}>
+                                {form.reputation.badges.map((badge) => <span key={badge.key} className="profile-trust-badge reputation">{badge.label}</span>)}
+                            </div>
+                        )}
+                    </section>
                     <section className="profile-stat-grid">
                         <div className="profile-stat card">
                             <span className="profile-stat-icon">01</span>

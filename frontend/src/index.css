@@ -2634,3 +2634,22 @@ html[data-theme="dark"] .jobs-detail-panel.has-active-job .jobs-detail-panel-hea
         border-radius:18px!important;
     }
 }
+
+.profile-verification-card{margin-top:18px}
+.profile-verification-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.profile-verification-title{font-size:12px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:9px}
+.profile-badge-list{display:flex;flex-wrap:wrap;gap:8px}
+.profile-trust-badge{display:inline-flex;align-items:center;padding:7px 10px;border-radius:999px;background:#ecfdf5;border:1px solid #bbf7d0;color:#166534;font-size:12px;font-weight:800}
+.profile-trust-badge.reputation{background:var(--primary-soft);border-color:var(--primary-border);color:var(--primary)}
+.profile-reputation-metrics{display:flex;flex-wrap:wrap;gap:8px}
+.profile-reputation-metrics span,.profile-reputation-metrics strong{padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:var(--card);font-size:12px}
+.disputes-page{display:grid;gap:18px}
+.dispute-list{display:grid;gap:10px}
+.dispute-item{display:grid;grid-template-columns:1fr auto;gap:12px;padding:15px;border:1px solid var(--border);border-radius:14px;background:var(--card)}
+.dispute-item>div:first-child{display:grid;gap:5px}
+.dispute-item span{font-size:12px;color:var(--muted)}
+.dispute-item p{margin:3px 0 0;line-height:1.55}
+.dispute-detail{grid-column:1/-1;padding:13px;border-radius:12px;background:var(--primary-soft);display:grid;gap:7px;font-size:13px}
+@media(max-width:700px){.profile-verification-grid{grid-template-columns:1fr}.dispute-item{grid-template-columns:1fr}.dispute-item>.btn{width:100%}}
+html[data-theme="dark"] .profile-trust-badge{background:#052e1b;border-color:#166534;color:#86efac}
+html[data-theme="dark"] .profile-trust-badge.reputation{background:#172554;border-color:#315a9d;color:#bfdbfe}
