@@ -84,6 +84,13 @@ export default function Payments() {
 
         const check = async () => {
             const result = await api("/payments/" + paymentUuid, { token })
+            if (result?.ok === false && [403, 404].includes(Number(result.status))) {
+                navigate("/payments", {
+                    replace: true,
+                    state: { notice: "Bu to‘lov mavjud emas yoki sizga tegishli emas." }
+                })
+                return
+            }
             if (result?.payment_uuid) setPayment(result)
         }
         check()
