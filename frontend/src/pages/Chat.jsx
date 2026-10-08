@@ -21,6 +21,8 @@ export default function Chat() {
     const [otherTyping, setOtherTyping] = useState(false)
     const [otherName, setOtherName] = useState("Foydalanuvchi")
     const [otherUsername, setOtherUsername] = useState("")
+    const [otherAvatarUrl, setOtherAvatarUrl] = useState("")
+    const meAvatarUrl = me?.avatar_url || ""
     const [file, setFile] = useState(null)
     const [reportingMessageId, setReportingMessageId] = useState(null)
     const fileInputRef = useRef(null)
@@ -89,6 +91,10 @@ export default function Chat() {
             const targetUsername = jobData.user_id === me?.id ? jobData.worker_username : jobData.creator_username
             if (targetName) setOtherName(targetName)
             if (targetUsername) setOtherUsername(targetUsername)
+            const targetAvatar = currentJob.user_id === me?.id ? currentJob.worker_avatar_url : currentJob.creator_avatar_url
+            if (targetAvatar !== undefined) setOtherAvatarUrl(targetAvatar || "")
+            const targetAvatar = jobData.user_id === me?.id ? jobData.worker_avatar_url : jobData.creator_avatar_url
+            if (targetAvatar !== undefined) setOtherAvatarUrl(targetAvatar || "")
             if (targetId && targetId !== "null" && targetId !== "undefined") {
                 setReceiverId(targetId)
             }
@@ -292,46 +298,73 @@ export default function Chat() {
                         {messages.map((message, index) => {
                             const myName = `${me?.first_name || ""} ${me?.last_name || ""}`.trim() || me?.username
                             const mine = message.sender_name === myName || String(message.sender_id) === String(me?.id)
+                            const messageDate = getMessageDateKey(message.sent_at)
+                            const previousDate = index > 0 ? getMessageDateKey(messages[index - 1].sent_at) : null
+                            const showDate = messageDate !== previousDate
+                            const senderAvatar = mine ? meAvatarUrl : (message.sender_avatar_url || otherAvatarUrl)
 
                             return (
-                                <div key={index} className={`message ${mine ? "me" : "them"}`}>
-                                    <div className="message-meta">
-                                        {mine ? "Siz" : (message.sender_name || "Foydalanuvchi")} • {message.sent_at}
-                                    </div>
-                                    {message.message && <div>{message.message}</div>}
-                                    {message.attachment_url && (
-                                        <div style={{ marginTop: message.message ? 8 : 0 }}>
-                                            {message.attachment_type === "image" ? (
-                                                <ChatImage
-                                                    url={message.attachment_url}
-                                                    name={message.attachment_name || "Rasm"}
-                                                    apiBase={API_BASE}
-                                                    token={token}
-                                                    onOpen={openAttachment}
-                                                />
-                                            ) : (
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-secondary"
-                                                    onClick={() => openAttachment(message.attachment_url)}
-                                                >
-                                                    Fayl: {message.attachment_name || "Faylni ochish"}
-                                                </button>
-                                            )}
+                                <div key={message.id || index}>
+                                    {showDate && (
+                                        <div className="chat-date-divider">
+                                            <span>{formatMessageDate(message.sent_at)}</span>
                                         </div>
                                     )}
-                                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-                                        {mine && <small className="muted">{message.read_at ? "✓✓ Ko‘rildi" : "✓ Yuborildi"}</small>}
+                                    <div className={`chat-message-row ${mine ? "mine" : "theirs"}`}>
                                         {!mine && (
-                                            <button
-                                                type="button"
-                                                className="btn btn-secondary"
-                                                style={{ padding: "3px 8px", fontSize: 12 }}
-                                                disabled={reportingMessageId === message.id}
-                                                onClick={() => reportMessage(message)}
-                                            >
-                                                {reportingMessageId === message.id ? "Yuborilmoqda..." : "Report"}
-                                            </button>
+                                            senderAvatar ? (
+                                                <img className="chat-avatar" src={getAvatarSrc(senderAvatar, API_BASE)} alt="" />
+                                            ) : (
+                                                <div className="chat-avatar chat-avatar-fallback">{getInitials(message.sender_name || otherName)}</div>
+                                            )
+                                        )}
+                                        <div className={`message ${mine ? "me" : "them"}`}>
+                                            <div className="message-meta">
+                                                {mine ? "Siz" : (message.sender_name || "Foydalanuvchi")} • {formatMessageTime(message.sent_at)}
+                                            </div>
+                                            {message.message && <div>{message.message}</div>}
+                                            {message.attachment_url && (
+                                                <div style={{ marginTop: message.message ? 8 : 0 }}>
+                                                    {message.attachment_type === "image" ? (
+                                                        <ChatImage
+                                                            url={message.attachment_url}
+                                                            name={message.attachment_name || "Rasm"}
+                                                            apiBase={API_BASE}
+                                                            token={token}
+                                                            onOpen={openAttachment}
+                                                        />
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-secondary"
+                                                            onClick={() => openAttachment(message.attachment_url)}
+                                                        >
+                                                            Fayl: {message.attachment_name || "Faylni ochish"}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
+                                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+                                                {mine && <small className="muted">{message.read_at ? "✓✓ Ko‘rildi" : "✓ Yuborildi"}</small>}
+                                                {!mine && (
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-secondary"
+                                                        style={{ padding: "3px 8px", fontSize: 12 }}
+                                                        disabled={reportingMessageId === message.id}
+                                                        onClick={() => reportMessage(message)}
+                                                    >
+                                                        {reportingMessageId === message.id ? "Yuborilmoqda..." : "Report"}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {mine && (
+                                            senderAvatar ? (
+                                                <img className="chat-avatar" src={getAvatarSrc(senderAvatar, API_BASE)} alt="" />
+                                            ) : (
+                                                <div className="chat-avatar chat-avatar-fallback">{getInitials(myName || "Siz")}</div>
+                                            )
                                         )}
                                     </div>
                                 </div>
@@ -374,6 +407,43 @@ export default function Chat() {
             </div>
         </AppLayout>
     )
+}
+
+function getMessageDateKey(value) {
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return ""
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, "0")
+    const day = String(date.getDate()).padStart(2, "0")
+    return `${year}-${month}-${day}`
+}
+
+function formatMessageTime(value) {
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return "--:--"
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })
+}
+
+function formatMessageDate(value) {
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return "Sana noma'lum"
+    const today = new Date()
+    const yesterday = new Date()
+    yesterday.setDate(today.getDate() - 1)
+
+    if (getMessageDateKey(date) === getMessageDateKey(today)) return "Bugun"
+    if (getMessageDateKey(date) === getMessageDateKey(yesterday)) return "Kecha"
+    return date.toLocaleDateString("uz-UZ", { day: "2-digit", month: "long", year: "numeric" })
+}
+
+function getAvatarSrc(url, apiBase) {
+    if (!url) return ""
+    return url.startsWith("http://") || url.startsWith("https://") ? url : apiBase + url
+}
+
+function getInitials(name) {
+    const parts = String(name || "").trim().split(/\\s+/).filter(Boolean)
+    return parts.slice(0, 2).map((part) => part[0].toUpperCase()).join("") || "?"
 }
 
 function ChatImage({ url, name, apiBase, token, onOpen }) {
