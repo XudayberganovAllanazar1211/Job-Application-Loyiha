@@ -4736,6 +4736,14 @@ def profile():
         if exists_u:
             return jsonify({"msg": "Ushbu foydalanuvchi nomi allaqachon band!"}), 400
 
+        current_email_row = db.q("SELECT email FROM users WHERE id=?", (request.uid,)).fetchone()
+        current_email = str(current_email_row[0] or "").strip().lower() if current_email_row else ""
+        if email != current_email:
+            return jsonify({
+                "msg": "Elektron pochta manzilini oddiy profil tahriridan o‘zgartirib bo‘lmaydi. Avval qayta autentifikatsiya va email tasdiqlash jarayoni kerak.",
+                "email_change_required": True
+            }), 409
+
         exists_e = db.q("SELECT id FROM users WHERE email=? AND id!=?", (email, request.uid)).fetchone()
         if exists_e:
             return jsonify({"msg": "Ushbu elektron pochta allaqachon ro‘yxatdan o‘tgan!"}), 400

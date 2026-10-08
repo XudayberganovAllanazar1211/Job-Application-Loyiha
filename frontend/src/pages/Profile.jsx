@@ -750,8 +750,9 @@ export default function Profile() {
                                         className="input"
                                         type="email"
                                         value={form.email}
-                                        onChange={(e) => setForm({ ...form, email: e.target.value })}
-                                        disabled={!isEditing}
+                                        disabled
+                                        readOnly
+                                        title="Emailni o‘zgartirish uchun xavfsiz qayta tasdiqlash jarayoni talab qilinadi"
                                         required
                                     />
                                 </div>

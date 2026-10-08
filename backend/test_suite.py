@@ -1739,5 +1739,30 @@ class JobPlatformTestCase(unittest.TestCase):
         self.assertEqual(item["status"], "resolved")
 
 
+    def test_10g_profile_email_change_requires_reauthentication(self):
+        login = self.client.post("/login", json={"username": "tester_worker", "password": "Password123!"})
+        self.assertEqual(login.status_code, 200)
+        token = login.get_json()["token"]
+        current = self.client.get("/profile", headers={"Authorization": f"Bearer {token}"}).get_json()
+
+        response = self.client.put(
+            "/profile",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "first_name": current["first_name"],
+                "last_name": current["last_name"],
+                "birthday": current["birthday"],
+                "username": current["username"],
+                "email": "takeover@example.com",
+                "bio": current["bio"],
+                "skills": current["skills"],
+            },
+        )
+        self.assertEqual(response.status_code, 409)
+        self.assertTrue(response.get_json()["email_change_required"])
+        stored = self.client.get("/profile", headers={"Authorization": f"Bearer {token}"}).get_json()
+        self.assertEqual(stored["email"], current["email"])
+
+
 if __name__ == "__main__":
     unittest.main()
