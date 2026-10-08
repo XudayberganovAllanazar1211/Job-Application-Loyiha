@@ -44,7 +44,7 @@ export default function Payments() {
             if (jobId) {
                 const access = await api("/payments/job/" + jobId, { token })
 
-                if (access?.ok === false && [403, 404].includes(Number(access.status))) {
+                if (access?.ok === false && [403, 404].includes(Number(access.http_status))) {
                     navigate("/payments", {
                         replace: true,
                         state: { notice: "Bu to‘lov mavjud emas yoki sizga tegishli emas." }
@@ -84,7 +84,7 @@ export default function Payments() {
 
         const check = async () => {
             const result = await api("/payments/" + paymentUuid, { token })
-            if (result?.ok === false && [403, 404].includes(Number(result.status))) {
+            if (result?.ok === false && [403, 404].includes(Number(result.http_status))) {
                 navigate("/payments", {
                     replace: true,
                     state: { notice: "Bu to‘lov mavjud emas yoki sizga tegishli emas." }
