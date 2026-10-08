@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { api } from "../api"
+import GoogleAuthButton from "../components/GoogleAuthButton"
 
 export default function Login() {
     // Endi username maydoniga ham username, ham email yozib kirish mumkin
@@ -8,6 +9,29 @@ export default function Login() {
     const [notice, setNotice] = useState("")
     const [loading, setLoading] = useState(false)
     const navigate = useNavigate()
+
+    const handleGoogleSuccess = async (credential) => {
+        setNotice("")
+        setLoading(true)
+
+        const result = await api("/auth/google", {
+            method: "POST",
+            body: { credential }
+        })
+
+        if (result?.token) {
+            localStorage.setItem("token", result.token)
+            const profile = await api("/profile", { token: result.token })
+            if (profile?.id) {
+                localStorage.setItem("user", JSON.stringify(profile))
+            }
+            navigate("/")
+            return
+        }
+
+        setLoading(false)
+        setNotice(result?.msg || "Google orqali kirishda xatolik yuz berdi.")
+    }
 
     const submit = async (e) => {
         e.preventDefault()
@@ -89,7 +113,16 @@ export default function Login() {
                         </button>
                     </form>
 
+                    <div style={{ textAlign: "center", marginTop: 16 }}>
+                        <div className="muted" style={{ fontSize: 13, marginBottom: 4 }}>yoki Google orqali</div>
+                        <GoogleAuthButton onSuccess={handleGoogleSuccess} disabled={loading} />
+                    </div>
+
                     <p style={{ marginTop: 16 }}>
+                        <Link className="link" to="/forgot-password">Parolni unutdingizmi?</Link>
+                    </p>
+
+                    <p style={{ marginTop: 8 }}>
                         Hisobingiz yo‘qmi? <Link className="link" to="/register">Ro‘yxatdan o‘tish</Link>
                     </p>
                     <div className="auth-legal-links">
