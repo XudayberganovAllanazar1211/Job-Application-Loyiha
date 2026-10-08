@@ -2578,3 +2578,54 @@ html[data-theme="dark"] .jobs-detail-panel.has-active-job .jobs-detail-panel-hea
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }
+
+
+/* Jobs mobile detail: deterministic scroll container */
+@media (max-width:760px){
+    .jobs-detail-panel.has-active-job{
+        display:flex!important;
+        flex-direction:column!important;
+        position:fixed!important;
+        left:8px!important;
+        right:8px!important;
+        top:72px!important;
+        bottom:auto!important;
+        width:auto!important;
+        height:calc(100dvh - 82px)!important;
+        max-height:calc(100dvh - 82px)!important;
+        min-height:0!important;
+        margin:0!important;
+        z-index:2000!important;
+        overflow:hidden!important;
+        touch-action:auto!important;
+        overscroll-behavior:contain;
+    }
+    .jobs-detail-panel.has-active-job .jobs-detail-panel-head{
+        flex:0 0 auto!important;
+        position:relative!important;
+        top:auto!important;
+        z-index:5;
+        background:var(--card,#fff);
+    }
+    .jobs-detail-panel.has-active-job .dashboard-job-detail-body{
+        flex:1 1 auto!important;
+        min-height:0!important;
+        max-height:none!important;
+        overflow-y:scroll!important;
+        overflow-x:hidden!important;
+        -webkit-overflow-scrolling:touch!important;
+        overscroll-behavior-y:contain;
+        touch-action:pan-y!important;
+        padding:0 2px 16px 0!important;
+    }
+}
+@media (max-width:480px){
+    .jobs-detail-panel.has-active-job{
+        left:6px!important;
+        right:6px!important;
+        top:66px!important;
+        height:calc(100dvh - 74px)!important;
+        max-height:calc(100dvh - 74px)!important;
+        border-radius:18px!important;
+    }
+}
