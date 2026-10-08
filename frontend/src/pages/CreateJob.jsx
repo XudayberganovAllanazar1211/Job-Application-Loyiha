@@ -243,7 +243,7 @@ export default function CreateJob() {
             title="Ish yaratish"
             subtitle="Xizmat kategoriyasini tanlab, yangi ish e’lon qiling."
         >
-            <div className="grid-2">
+            <div className="create-job-layout">
                 <section className="card">
                     <h2>Ish e’loni formasi</h2>
                     <p className="muted">Barcha maydonlarni to‘ldiring.</p>
@@ -445,40 +445,7 @@ export default function CreateJob() {
                     </form>
                 </section>
 
-                <aside className="card job-tips-card">
-                    <h3>Yaxshi e’lon uchun qo‘llanma</h3>
-                    <p className="muted">Mutaxassis sizning vazifangizni tez tushunishi va mos taklif berishi uchun quyidagilarni yozing.</p>
-                    <div className="tips-list">
-                        <div className="tip-item">
-                            <strong>🎯 Aniq sarlavha yozing</strong>
-                            <span>Natijani aniq ayting. Masalan: “React’da landing page yaratish” yoki “Logo uchun 3 ta variant tayyorlash”.</span>
-                        </div>
-                        <div className="tip-item">
-                            <strong>📝 Vazifani batafsil tushuntiring</strong>
-                            <span>Vazifa, kutilayotgan natija, kerakli format va muhim talablarni yozing. Keraksiz umumiy gaplarni kamaytiring.</span>
-                        </div>
-                        <div className="tip-item">
-                            <strong>🛠️ To‘g‘ri xizmatni tanlang</strong>
-                            <span>Eng mos sohani tanlang. Mos soha e’loningizni kerakli mutaxassislarga ko‘rsatishga yordam beradi.</span>
-                        </div>
-                        <div className="tip-item">
-                            <strong>💰 Realistik narx belgilang</strong>
-                            <span>Budjetni ish hajmi va murakkabligiga mos qo‘ying. Zarur bo‘lsa, narx kelishilishini tavsifda yozing.</span>
-                        </div>
-                        <div className="tip-item">
-                            <strong>📍 Manzilni ko‘rsating</strong>
-                            <span>Oflayn ish bo‘lsa, hududni ko‘rsating. Keraksiz darajada aniq shaxsiy manzilni yozmang.</span>
-                        </div>
-                        <div className="tip-item">
-                            <strong>⏱️ Muddatni ayting</strong>
-                            <span>Muddat muhim bo‘lsa, boshlanish yoki topshirish vaqtini tavsifda aniq ko‘rsating.</span>
-                        </div>
-                        <div className="tip-item">
-                            <strong>🤝 Kelishuvni aniq qiling</strong>
-                            <span>Masalan: React, Python, Photoshop, kerakli fayl formati, tajriba darajasi yoki topshirish formati.</span>
-                        </div>
-                    </div>
-                </aside>
+
             </div>
         </AppLayout>
     )
