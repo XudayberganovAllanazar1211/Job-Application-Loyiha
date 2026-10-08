@@ -693,7 +693,8 @@ export default function Jobs() {
     const detailCanPropose = detailStatus === "active" && !detailIsMyJob && activeJobDetails?.worker_id == null
     const myProposal = proposals.find((item) => String(item.job_id) === String(activeJobDetails?.id) && String(item.worker_id) === String(user?.id) && item.status === "pending")
     const detailCanFinish = detailStatus === "accepted" && ((detailIsMyJob && !activeJobDetails?.owner_finished) || (detailIsWorker && !activeJobDetails?.worker_finished))
-    const detailCanReport = detailIsParticipant && activeJobDetails?.worker_id != null && ["accepted", "pending_finish"].includes(detailStatus)
+    const detailCanChangeWorker = detailIsMyJob && activeJobDetails?.worker_id != null && ["payment_pending", "accepted"].includes(detailStatus)
+    const detailCanReport = detailIsParticipant && activeJobDetails?.worker_id != null && ["active", "payment_pending", "accepted", "pending_finish", "finished"].includes(detailStatus)
     const detailStatusLabel = {
         active: "Faol",
         payment_pending: "To‘lov kutilmoqda",
@@ -1158,7 +1159,7 @@ export default function Jobs() {
                                         </button>
                                     )}
 
-                                    {detailIsMyJob && detailCanFinish && (
+                                    {detailCanChangeWorker && (
                                         <button
                                             className="btn btn-warn"
                                             onClick={() => cancelWorker(activeJobDetails)}
