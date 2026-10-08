@@ -650,6 +650,24 @@ class DB:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_payments_payee_status ON payments(payee_id,status,created_at);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_payments_job_status ON payments(job_id,status);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_wallet_transactions_user ON wallet_transactions(user_id,created_at);")
+        duplicate_ratings = cursor.execute(
+            """SELECT job_id,from_user,MIN(id)
+               FROM ratings
+               WHERE job_id IS NOT NULL AND from_user IS NOT NULL
+               GROUP BY job_id,from_user
+               HAVING COUNT(*)>1"""
+        ).fetchall()
+        for duplicate_job_id, duplicate_from_user, keep_id in duplicate_ratings:
+            cursor.execute(
+                "DELETE FROM ratings WHERE job_id=? AND from_user=? AND id!=?",
+                (duplicate_job_id, duplicate_from_user, keep_id),
+            )
+        cursor.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_ratings_job_from_user ON ratings(job_id,from_user)"
+        )
+        cursor.execute(
+            "UPDATE users SET average_rating=COALESCE((SELECT ROUND(AVG(score),1) FROM ratings WHERE to_user=users.id),0)"
+        )
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_ratings_to_user ON ratings(to_user);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_ratings_job ON ratings(job_id);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read, created_at);")
@@ -2903,11 +2921,14 @@ def job_proposals(job_id):
             (proposal_price, deadline, message, now_time, existing[0]),
         )
     else:
-        result = db.q(
-            """INSERT INTO job_proposals(job_id,worker_id,price,deadline,message,status,created_at,updated_at)
-               VALUES(?,?,?,?,?,?,?,?)""",
-            (job_id, request.uid, proposal_price, deadline, message, "pending", now_time, now_time),
-        )
+        try:
+            result = db.q(
+                """INSERT INTO job_proposals(job_id,worker_id,price,deadline,message,status,created_at,updated_at)
+                   VALUES(?,?,?,?,?,?,?,?)""",
+                (job_id, request.uid, proposal_price, deadline, message, "pending", now_time, now_time),
+            )
+        except sqlite3.IntegrityError:
+            return jsonify({"msg": "Bu ish uchun taklifingiz allaqachon mavjud"}), 409
     proposal_id = result.lastrowid
     result.close()
 
@@ -3916,11 +3937,14 @@ def add_rating():
         return jsonify({"msg": "Bu ish uchun siz allaqachon baho bergansiz"}), 409
 
     now_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    result = db.q(
-        "INSERT INTO ratings(job_id, from_user, to_user, score, comment, created_at) VALUES(?,?,?,?,?,?)",
-        (job_id, request.uid, to_user, score, comment, now_time),
-    )
-    result.close()
+    try:
+        result = db.q(
+            "INSERT INTO ratings(job_id, from_user, to_user, score, comment, created_at) VALUES(?,?,?,?,?,?)",
+            (job_id, request.uid, to_user, score, comment, now_time),
+        )
+        result.close()
+    except sqlite3.IntegrityError:
+        return jsonify({"msg": "Bu ish uchun siz allaqachon baho bergansiz"}), 409
 
     avg_row = db.q("SELECT AVG(score) FROM ratings WHERE to_user=?", (to_user,)).fetchone()
     avg_score = round(avg_row[0], 1) if avg_row and avg_row[0] is not None else 0.0
