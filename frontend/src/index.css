@@ -2615,3 +2615,26 @@ html[data-theme="dark"] .jobs-checkbox-row{
         font-size:12px;
     }
 }
+
+
+/* Keep the Jobs page fixed on the horizontal axis on touch devices */
+.jobs-page-shell{
+    width:100%;
+    min-width:0;
+    max-width:100%;
+    overflow-x:clip;
+    overscroll-behavior-x:none;
+}
+@media(max-width:760px){
+    .jobs-page-shell{
+        touch-action:pan-y;
+        overflow-x:hidden;
+    }
+    .jobs-content-layout,
+    .jobs-content-layout>section,
+    .jobs-controls-card{
+        min-width:0;
+        max-width:100%;
+        overflow-x:hidden;
+    }
+}
