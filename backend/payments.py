@@ -1,4 +1,5 @@
 import datetime
+import sqlite3
 import hashlib
 import json
 import os
@@ -205,13 +206,33 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
                 })
             payment_uuid = str(uuid.uuid4())
             now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-            result = db.q(
-                """INSERT INTO payments(
-                    payment_uuid,job_id,payer_id,payee_id,amount,currency,provider,status,created_at
-                ) VALUES(?,?,?,?,?,?,?,?,?)""",
-                (payment_uuid,job_id,owner_id,worker_id,float(price),"UZS","dummy","pending",now),
-            )
-            result.close()
+            try:
+                result = db.q(
+                    """INSERT INTO payments(
+                        payment_uuid,job_id,payer_id,payee_id,amount,currency,provider,status,created_at
+                    ) VALUES(?,?,?,?,?,?,?,?,?)""",
+                    (payment_uuid,job_id,owner_id,worker_id,float(price),"UZS","dummy","pending",now),
+                )
+                result.close()
+            except sqlite3.IntegrityError:
+                existing = db.q(
+                    "SELECT payment_uuid,amount,currency,status FROM payments WHERE job_id=? AND provider='dummy'",
+                    (job_id,),
+                ).fetchone()
+                if existing:
+                    return jsonify({
+                        "msg": "ok",
+                        "status": existing[3],
+                        "payment_uuid": existing[0],
+                        "amount": existing[1],
+                        "currency": existing[2],
+                        "provider": "dummy",
+                        "title": title,
+                        "commission_percent": _commission_preview(existing[1])[0],
+                        "commission_amount": _commission_preview(existing[1])[1],
+                        "worker_amount": _commission_preview(existing[1])[2],
+                    })
+                return jsonify({"msg": "To‘lovni yaratishda to‘qnashuv yuz berdi"}), 409
             return jsonify({
                 "msg": "ok",
                 "status": "pending",
@@ -249,13 +270,36 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
 
         payment_uuid = str(uuid.uuid4())
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        result = db.q(
-            """INSERT INTO payments(
-                payment_uuid,job_id,payer_id,payee_id,amount,currency,provider,status,created_at
-            ) VALUES(?,?,?,?,?,?,?,?,?)""",
-            (payment_uuid,job_id,owner_id,worker_id,float(price),"UZS","click","pending",now),
-        )
-        result.close()
+        try:
+            result = db.q(
+                """INSERT INTO payments(
+                    payment_uuid,job_id,payer_id,payee_id,amount,currency,provider,status,created_at
+                ) VALUES(?,?,?,?,?,?,?,?,?)""",
+                (payment_uuid,job_id,owner_id,worker_id,float(price),"UZS","click","pending",now),
+            )
+            result.close()
+        except sqlite3.IntegrityError:
+            existing = db.q(
+                "SELECT payment_uuid,amount,currency,status FROM payments WHERE job_id=? AND provider='click'",
+                (job_id,),
+            ).fetchone()
+            if existing:
+                payment_uuid_existing, amount_existing, currency_existing, status_existing = existing
+                if status_existing == "paid":
+                    return jsonify({"msg": "already_paid", "status": "paid"})
+                return jsonify({
+                    "msg": "ok",
+                    "status": status_existing,
+                    "payment_uuid": payment_uuid_existing,
+                    "amount": amount_existing,
+                    "currency": currency_existing,
+                    "checkout_url": build_checkout_url(payment_uuid_existing, amount_existing),
+                    "title": title,
+                    "commission_percent": _commission_preview(amount_existing)[0],
+                    "commission_amount": _commission_preview(amount_existing)[1],
+                    "worker_amount": _commission_preview(amount_existing)[2],
+                })
+            return jsonify({"msg": "To‘lovni yaratishda to‘qnashuv yuz berdi"}), 409
 
         return jsonify({
             "msg": "ok",
