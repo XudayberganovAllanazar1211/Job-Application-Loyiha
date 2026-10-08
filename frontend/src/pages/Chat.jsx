@@ -91,8 +91,6 @@ export default function Chat() {
             const targetUsername = jobData.user_id === me?.id ? jobData.worker_username : jobData.creator_username
             if (targetName) setOtherName(targetName)
             if (targetUsername) setOtherUsername(targetUsername)
-            const targetAvatar = currentJob.user_id === me?.id ? currentJob.worker_avatar_url : currentJob.creator_avatar_url
-            if (targetAvatar !== undefined) setOtherAvatarUrl(targetAvatar || "")
             const targetAvatar = jobData.user_id === me?.id ? jobData.worker_avatar_url : jobData.creator_avatar_url
             if (targetAvatar !== undefined) setOtherAvatarUrl(targetAvatar || "")
             if (targetId && targetId !== "null" && targetId !== "undefined") {
