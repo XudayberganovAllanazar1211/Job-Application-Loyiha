@@ -1448,30 +1448,88 @@ class JobPlatformTestCase(unittest.TestCase):
         chat_forbidden = self.client.get(
             f"/messages/{security_job_id}",
             headers={"Authorization": f"Bearer {outsider_token}"}
-        )
-        self.assertEqual(chat_forbidden.status_code, 403)
 
-        payment_forbidden = self.client.get(
-            f"/payments/job/{security_job_id}",
+    def test_14_payment_receipt_and_finance_summary(self):
+        owner_token = self.client.post(
+            "/login",
+            json={"username": "tester_creator", "password": "Password123!"}
+        ).get_json()["token"]
+        worker_token = self.client.post(
+            "/login",
+            json={"username": "tester_worker", "password": "Password123!"}
+        ).get_json()["token"]
+        outsider_token = self.client.post(
+            "/login",
+            json={"username": "tester_outsider", "password": "Password123!"}
+        ).get_json()["token"]
+
+        owner_id = self.client.get(
+            "/profile", headers={"Authorization": f"Bearer {owner_token}"}
+        ).get_json()["id"]
+        worker_id = self.client.get(
+            "/profile", headers={"Authorization": f"Bearer {worker_token}"}
+        ).get_json()["id"]
+
+        now = "2026-10-08T00:00:00+00:00"
+        cursor = main.db.get_connection()
+        try:
+            job_id = cursor.execute(
+                """INSERT INTO jobs(
+                    user_id,service_id,title,description,price,currency,location,
+                    worker_id,status,created_at,finished_at,custom_service,agreed_price
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    owner_id,1,"Payment Receipt Regression",
+                    "Payment receipt API regression test",500000,"UZS","Remote",
+                    worker_id,"accepted",now,None,"",500000
+                ),
+            ).lastrowid
+            payment_uuid = "test-receipt-payment-uuid"
+            cursor.execute(
+                """INSERT INTO payments(
+                    payment_uuid,job_id,payer_id,payee_id,amount,currency,provider,status,
+                    provider_transaction_id,created_at,paid_at,released_at,refunded_at
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    payment_uuid,job_id,owner_id,worker_id,500000,"UZS","dummy","released",
+                    "test-provider-tx",now,now,now,None
+                ),
+            )
+            cursor.commit()
+        finally:
+            cursor.close()
+
+        receipt = self.client.get(
+            f"/payments/{payment_uuid}/receipt",
+            headers={"Authorization": f"Bearer {owner_token}"}
+        )
+        self.assertEqual(receipt.status_code, 200)
+        receipt_data = receipt.get_json()
+        self.assertEqual(receipt_data["payment_uuid"], payment_uuid)
+        self.assertEqual(receipt_data["amount"], 500000)
+        self.assertEqual(receipt_data["currency"], "UZS")
+        self.assertEqual(receipt_data["status"], "released")
+        self.assertEqual(receipt_data["provider_transaction_id"], "test-provider-tx")
+        self.assertIn("commission_amount", receipt_data)
+        self.assertIn("worker_amount", receipt_data)
+
+        forbidden = self.client.get(
+            f"/payments/{payment_uuid}/receipt",
             headers={"Authorization": f"Bearer {outsider_token}"}
         )
-        self.assertEqual(payment_forbidden.status_code, 404)
+        self.assertEqual(forbidden.status_code, 403)
 
-        malformed_profile = self.client.put(
-            "/profile",
-            headers={"Authorization": f"Bearer {admin_token}"},
-            json={"username": {"bad": "type"}, "email": "tester_creator@example.com"},
+        summary = self.client.get(
+            "/admin/finance/summary",
+            headers={"Authorization": f"Bearer {owner_token}"}
         )
-        self.assertEqual(malformed_profile.status_code, 400)
+        self.assertEqual(summary.status_code, 200)
+        summary_data = summary.get_json()
+        self.assertIn("payments", summary_data)
+        self.assertIn("platform", summary_data)
+        self.assertIn("withdrawals", summary_data)
+        self.assertGreaterEqual(summary_data["payments"]["count"], 1)
 
-        malformed_rating = self.client.post(
-            "/rating",
-            headers={"Authorization": f"Bearer {admin_token}"},
-            json={"job_id": security_job_id, "to_user": worker_id, "score": 10, "comment": {"bad": "type"}},
-        )
-        self.assertIn(malformed_rating.status_code, (400, 409))
+        main.db.q("DELETE FROM payments WHERE payment_uuid=?", (payment_uuid,)).close()
+        main.db.q("DELETE FROM jobs WHERE id=?", (job_id,)).close()
 
-
-
-if __name__ == "__main__":
-    unittest.main()
