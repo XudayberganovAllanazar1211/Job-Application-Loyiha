@@ -657,20 +657,33 @@ export default function Dashboard() {
                             <div className="message-list">
                                 {messages.map((message, index) => {
                                     const mine = String(message.sender_id) === String(user?.id)
+                                    const messageDate = getMessageDateKey(message.sent_at)
+                                    const previousDate = index > 0 ? getMessageDateKey(messages[index - 1].sent_at) : null
+                                    const showDate = messageDate !== previousDate
+
                                     return (
-                                        <div className={`message ${mine ? "me" : "them"}`} key={index}>
-                                            <div className="message-meta">{mine ? "Siz" : (message.sender_name || "Foydalanuvchi")} • {message.sent_at}</div>
-                                            {message.message && <div>{message.message}</div>}
-                                            {message.attachment_url && (
-                                                <DashboardChatAttachment
-                                                    url={message.attachment_url}
-                                                    name={message.attachment_name || "Fayl"}
-                                                    type={message.attachment_type || ""}
-                                                    apiBase={API_BASE}
-                                                    token={token}
-                                                    onOpen={openChatAttachment}
-                                                />
+                                        <div key={message.id || index}>
+                                            {showDate && (
+                                                <div className="chat-date-divider">
+                                                    <span>{formatMessageDate(message.sent_at)}</span>
+                                                </div>
                                             )}
+                                            <div className={`message ${mine ? "me" : "them"}`}>
+                                                <div className="message-meta">
+                                                    {mine ? "Siz" : (message.sender_name || "Foydalanuvchi")} • {formatMessageTime(message.sent_at)}
+                                                </div>
+                                                {message.message && <div>{message.message}</div>}
+                                                {message.attachment_url && (
+                                                    <DashboardChatAttachment
+                                                        url={message.attachment_url}
+                                                        name={message.attachment_name || "Fayl"}
+                                                        type={message.attachment_type || ""}
+                                                        apiBase={API_BASE}
+                                                        token={token}
+                                                        onOpen={openChatAttachment}
+                                                    />
+                                                )}
+                                            </div>
                                         </div>
                                     )
                                 })}
@@ -735,6 +748,39 @@ export default function Dashboard() {
         )}
         </AppLayout>
     )
+}
+
+function getMessageDateKey(value) {
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return ""
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, "0")
+    const day = String(date.getDate()).padStart(2, "0")
+    return `${year}-${month}-${day}`
+}
+
+function formatMessageTime(value) {
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return "--:--"
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })
+}
+
+function formatMessageDate(value) {
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return "Sana noma'lum"
+
+    const today = new Date()
+    const yesterday = new Date()
+    yesterday.setDate(today.getDate() - 1)
+
+    if (getMessageDateKey(date) === getMessageDateKey(today)) return "Bugun"
+    if (getMessageDateKey(date) === getMessageDateKey(yesterday)) return "Kecha"
+
+    return date.toLocaleDateString("uz-UZ", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric"
+    })
 }
 
 function DashboardChatAttachment({ url, name, type, apiBase, token, onOpen }) {
