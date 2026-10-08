@@ -929,6 +929,13 @@ export default function Jobs() {
                     )}
                 </section>
 
+                {isMobile && activeJobDetails && (
+                    <div
+                        className="jobs-detail-backdrop"
+                        aria-hidden="true"
+                        onClick={() => { setSelectedJob(null); setJobDetails(null); setProposals([]) }}
+                    />
+                )}
                 <aside
                     className={"card jobs-detail-panel " + (activeJobDetails ? "has-active-job" : "")}
                 >
@@ -946,12 +953,13 @@ export default function Jobs() {
                         >×</button>
                     </div>
 
-                    {jobDetailsLoading ? (
-                        <div className="empty-state">To‘liq ma’lumot backenddan yuklanmoqda...</div>
-                    ) : !activeJobDetails ? (
+                    {!activeJobDetails ? (
                         <div className="empty-state">Jobni tanlang.</div>
                     ) : (
                         <div className="dashboard-job-detail-body">
+                            {jobDetailsLoading && (
+                                <div className="jobs-detail-loading-note">Yangilangan ma’lumotlar yuklanmoqda...</div>
+                            )}
                             <div>
                                 <span className="helper">ISH NOMI</span>
                                 <div className="jobs-detail-title-row">
