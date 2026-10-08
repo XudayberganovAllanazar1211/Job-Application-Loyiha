@@ -56,6 +56,7 @@ export default function Jobs() {
     const serviceSearchRef = useRef(null)
     const filterRef = useRef(null)
     const detailPanelRef = useRef(null)
+    const jobsRequestRef = useRef(0)
 
     const [reportJobId, setReportJobId] = useState(null)
     const [reportReason, setReportReason] = useState("")
@@ -87,6 +88,8 @@ export default function Jobs() {
     )
 
     const loadJobs = async (requestedPage = currentPage) => {
+        const requestId = jobsRequestRef.current + 1
+        jobsRequestRef.current = requestId
         setLoading(true)
         try {
             const query = new URLSearchParams()
@@ -105,6 +108,7 @@ export default function Jobs() {
             if (selectedIds.length) query.set("service_ids", [...new Set(selectedIds)].join(","))
 
             const jobResult = await api("/jobs?" + query.toString(), { token })
+            if (requestId !== jobsRequestRef.current) return
             if (jobResult?.items && Array.isArray(jobResult.items)) {
                 setJobs(jobResult.items)
                 setTotalItems(Number(jobResult.pagination?.total || 0))
@@ -123,7 +127,7 @@ export default function Jobs() {
             setNoticeType("warn")
             setNotice("Ishlarni yuklashda xatolik yuz berdi.")
         } finally {
-            setLoading(false)
+            if (requestId === jobsRequestRef.current) setLoading(false)
         }
     }
 
