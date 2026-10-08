@@ -637,6 +637,51 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
             return jsonify({"msg": message}), 400
         return jsonify({"msg": "ok", "status": "refunded", **(data or {})})
 
+
+    @app.route("/payments/<payment_uuid>/receipt")
+    @auth
+    def payment_receipt(payment_uuid):
+        payment = db.q(
+            """SELECT p.payment_uuid,p.job_id,p.payer_id,p.payee_id,p.amount,p.currency,
+                      p.provider,p.status,p.provider_transaction_id,p.created_at,p.paid_at,
+                      p.released_at,p.refunded_at,j.title,j.created_at,
+                      pu.username,ru.username
+               FROM payments p
+               JOIN jobs j ON j.id=p.job_id
+               LEFT JOIN users pu ON pu.id=p.payer_id
+               LEFT JOIN users ru ON ru.id=p.payee_id
+               WHERE p.payment_uuid=?""",
+            (payment_uuid,),
+        ).fetchone()
+        if not payment:
+            return jsonify({"msg": "To‘lov topilmadi"}), 404
+        if request.uid not in (payment[2], payment[3]):
+            return jsonify({"msg": "Ruxsat berilmadi"}), 403
+
+        amount = float(payment[4])
+        commission_percent, commission, worker_amount = _commission_preview(amount)
+        return jsonify({
+            "receipt_number": f"FINJOB-{payment[0]}",
+            "payment_uuid": payment[0],
+            "job_id": payment[1],
+            "job_title": payment[13],
+            "job_created_at": payment[14],
+            "payer": {"id": payment[2], "username": payment[15] or ""},
+            "payee": {"id": payment[3], "username": payment[16] or ""},
+            "amount": amount,
+            "currency": payment[5],
+            "provider": payment[6],
+            "status": payment[7],
+            "provider_transaction_id": payment[8] or "",
+            "commission_percent": commission_percent,
+            "commission_amount": commission,
+            "worker_amount": worker_amount,
+            "created_at": payment[9],
+            "paid_at": payment[10],
+            "released_at": payment[11],
+            "refunded_at": payment[12],
+        })
+
     @app.route("/wallet")
     @auth
     def get_wallet():
@@ -796,6 +841,59 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
         )
         return jsonify({"msg": "Test balansi qo‘shildi", "balance": float(balance)})
 
+
+
+    @app.route("/admin/finance/summary")
+    @admin_required
+    def admin_finance_summary():
+        totals = db.q(
+            """SELECT
+                 COUNT(*) AS payment_count,
+                 COALESCE(SUM(amount),0) AS gross_volume,
+                 COALESCE(SUM(CASE WHEN status='held' THEN amount ELSE 0 END),0) AS held_volume,
+                 COALESCE(SUM(CASE WHEN status='released' THEN amount ELSE 0 END),0) AS released_volume,
+                 COALESCE(SUM(CASE WHEN status='refunded' THEN amount ELSE 0 END),0) AS refunded_volume,
+                 COALESCE(SUM(CASE WHEN provider='click' THEN amount ELSE 0 END),0) AS click_volume,
+                 COALESCE(SUM(CASE WHEN provider='dummy' THEN amount ELSE 0 END),0) AS dummy_volume
+               FROM payments"""
+        ).fetchone()
+        providers = db.q(
+            """SELECT provider,status,COUNT(*),COALESCE(SUM(amount),0)
+               FROM payments
+               GROUP BY provider,status
+               ORDER BY provider,status"""
+        ).fetchall()
+        wallet = db.q(
+            "SELECT balance,COALESCE(escrow_balance,0) FROM platform_wallet WHERE id=1"
+        ).fetchone()
+        withdrawals = db.q(
+            """SELECT COUNT(*),COALESCE(SUM(-amount),0)
+               FROM wallet_transactions
+               WHERE type='withdrawal' AND amount < 0"""
+        ).fetchone()
+        return jsonify({
+            "payments": {
+                "count": int(totals[0] or 0),
+                "gross_volume": float(totals[1] or 0),
+                "held_volume": float(totals[2] or 0),
+                "released_volume": float(totals[3] or 0),
+                "refunded_volume": float(totals[4] or 0),
+                "click_volume": float(totals[5] or 0),
+                "dummy_volume": float(totals[6] or 0),
+            },
+            "platform": {
+                "balance": float(wallet[0] or 0) if wallet else 0,
+                "escrow_balance": float(wallet[1] or 0) if wallet else 0,
+            },
+            "withdrawals": {
+                "count": int(withdrawals[0] or 0),
+                "volume": float(withdrawals[1] or 0),
+            },
+            "by_provider_status": [
+                {"provider": row[0], "status": row[1], "count": int(row[2]), "volume": float(row[3] or 0)}
+                for row in providers
+            ],
+        })
 
     @app.route("/admin/wallet/summary")
     @admin_required
