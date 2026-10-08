@@ -464,6 +464,8 @@ export default function Jobs() {
                         : (result?.msg || "Xato")
             )
             await loadJobs(currentPage)
+            const refreshed = await api("/jobs/" + job.id, { token })
+            if (refreshed?.id) setJobDetails(refreshed)
         } finally {
             setActionJobId(null)
         }
@@ -489,6 +491,8 @@ export default function Jobs() {
                         : "Ishni yakunlashda xatolik yuz berdi."
             )
             await loadJobs(currentPage)
+            const refreshed = await api("/jobs/" + jobId, { token })
+            if (refreshed?.id) setJobDetails(refreshed)
         } finally {
             setActionJobId(null)
         }
@@ -513,7 +517,9 @@ export default function Jobs() {
                 ? "Bajaruvchi bekor qilindi. Ish yana barcha uchun ochiq."
                 : (result?.msg || "Xatolik yuz berdi")
         )
-        loadJobs(currentPage)
+        await loadJobs(currentPage)
+        const refreshed = await api("/jobs/" + job.id, { token })
+        if (refreshed?.id) setJobDetails(refreshed)
     }
 
     const submitReport = async (job) => {
@@ -1123,17 +1129,58 @@ export default function Jobs() {
 
                             <div className="dashboard-job-detail-section">
                                 <span className="helper">AMALLAR</span>
-                                <div className="actions" style={{ marginTop: 10 }}>
-                                    {detailIsParticipant && <button className="btn btn-secondary" onClick={() => navigate(`/chat/${activeJobDetails.id}`, { state: { job: activeJobDetails } })}>Suhbat</button>}
-                                    {detailIsParticipant && detailStatus === "finished" && <button className="btn btn-secondary" onClick={() => navigate(`/rating/${activeJobDetails.id}`, { state: { job: activeJobDetails } })}>Baho</button>}
-                                    {detailCanPropose && <button className="btn btn-primary" onClick={() => openProposalModal(activeJobDetails)}>{myProposal?.status === "pending" ? "Taklifni tahrirlash" : "Taklif yuborish"}</button>}
-                                    {detailIsMyJob && detailStatus === "payment_pending" && <button className="btn btn-primary" onClick={() => navigate(`/payments/job/${activeJobDetails.id}`)}>💳 To‘lovni amalga oshirish</button>}
-                                    {detailCanReport && <button className="btn btn-secondary" onClick={() => setReportJobId(reportJobId === activeJobDetails.id ? null : activeJobDetails.id)}>⚑ Shikoyat</button>}
-                                    {detailIsMyJob && detailCanFinish && <button className="btn btn-warn" onClick={() => cancelWorker(activeJobDetails)}>Ishchini almashtirish</button>}
-                                    {detailCanFinish && detailIsParticipant && <button className="btn btn-success" disabled={actionJobId === activeJobDetails.id} onClick={() => detailIsWorker ? finishJobWorker(activeJobDetails.id) : finishJobSeeker(activeJobDetails)}>{actionJobId === activeJobDetails.id ? "Yakunlanmoqda..." : "Yakunlash"}</button>}
-                                    {detailIsWorker && detailStatus === "payment_pending" && <span className="chip job-accepted-chip">⏳ Ish egasining to‘lovi kutilmoqda</span>}
-                                    {detailIsWorker && detailStatus === "accepted" && <span className="chip job-accepted-chip">✅ Siz qabul qilgansiz</span>}
-                                    {detailIsParticipant && detailStatus === "accepted" && (activeJobDetails.owner_finished || activeJobDetails.worker_finished) && <span className="chip">⏳ Ikkinchi tomonning yakunlashini kutmoqda</span>}
+                                <div className="actions jobs-detail-actions" style={{ marginTop: 10 }}>
+                                    {detailIsParticipant && (
+                                        <button className="btn btn-secondary" onClick={() => navigate(`/chat/${activeJobDetails.id}`, { state: { job: activeJobDetails } })}>
+                                            Suhbat
+                                        </button>
+                                    )}
+                                    {detailCanFinish && detailIsParticipant && (
+                                        <button
+                                            className="btn btn-success"
+                                            disabled={actionJobId === activeJobDetails.id}
+                                            onClick={() => detailIsWorker ? finishJobWorker(activeJobDetails.id) : finishJobSeeker(activeJobDetails)}
+                                        >
+                                            {actionJobId === activeJobDetails.id ? "Yakunlanmoqda..." : "Ishni yakunlash"}
+                                        </button>
+                                    )}
+                                    {detailIsMyJob && detailStatus === "payment_pending" && (
+                                        <button
+                                            className="btn btn-primary"
+                                            onClick={() => navigate(`/payments/job/${activeJobDetails.id}`)}
+                                        >
+                                            To‘lovni amalga oshirish
+                                        </button>
+                                    )}
+                                    {detailIsMyJob && detailCanFinish && (
+                                        <button className="btn btn-warn" onClick={() => cancelWorker(activeJobDetails)}>
+                                            Ishchini o‘zgartirish
+                                        </button>
+                                    )}
+                                    {detailIsParticipant && detailStatus === "finished" && (
+                                        <button className="btn btn-secondary" onClick={() => navigate(`/rating/${activeJobDetails.id}`, { state: { job: activeJobDetails } })}>
+                                            Baho berish
+                                        </button>
+                                    )}
+                                    {detailCanPropose && (
+                                        <button className="btn btn-primary" onClick={() => openProposalModal(activeJobDetails)}>
+                                            {myProposal?.status === "pending" ? "Taklifni tahrirlash" : "Taklif yuborish"}
+                                        </button>
+                                    )}
+                                    {detailCanReport && (
+                                        <button className="btn btn-secondary" onClick={() => setReportJobId(reportJobId === activeJobDetails.id ? null : activeJobDetails.id)}>
+                                            Shikoyat
+                                        </button>
+                                    )}
+                                    {detailIsWorker && detailStatus === "payment_pending" && (
+                                        <span className="chip job-accepted-chip">Ish egasining to‘lovi kutilmoqda</span>
+                                    )}
+                                    {detailIsWorker && detailStatus === "accepted" && (
+                                        <span className="chip job-accepted-chip">Siz qabul qilgansiz</span>
+                                    )}
+                                    {detailIsParticipant && detailStatus === "accepted" && (activeJobDetails.owner_finished || activeJobDetails.worker_finished) && (
+                                        <span className="chip">Ikkinchi tomonning yakunlashini kutmoqda</span>
+                                    )}
                                 </div>
 
                                 {reportJobId === activeJobDetails.id && detailCanReport && (
