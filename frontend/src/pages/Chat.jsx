@@ -439,7 +439,7 @@ export default function Chat() {
                     </div>
 
                     {file && <div className="notice" style={{ marginTop: 14 }}>Tanlangan fayl: {file.name}</div>}
-                    <form onSubmit={send} className="actions" style={{ marginTop: 14 }}>
+                    <form onSubmit={send} className="chat-compose">
                         <input
                             ref={fileInputRef}
                             type="file"
@@ -447,13 +447,18 @@ export default function Chat() {
                             accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
                             onChange={(e) => setFile(e.target.files?.[0] || null)}
                         />
-                        <button type="button" className="btn btn-secondary" onClick={() => fileInputRef.current?.click()}>
-                            Fayl
+                        <button
+                            type="button"
+                            className="btn btn-secondary chat-attach-button"
+                            onClick={() => fileInputRef.current?.click()}
+                            aria-label="Fayl biriktirish"
+                            title="Fayl biriktirish"
+                        >
+                            📎
                         </button>
                         <input
-                            className="input"
-                            style={{ flex: 1 }}
-                            placeholder="Xabar yozing..."
+                            className="input chat-compose-input"
+                            placeholder={file ? file.name : "Xabar yozing..."}
                             value={text}
                             onChange={(e) => {
                                 const value = e.target.value
@@ -465,7 +470,7 @@ export default function Chat() {
                                 }
                             }}
                         />
-                        <button className="btn btn-primary">Yuborish</button>
+                        <button className="btn btn-primary chat-send-button">Yuborish</button>
                     </form>
                 </section>
             </div>
