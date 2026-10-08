@@ -713,7 +713,7 @@ export default function Jobs() {
                     {activeFilterCount > 0 && <span className="jobs-active-filter-label">{activeFilterCount} ta filtr faol</span>}
                     {hasSearchOrFilters && <button type="button" className="jobs-clear-inline" onClick={clearAllFilters}>Hammasini tozalash</button>}
                 </div>
-                {notice && <div className={"notice " + (noticeType === "ok" ? "ok" : "warn")} style={{ marginTop: 14 }}>{notice}</div>
+                {notice && <div className={"notice " + (noticeType === "ok" ? "ok" : "warn")} style={{ marginTop: 14 }}>{notice}</div>}
                 <div className="jobs-saved-search-bar">
                     <div style={{ minWidth: 0, flex: 1 }}>
                         <span className="helper">SAQLANGAN QIDIRUVLAR</span>
