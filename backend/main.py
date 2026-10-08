@@ -4044,39 +4044,39 @@ def unread_message_count():
 @app.route("/conversations")
 @auth
 def conversations():
-    block_response=enforce_block("chat")
-    if block_response: return block_response
+    block_response = enforce_block("chat")
+    if block_response:
+        return block_response
 
-    
     items = db.q(
         """SELECT m.id,m.job_id,m.sender_id,m.receiver_id,m.message,m.sent_at,m.read_at,j.title,
-                  CASE WHEN m.sender_id=? THEN r.username ELSE s.username END as other_username
+                  CASE WHEN m.sender_id=? THEN r.username ELSE s.username END as other_username,
+                  (SELECT COUNT(*) FROM messages unread
+                   WHERE unread.job_id=m.job_id AND unread.receiver_id=? AND unread.read_at IS NULL) as unread_count
            FROM messages m
            JOIN jobs j ON j.id=m.job_id
            LEFT JOIN users s ON s.id=m.sender_id
            LEFT JOIN users r ON r.id=m.receiver_id
            WHERE j.worker_id IS NOT NULL
              AND j.status NOT IN ('active', 'blocked')
+             AND (m.sender_id=? OR m.receiver_id=?)
              AND m.id IN (
                SELECT MAX(m2.id) FROM messages m2
                WHERE m2.sender_id=? OR m2.receiver_id=?
                GROUP BY m2.job_id
            )
            ORDER BY m.id DESC LIMIT 100""",
-        (request.uid,request.uid,request.uid),
+        (request.uid,request.uid,request.uid,request.uid,request.uid,request.uid),
     ).fetchall()
-    result=[]
-    for x in items:
-        unread = db.q(
-            "SELECT COUNT(*) FROM messages WHERE job_id=? AND receiver_id=? AND read_at IS NULL",
-            (x[1],request.uid),
-        ).fetchone()[0]
-        result.append({
-            "job_id":x[1],"sender_id":x[2],"receiver_id":x[3],"message":x[4],
-            "sent_at":x[5],"read_at":x[6],"title":x[7],"other_username":x[8] or "",
-            "unread":int(unread)
-        })
-    return jsonify(result)
+
+    return jsonify([
+        {
+            "job_id": x[1], "sender_id": x[2], "receiver_id": x[3], "message": x[4],
+            "sent_at": x[5], "read_at": x[6], "title": x[7], "other_username": x[8] or "",
+            "unread": int(x[9] or 0)
+        }
+        for x in items
+    ])
 
 
 @app.route("/presence", methods=["POST"])
