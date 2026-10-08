@@ -91,6 +91,7 @@ _RATE_LIMIT_RULES = {
     "/reverse-geocode": (20, 60),
     "/saved-searches/": (30, 600),
     "/recently-viewed/": (60, 60),
+    "/disputes": (10, 600),
 }
 
 

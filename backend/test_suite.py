@@ -1651,5 +1651,93 @@ class JobPlatformTestCase(unittest.TestCase):
         self.assertEqual(deleted.status_code, 200)
 
 
+    def test_10f_verification_reputation_and_dispute_flow(self):
+        owner = self.client.post("/login", json={"username": "tester_creator", "password": "Password123!"})
+        worker = self.client.post("/login", json={"username": "tester_worker", "password": "Password123!"})
+        self.assertEqual(owner.status_code, 200)
+        self.assertEqual(worker.status_code, 200)
+        owner_token = owner.get_json()["token"]
+        worker_token = worker.get_json()["token"]
+
+        verification = self.client.get("/verification", headers={"Authorization": f"Bearer {worker_token}"})
+        self.assertEqual(verification.status_code, 200)
+        self.assertTrue(verification.get_json()["email_verified"])
+        self.assertIn("email_verified", {item["key"] for item in verification.get_json()["badges"]})
+
+        reputation = self.client.get("/reputation", headers={"Authorization": f"Bearer {worker_token}"})
+        self.assertEqual(reputation.status_code, 200)
+        self.assertIn("average_rating", reputation.get_json())
+        self.assertIn("success_rate", reputation.get_json())
+        self.assertIn("badges", reputation.get_json())
+
+        created = self.client.post(
+            "/job",
+            headers={"Authorization": f"Bearer {owner_token}"},
+            json={
+                "service_id": 1,
+                "title": "Dispute Center Regression Check",
+                "description": "Verify dispute authorization and lifecycle.",
+                "price": 150000,
+                "location": "Remote"
+            },
+        )
+        self.assertEqual(created.status_code, 200)
+        job_id = [item["id"] for item in self.client.get(
+            "/jobs", headers={"Authorization": f"Bearer {owner_token}"}
+        ).get_json() if item["title"] == "Dispute Center Regression Check"][0]
+
+        accepted = self.client.post(
+            "/accept_job",
+            headers={"Authorization": f"Bearer {worker_token}"},
+            json={"job_id": job_id},
+        )
+        self.assertEqual(accepted.status_code, 200)
+
+        opened = self.client.post(
+            "/disputes",
+            headers={"Authorization": f"Bearer {owner_token}"},
+            json={
+                "job_id": job_id,
+                "category": "quality",
+                "description": "Regression test dispute.",
+                "evidence": "Test evidence.",
+            },
+        )
+        self.assertEqual(opened.status_code, 201)
+        dispute_id = opened.get_json()["id"]
+
+        worker_view = self.client.get("/disputes", headers={"Authorization": f"Bearer {worker_token}"})
+        self.assertEqual(worker_view.status_code, 200)
+        self.assertTrue(any(item["id"] == dispute_id for item in worker_view.get_json()))
+
+        duplicate = self.client.post(
+            "/disputes",
+            headers={"Authorization": f"Bearer {owner_token}"},
+            json={
+                "job_id": job_id,
+                "category": "payment",
+                "description": "Second open dispute must be rejected.",
+            },
+        )
+        self.assertEqual(duplicate.status_code, 409)
+
+        admin_items = self.client.get("/admin/disputes", headers={"Authorization": f"Bearer {owner_token}"})
+        self.assertEqual(admin_items.status_code, 200)
+        self.assertTrue(any(item["id"] == dispute_id for item in admin_items.get_json()))
+
+        resolved = self.client.patch(
+            f"/admin/disputes/{dispute_id}",
+            headers={"Authorization": f"Bearer {owner_token}"},
+            json={"status": "resolved", "admin_response": "Regression test resolved."},
+        )
+        self.assertEqual(resolved.status_code, 200)
+        self.assertEqual(resolved.get_json()["status"], "resolved")
+
+        final_view = self.client.get("/disputes", headers={"Authorization": f"Bearer {owner_token}"})
+        self.assertEqual(final_view.status_code, 200)
+        item = next(item for item in final_view.get_json() if item["id"] == dispute_id)
+        self.assertEqual(item["status"], "resolved")
+
+
 if __name__ == "__main__":
     unittest.main()
