@@ -248,9 +248,19 @@ class DB:
         conn = sqlite3.connect(self.db_name, check_same_thread=False, timeout=15.0)
         conn.execute("PRAGMA journal_mode = WAL;")
         conn.execute("PRAGMA synchronous = NORMAL;")
-        conn.execute("PRAGMA cache_size = 10000;")
+        conn.execute("PRAGMA busy_timeout = 5000;")
+        conn.execute("PRAGMA cache_size = -32768;")
+        conn.execute("PRAGMA temp_store = MEMORY;")
+        conn.execute("PRAGMA mmap_size = 268435456;")
         conn.execute("PRAGMA foreign_keys = ON;")
         return conn
+
+    def _query_connection(self):
+        local = getattr(threading.current_thread(), "_finjob_db", None)
+        if local is None or local.get("db_name") != self.db_name:
+            local = {"db_name": self.db_name, "conn": self.get_connection()}
+            setattr(threading.current_thread(), "_finjob_db", local)
+        return local["conn"]
 
     def init(self):
         conn = self.get_connection()
@@ -640,8 +650,13 @@ class DB:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_user_status ON jobs(user_id, status);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_worker_status ON jobs(worker_id, status);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_service ON jobs(service_id);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status_created ON jobs(status, created_at DESC, id DESC);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_service_status_created ON jobs(service_id, status, created_at DESC, id DESC);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_services_parent_name ON services(parent_id, name);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_job ON messages(job_id, sent_at);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_job_id_desc ON messages(job_id, id DESC);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_receiver_read ON messages(receiver_id, read_at, sent_at);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_sender_sent ON messages(sender_id, sent_at);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_proposals_job_status ON job_proposals(job_id, status, created_at);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_proposals_worker_status ON job_proposals(worker_id, status, created_at);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_favorites_user_target ON favorites(user_id, target_type, target_id);")
@@ -928,15 +943,17 @@ class DB:
         conn.close()
 
     def q(self, sql, args=()):
-        conn = self.get_connection()
+        conn = self._query_connection()
         cursor = conn.cursor()
         try:
             cursor.execute(sql, args)
-            conn.commit()
+            first_keyword = sql.lstrip().split(None, 1)[0].upper() if sql.strip() else ""
+            if first_keyword not in {"SELECT", "PRAGMA", "EXPLAIN"}:
+                conn.commit()
             return QueryResult(conn, cursor)
         except Exception:
             conn.rollback()
-            conn.close()
+            cursor.close()
             raise
 
 
@@ -964,9 +981,10 @@ class QueryResult:
         return self.cursor.lastrowid
 
     def close(self):
-        if self.conn is not None:
-            self.conn.close()
-            self.conn = None
+        if self.cursor is not None:
+            self.cursor.close()
+        self.cursor = None
+        self.conn = None
 
 
 db = DB()
