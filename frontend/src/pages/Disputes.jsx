@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { useSearchParams } from "react-router-dom"
 import AppLayout from "../components/AppLayout"
 import { api } from "../api"
 
@@ -23,7 +24,13 @@ export default function Disputes() {
     const [notice, setNotice] = useState("")
     const [selected, setSelected] = useState(null)
     const [form, setForm] = useState({ job_id: "", category: "payment", description: "", evidence: "" })
+    const [searchParams] = useSearchParams()
     const token = localStorage.getItem("token") || ""
+
+    useEffect(() => {
+        const jobId = searchParams.get("job")
+        if (jobId && /^\d+$/.test(jobId)) setForm((current) => ({ ...current, job_id: jobId }))
+    }, [searchParams])
 
     const load = async () => {
         setLoading(true)

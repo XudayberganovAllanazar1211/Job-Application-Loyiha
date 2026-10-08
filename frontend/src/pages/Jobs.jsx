@@ -1195,6 +1195,15 @@ export default function Jobs() {
                                         </button>
                                     )}
 
+                                    {detailIsParticipant && ["payment_pending", "accepted", "pending_finish", "finished"].includes(detailStatus) && (
+                                        <button
+                                            className="btn btn-warn"
+                                            onClick={() => navigate(`/disputes?job=${activeJobDetails.id}`)}
+                                        >
+                                            Nizo ochish
+                                        </button>
+                                    )}
+
                                     {detailIsWorker && detailStatus === "payment_pending" && (
                                         <span className="chip job-accepted-chip">Ish egasining to‘lovi kutilmoqda</span>
                                     )}
