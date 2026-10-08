@@ -78,6 +78,7 @@ export default function Jobs() {
     const [proposalActionId, setProposalActionId] = useState(null)
     const [proposalSubmitting, setProposalSubmitting] = useState(false)
     const [proposalModalExisting, setProposalModalExisting] = useState(null)
+    const [isMobile, setIsMobile] = useState(() => window.matchMedia("(max-width: 760px)").matches)
 
     const serviceMap = useMemo(
         () => Object.fromEntries(services.map((service) => [String(service.id), service.name])),
@@ -138,6 +139,14 @@ export default function Jobs() {
     }
     useEffect(() => {
         load(1)
+    }, [])
+
+    useEffect(() => {
+        const mediaQuery = window.matchMedia("(max-width: 760px)")
+        const handleChange = (event) => setIsMobile(event.matches)
+        setIsMobile(mediaQuery.matches)
+        mediaQuery.addEventListener("change", handleChange)
+        return () => mediaQuery.removeEventListener("change", handleChange)
     }, [])
 
     const availableServices = useMemo(() => {
@@ -279,10 +288,10 @@ export default function Jobs() {
 
 
     useEffect(() => {
-        if (!selectedJob?.id && pagedRanked.length > 0) {
+        if (!isMobile && !selectedJob?.id && pagedRanked.length > 0) {
             setSelectedJob(pagedRanked[0].job)
         }
-    }, [pagedRanked, selectedJob?.id])
+    }, [pagedRanked, selectedJob?.id, isMobile])
 
     const addServiceFilter = (service) => {
         setSelectedServices([...selectedServices, service])
@@ -682,13 +691,13 @@ export default function Jobs() {
                                         <label><span>Minimal narx</span><input className="input" type="number" min="0" value={minPrice} onChange={(e) => setMinPrice(e.target.value)} /></label>
                                         <label><span>Maksimal narx</span><input className="input" type="number" min="0" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} /></label>
                                         <label><span>Joylashuv</span><input className="input" placeholder="Masalan: Toshkent" value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)} /></label>
-                                        <label style={{ gridColumn: "1 / -1" }}>
+                                                            <div className="jobs-saved-only-field">
                                             <span>Saqlangan ishlar</span>
-                                            <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+                                            <label className="jobs-checkbox-row">
                                                 <input type="checkbox" checked={savedOnly} onChange={(e) => setSavedOnly(e.target.checked)} />
                                                 <span>Faqat ★ bilan saqlangan ishlarni ko‘rsatish</span>
                                             </label>
-                                        </label>
+                                        </div>
                                         <label>
                                             <span>Vaqt</span>
                                             <select className="input" value={timeFilter} onChange={(e) => setTimeFilter(e.target.value)}>
@@ -753,15 +762,7 @@ export default function Jobs() {
                 )}
             </div>
 
-            <div
-                style={{
-                    display: "grid",
-                    gridTemplateColumns: "minmax(0, 1fr) minmax(420px, 520px)",
-                    gap: 20,
-                    alignItems: "start",
-                    width: "100%"
-                }}
-            >
+            <div className="jobs-content-layout">
                 <section style={{ minWidth: 0 }}>
                     {loading ? (
                         <div className="jobs-loading-grid">
@@ -928,15 +929,20 @@ export default function Jobs() {
                 </section>
 
                 <aside
-                    className="card jobs-detail-panel"
-                    style={{ minWidth: 0, width: "100%" }}
+                    className={"card jobs-detail-panel " + (activeJobDetails ? "has-active-job" : "")}
                 >
-                    <div className="dashboard-panel-head">
+                    <div className="dashboard-panel-head jobs-detail-panel-head">
                         <div>
                             <span className="profile-eyebrow">ISH MA'LUMOTI</span>
                             <h2>To‘liq ma’lumot</h2>
                             <p>Tanlangan jobning barcha tafsilotlari va amallari.</p>
                         </div>
+                        <button
+                            type="button"
+                            className="jobs-detail-close"
+                            onClick={() => { setSelectedJob(null); setJobDetails(null); setProposals([]) }}
+                            aria-label="Ish tafsilotlarini yopish"
+                        >×</button>
                     </div>
 
                     {jobDetailsLoading ? (
