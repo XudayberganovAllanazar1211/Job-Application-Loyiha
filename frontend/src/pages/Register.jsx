@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { api } from "../api"
+import GoogleAuthButton from "../components/GoogleAuthButton"
 
 export default function Register() {
     const [form, setForm] = useState({
@@ -19,6 +20,34 @@ export default function Register() {
     const [loading, setLoading] = useState(false)
     const [acceptedPolicies, setAcceptedPolicies] = useState(false)
     const navigate = useNavigate()
+
+    const handleGoogleSuccess = async (credential) => {
+        setNotice("")
+
+        if (!acceptedPolicies) {
+            setNotice("Google orqali ro‘yxatdan o‘tishdan oldin Maxfiylik siyosati va Foydalanish shartlari'ni qabul qiling.")
+            return
+        }
+
+        setLoading(true)
+        const result = await api("/auth/google", {
+            method: "POST",
+            body: { credential }
+        })
+
+        if (result?.token) {
+            localStorage.setItem("token", result.token)
+            const profile = await api("/profile", { token: result.token })
+            if (profile?.id) {
+                localStorage.setItem("user", JSON.stringify(profile))
+            }
+            navigate("/")
+            return
+        }
+
+        setLoading(false)
+        setNotice(result?.msg || "Google orqali ro‘yxatdan o‘tishda xatolik yuz berdi.")
+    }
 
     // 1-QADAM: Emailga kod yuborishni so'rash
     const requestVerification = async (e) => {
@@ -209,6 +238,20 @@ export default function Register() {
                                     <Link className="link" to="/terms">Foydalanish shartlari</Link> va <Link className="link" to="/privacy">Maxfiylik siyosati</Link>ni o'qidim va qabul qilaman.
                                 </span>
                             </label>
+
+                            <div style={{ textAlign: "center", marginTop: 16 }}>
+                                <div className="muted" style={{ fontSize: 13, marginBottom: 4 }}>Google account bilan</div>
+                                <GoogleAuthButton onSuccess={handleGoogleSuccess} disabled={loading || !acceptedPolicies} />
+                                <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+                                    Google orqali kirilganda email tasdiqlash kodi talab qilinmaydi.
+                                </div>
+                            </div>
+
+                            <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "18px 0 2px" }}>
+                                <div style={{ flex: 1, height: 1, background: "var(--border, #e5e7eb)" }} />
+                                <span className="muted" style={{ fontSize: 12 }}>yoki email bilan</span>
+                                <div style={{ flex: 1, height: 1, background: "var(--border, #e5e7eb)" }} />
+                            </div>
 
                             <button className="btn btn-primary" disabled={loading}>
                                 {loading ? "Yuborilmoqda..." : "Tasdiqlash kodini olish"}
