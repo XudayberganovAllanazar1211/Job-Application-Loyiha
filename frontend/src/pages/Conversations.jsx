@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useLocation, useNavigate } from "react-router-dom"
 import AppLayout from "../components/AppLayout"
 import { api } from "../api"
 
 export default function Conversations() {
     const navigate = useNavigate()
+    const location = useLocation()
     const token = localStorage.getItem("token") || ""
     const [items, setItems] = useState([])
     const [loading, setLoading] = useState(true)
-    const [notice, setNotice] = useState("")
+    const [notice, setNotice] = useState(location.state?.notice || "")
 
     const load = async () => {
         setLoading(true)
