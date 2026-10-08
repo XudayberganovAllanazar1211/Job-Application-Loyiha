@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom"
 import Login from "./pages/Login"
+import ForgotPassword from "./pages/ForgotPassword"
 import Register from "./pages/Register"
 import Dashboard from "./pages/Dashboard"
 import CreateJob from "./pages/CreateJob"
@@ -39,6 +40,7 @@ export default function App() {
             <Route path="/terms" element={<Terms />} />
             <Route path="/community-rules" element={<CommunityRules />} />
             <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />
+            <Route path="/forgot-password" element={<PublicOnly><ForgotPassword /></PublicOnly>} />
             <Route path="/register" element={<PublicOnly><Register /></PublicOnly>} />
             <Route path="/" element={<Protected><Dashboard /></Protected>} />
             <Route path="/create" element={<Protected><CreateJob /></Protected>} />
