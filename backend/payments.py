@@ -119,7 +119,56 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
             "commission_percent": _commission_percent(),
         })
 
-    @app.route("/payments/create/<int:job_id>", methods=["POST"])
+    @app.route("/payments/job/<int:job_id>")
+    @auth
+    def get_job_payment_access(job_id):
+        job = db.q(
+            """SELECT user_id,worker_id,status,COALESCE(agreed_price,price),currency,title
+               FROM jobs WHERE id=?""",
+            (job_id,),
+        ).fetchone()
+        if not job:
+            return jsonify({"msg": "To‘lov topilmadi"}), 404
+
+        owner_id, worker_id, job_status, price, currency, title = job
+        payment = db.q(
+            """SELECT payment_uuid,amount,currency,provider,status,paid_at,created_at
+               FROM payments WHERE job_id=? ORDER BY id DESC LIMIT 1""",
+            (job_id,),
+        ).fetchone()
+
+        is_participant = request.uid in (owner_id, worker_id)
+        if not is_participant:
+            return jsonify({"msg": "To‘lov topilmadi"}), 404
+
+        if payment:
+            return jsonify({
+                "ok": True,
+                "payment_uuid": payment[0],
+                "job_id": job_id,
+                "amount": payment[1],
+                "currency": payment[2],
+                "provider": payment[3],
+                "status": payment[4],
+                "paid_at": payment[5],
+                "created_at": payment[6],
+                "title": title,
+            })
+
+        if request.uid == owner_id and job_status == "payment_pending" and worker_id:
+            return jsonify({
+                "ok": True,
+                "payment_ready": True,
+                "job_id": job_id,
+                "amount": float(price),
+                "currency": currency or "UZS",
+                "title": title,
+            })
+
+        return jsonify({"msg": "To‘lov topilmadi"}), 404
+
+
+@app.route("/payments/create/<int:job_id>", methods=["POST"])
     @auth
     def create_payment(job_id):
         job = db.q(
