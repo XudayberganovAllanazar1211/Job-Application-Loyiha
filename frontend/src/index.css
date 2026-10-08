@@ -2580,25 +2580,28 @@ html[data-theme="dark"] .jobs-detail-panel.has-active-job .jobs-detail-panel-hea
 }
 
 
-/* Jobs mobile detail: deterministic scroll container */
+/* Jobs mobile detail: visible jobs list + scrollable bottom sheet */
 @media (max-width:760px){
+    .jobs-detail-backdrop{display:none!important}
     .jobs-detail-panel.has-active-job{
         display:flex!important;
         flex-direction:column!important;
         position:fixed!important;
         left:8px!important;
         right:8px!important;
-        top:72px!important;
-        bottom:auto!important;
+        top:auto!important;
+        bottom:calc(62px + env(safe-area-inset-bottom))!important;
         width:auto!important;
-        height:calc(100dvh - 82px)!important;
-        max-height:calc(100dvh - 82px)!important;
-        min-height:0!important;
+        height:min(56dvh,520px)!important;
+        max-height:min(56dvh,520px)!important;
+        min-height:280px!important;
         margin:0!important;
-        z-index:2000!important;
+        z-index:900!important;
         overflow:hidden!important;
         touch-action:auto!important;
         overscroll-behavior:contain;
+        border-radius:20px!important;
+        box-shadow:0 18px 60px rgba(15,23,42,.24)!important;
     }
     .jobs-detail-panel.has-active-job .jobs-detail-panel-head{
         flex:0 0 auto!important;
@@ -2606,12 +2609,13 @@ html[data-theme="dark"] .jobs-detail-panel.has-active-job .jobs-detail-panel-hea
         top:auto!important;
         z-index:5;
         background:var(--card,#fff);
+        border-bottom:1px solid var(--border,#e5e7eb);
     }
     .jobs-detail-panel.has-active-job .dashboard-job-detail-body{
         flex:1 1 auto!important;
         min-height:0!important;
         max-height:none!important;
-        overflow-y:scroll!important;
+        overflow-y:auto!important;
         overflow-x:hidden!important;
         -webkit-overflow-scrolling:touch!important;
         overscroll-behavior-y:contain;
@@ -2623,9 +2627,10 @@ html[data-theme="dark"] .jobs-detail-panel.has-active-job .jobs-detail-panel-hea
     .jobs-detail-panel.has-active-job{
         left:6px!important;
         right:6px!important;
-        top:66px!important;
-        height:calc(100dvh - 74px)!important;
-        max-height:calc(100dvh - 74px)!important;
+        bottom:calc(60px + env(safe-area-inset-bottom))!important;
+        height:min(58dvh,500px)!important;
+        max-height:min(58dvh,500px)!important;
+        min-height:260px!important;
         border-radius:18px!important;
     }
 }
