@@ -71,8 +71,11 @@ _rate_buckets = {}
 _rate_lock = threading.Lock()
 _RATE_LIMIT_RULES = {
     "/login": (10, 60),
+    "/auth/google": (10, 60),
     "/register/send-code": (3, 900),
     "/register/verify": (10, 900),
+    "/forgot-password/send-code": (3, 900),
+    "/forgot-password/reset": (10, 900),
     "/message": (60, 60),
     "/report": (10, 600),
     "/wallet/withdraw": (10, 600),
@@ -86,7 +89,7 @@ def _rate_limit_key(path):
     payload = request.get_json(silent=True) or {}
     if path == "/login":
         extra = ":" + str(payload.get("username", "")).strip().lower()[:254]
-    elif path in ("/register/send-code", "/register/verify"):
+    elif path in ("/register/send-code", "/register/verify", "/forgot-password/send-code", "/forgot-password/reset"):
         extra = ":" + str(payload.get("email", "")).strip().lower()[:254]
     return f"{path}:{ip}{extra}"
 
@@ -130,36 +133,94 @@ def apply_rate_limits():
     return None
 
 # -------- E-MAIL (SMTP) SOZLAMALARI --------
-SMTP_SERVER = os.environ.get("SMTP_SERVER", "smtp.gmail.com")
-SMTP_PORT = int(os.environ.get("SMTP_PORT", 587))
-SMTP_USER = os.environ.get("SMTP_USER", "")
-SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
+SMTP_SERVER = os.environ.get("MAIL_SERVER") or os.environ.get("SMTP_SERVER", "smtp.gmail.com")
+try:
+    SMTP_PORT = int(os.environ.get("MAIL_PORT") or os.environ.get("SMTP_PORT", "587"))
+except (TypeError, ValueError):
+    SMTP_PORT = 587
+SMTP_USER = os.environ.get("MAIL_USERNAME") or os.environ.get("SMTP_USER", "")
+SMTP_PASSWORD = os.environ.get("MAIL_PASSWORD") or os.environ.get("SMTP_PASSWORD", "")
+SMTP_USE_TLS = str(os.environ.get("MAIL_USE_TLS", os.environ.get("SMTP_USE_TLS", "True"))).strip().lower() in {"1", "true", "yes", "on"}
+SMTP_USE_SSL = str(os.environ.get("MAIL_USE_SSL", os.environ.get("SMTP_USE_SSL", "False"))).strip().lower() in {"1", "true", "yes", "on"}
 
-# Vaqtinchalik tasdiqlash kodlarini xotirada saqlash uchun lug'at:
-# email -> { "code": str, "data": dict, "expiry": datetime }
 pending_verifications = {}
+pending_password_resets = {}
+
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
 
 
-def send_email_code(to_email, code):
-    subject = "FinJob - Ro'yxatdan o'tish kodi"
-    body = f"Sizning 6 xonali ro'yxatdan o'tish kodingiz: {code}\nUshbu kodni hech kimga bermang."
+def send_auth_code_email(to_email, code, purpose="register"):
+    if purpose == "reset":
+        subject = "FinJob — Parolni tiklash kodi"
+        title = "Parolni tiklash"
+        intro = "FinJob hisobingiz uchun parolni tiklash so‘rovi qabul qilindi."
+    else:
+        subject = "FinJob — Elektron pochtani tasdiqlash kodi"
+        title = "Email manzilini tasdiqlash"
+        intro = "FinJob hisobingizni ro‘yxatdan o‘tkazishni yakunlash uchun quyidagi koddan foydalaning."
 
-    msg = MIMEMultipart()
+    text_body = (
+        f"{intro}\n\n"
+        f"Tasdiqlash kodi: {code}\n\n"
+        "Kod 10 daqiqa amal qiladi. Agar bu so‘rovni siz yubormagan bo‘lsangiz, "
+        "ushbu xatni e’tiborsiz qoldiring. Kodni hech kimga bermang."
+    )
+    html_body = f"""<!doctype html>
+<html lang="uz">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;background:#f4f7fb;font-family:Arial,sans-serif;color:#172033;">
+  <div style="max-width:560px;margin:32px auto;padding:0 16px;">
+    <div style="background:#111827;border-radius:18px 18px 0 0;padding:24px;color:white;">
+      <div style="font-size:24px;font-weight:800;">FinJob</div>
+      <div style="margin-top:6px;opacity:.8;">Ish toping. Ishni yakunlang.</div>
+    </div>
+    <div style="background:white;border:1px solid #e5e7eb;border-top:0;border-radius:0 0 18px 18px;padding:32px;">
+      <h1 style="font-size:22px;margin:0 0 12px;">{title}</h1>
+      <p style="font-size:15px;line-height:1.6;color:#4b5563;">{intro}</p>
+      <div style="margin:26px 0;text-align:center;background:#f3f4f6;border-radius:14px;padding:20px;">
+        <div style="font-size:12px;color:#6b7280;margin-bottom:8px;">6 xonali kod</div>
+        <div style="font-size:34px;letter-spacing:8px;font-weight:800;">{code}</div>
+      </div>
+      <p style="font-size:13px;line-height:1.6;color:#6b7280;">
+        Kod 10 daqiqa amal qiladi. Agar bu so‘rovni siz yubormagan bo‘lsangiz, xatni e’tiborsiz qoldiring.
+      </p>
+      <p style="font-size:13px;color:#9ca3af;margin:24px 0 0;">Bu avtomatik xat. Iltimos, unga javob bermang.</p>
+    </div>
+  </div>
+</body>
+</html>"""
+
+    msg = MIMEMultipart("alternative")
     msg["From"] = SMTP_USER
     msg["To"] = to_email
     msg["Subject"] = subject
-    msg.attach(MIMEText(body, "plain"))
+    msg["Reply-To"] = SMTP_USER
+    msg.attach(MIMEText(text_body, "plain", "utf-8"))
+    msg.attach(MIMEText(html_body, "html", "utf-8"))
 
     try:
-        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
-        server.starttls()
-        server.login(SMTP_USER, SMTP_PASSWORD)
-        server.sendmail(SMTP_USER, to_email, msg.as_string())
-        server.quit()
+        if not SMTP_USER or not SMTP_PASSWORD:
+            app.logger.error("SMTP credentials sozlanmagan.")
+            return False
+        if SMTP_USE_SSL:
+            server = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=15)
+        else:
+            server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=15)
+        with server:
+            server.ehlo()
+            if SMTP_USE_TLS:
+                server.starttls()
+                server.ehlo()
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.sendmail(SMTP_USER, [to_email], msg.as_string())
         return True
     except Exception as e:
-        app.logger.exception("Tasdiqlash xatini yuborishda xatolik yuz berdi: %s", e)
+        app.logger.exception("Email yuborishda xatolik yuz berdi: %s", e)
         return False
+
+
+def send_email_code(to_email, code):
+    return send_auth_code_email(to_email, code, "register")
 
 
 # -------- DATABASE --------
@@ -456,6 +517,8 @@ class DB:
             ("balance", "ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0"),
             ("last_seen_at", "ALTER TABLE users ADD COLUMN last_seen_at TEXT DEFAULT ''"),
             ("is_blocked", "ALTER TABLE users ADD COLUMN is_blocked INTEGER NOT NULL DEFAULT 0"),
+            ("auth_provider", "ALTER TABLE users ADD COLUMN auth_provider TEXT DEFAULT 'password'"),
+            ("google_sub", "ALTER TABLE users ADD COLUMN google_sub TEXT DEFAULT ''"),
         ]
         for col_name, sql in migrations:
             if col_name not in existing_user_cols:
@@ -2045,6 +2108,113 @@ def admin_delete_rating(rating_id):
 
 
 # -------- AUTH --------
+def issue_user_token(user_id):
+    role_row = db.q("SELECT role, COALESCE(token_version,0) FROM users WHERE id=?", (user_id,)).fetchone()
+    user_role = role_row[0] if role_row and role_row[0] else "user"
+    token_version = int(role_row[1] if role_row else 0)
+    return token(user_id, role=user_role, token_version=token_version), user_role
+
+
+def verify_google_credential(credential):
+    if not GOOGLE_CLIENT_ID:
+        return None, "GOOGLE_CLIENT_ID serverda sozlanmagan."
+
+    try:
+        request_obj = URLRequest(
+            "https://oauth2.googleapis.com/tokeninfo?" + urlencode({"id_token": credential}),
+            headers={"Accept": "application/json"},
+        )
+        with urlopen(request_obj, timeout=8) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (HTTPError, URLError, TimeoutError, ValueError):
+        return None, "Google credentialini tekshirib bo‘lmadi."
+
+    if payload.get("aud") != GOOGLE_CLIENT_ID:
+        return None, "Google credentiali ushbu FinJob ilovasiga tegishli emas."
+    if payload.get("iss") not in {"accounts.google.com", "https://accounts.google.com"}:
+        return None, "Google credentiali ishonchsiz."
+    if str(payload.get("email_verified", "")).lower() != "true":
+        return None, "Google email manzili tasdiqlanmagan."
+
+    email = str(payload.get("email", "")).strip().lower()
+    sub = str(payload.get("sub", "")).strip()
+    if not email or not sub:
+        return None, "Google account ma’lumotlari to‘liq emas."
+    return payload, None
+
+
+def make_google_username(email):
+    base = re.sub(r"[^A-Za-z0-9_.-]", "", email.split("@", 1)[0])[:24] or "googleuser"
+    username = base
+    suffix = 1
+    while db.q("SELECT id FROM users WHERE username=?", (username,)).fetchone():
+        suffix_text = str(suffix)
+        username = (base[:32-len(suffix_text)-1] + "_" + suffix_text)
+        suffix += 1
+    return username
+
+
+@app.route("/auth/google", methods=["POST"])
+def google_auth():
+    d = request.json or {}
+    credential = str(d.get("credential", "")).strip()
+    if not credential:
+        return jsonify({"msg": "Google credentiali yuborilmadi."}), 400
+
+    google_user, error = verify_google_credential(credential)
+    if error:
+        return jsonify({"msg": error}), 400
+
+    email = google_user["email"].lower()
+    google_sub = google_user["sub"]
+    existing = db.q(
+        "SELECT id, role, auth_provider, google_sub FROM users WHERE google_sub=? OR lower(email)=?",
+        (google_sub, email),
+    ).fetchone()
+
+    if existing:
+        if existing[3] != google_sub:
+            return jsonify({"msg": "Bu email allaqachon parol orqali ro‘yxatdan o‘tgan. Avval shu accountga parol bilan kiring."}), 409
+        access_token, user_role = issue_user_token(existing[0])
+        return jsonify({"token": access_token, "role": user_role})
+
+    first_name = str(google_user.get("given_name", "")).strip()[:100]
+    last_name = str(google_user.get("family_name", "")).strip()[:100]
+    username = make_google_username(email)
+    picture = str(google_user.get("picture", "")).strip()[:1000]
+    random_password = generate_password_hash(secrets.token_urlsafe(32))
+    now_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    try:
+        db.q(
+            """INSERT INTO users(
+                username,password,first_name,last_name,birthday,email,bio,skills,
+                created_at,average_rating,role,avatar_url,auth_provider,google_sub
+            ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                username,
+                random_password,
+                first_name or username,
+                last_name,
+                "",
+                email,
+                "",
+                "",
+                now_time,
+                0.0,
+                "user",
+                picture,
+                "google",
+                google_sub,
+            ),
+        )
+        new_user = db.q("SELECT id FROM users WHERE google_sub=?", (google_sub,)).fetchone()
+        access_token, user_role = issue_user_token(new_user[0])
+        return jsonify({"token": access_token, "role": user_role})
+    except sqlite3.IntegrityError:
+        return jsonify({"msg": "Google accountni ro‘yxatdan o‘tkazishda account allaqachon mavjud bo‘lib qoldi. Qayta urinib ko‘ring."}), 409
+
+
 @app.route("/login", methods=["POST"])
 def login():
     d = request.json or {}
@@ -2061,10 +2231,10 @@ def login():
         return jsonify({"msg": "Parol 8–256 belgidan iborat bo‘lishi kerak"}), 400
 
     u = db.q(
-        "SELECT id, password, role FROM users WHERE username=? OR lower(email)=?",
+        "SELECT id, password, role, auth_provider FROM users WHERE username=? OR lower(email)=?",
         (username_or_email, login_email),
     ).fetchone()
-    if u and check_password_hash(u[1], password):
+    if u and u[1] and check_password_hash(u[1], password):
         user_role = u[2] if len(u) > 2 and u[2] else "user"
         version_row = db.q("SELECT COALESCE(token_version,0) FROM users WHERE id=?", (u[0],)).fetchone()
         token_version = int(version_row[0] if version_row else 0)
@@ -2172,8 +2342,8 @@ def verify_code():
         assigned_role = "user"
 
         db.q(
-            """INSERT INTO users(username,password,first_name,last_name,birthday,email,bio,skills,created_at,average_rating,role)
-               VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+            """INSERT INTO users(username,password,first_name,last_name,birthday,email,bio,skills,created_at,average_rating,role,auth_provider)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 ud["username"],
                 ud["password"],
@@ -2186,6 +2356,7 @@ def verify_code():
                 now_time,
                 0.0,
                 assigned_role,
+                "password",
             ),
         )
 
@@ -2193,6 +2364,75 @@ def verify_code():
         return jsonify({"msg": "ok", "role": assigned_role})
     except Exception:
         return jsonify({"msg": "Ro'yxatdan o'tishda xatolik yuz berdi"}), 400
+
+
+@app.route("/forgot-password/send-code", methods=["POST"])
+def forgot_password_send_code():
+    d = request.json or {}
+    email = str(d.get("email", "")).strip().lower()
+
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email) or len(email) > 254:
+        return jsonify({"msg": "Elektron pochta manzili noto‘g‘ri."}), 400
+
+    # Har doim bir xil javob qaytaramiz: email accountga tegishli ekanini oshkor qilmaymiz.
+    user = db.q("SELECT id FROM users WHERE lower(email)=?", (email,)).fetchone()
+    if not user:
+        return jsonify({"msg": "Agar bu email FinJob accountiga tegishli bo‘lsa, tiklash kodi yuborildi."})
+
+    code = str(secrets.randbelow(900000) + 100000)
+    now_dt = datetime.datetime.now()
+    expired_keys = [key for key, value in pending_password_resets.items() if now_dt > value.get("expiry", now_dt)]
+    for key in expired_keys:
+        pending_password_resets.pop(key, None)
+
+    pending_password_resets[email] = {
+        "code": code,
+        "attempts": 0,
+        "user_id": int(user[0]),
+        "expiry": now_dt + datetime.timedelta(minutes=10),
+    }
+
+    if not send_auth_code_email(email, code, "reset"):
+        pending_password_resets.pop(email, None)
+        return jsonify({"msg": "Email yuborilmadi. Keyinroq qayta urinib ko‘ring."}), 502
+
+    return jsonify({"msg": "Agar bu email FinJob accountiga tegishli bo‘lsa, tiklash kodi yuborildi."})
+
+
+@app.route("/forgot-password/reset", methods=["POST"])
+def forgot_password_reset():
+    d = request.json or {}
+    email = str(d.get("email", "")).strip().lower()
+    code = str(d.get("code", "")).strip()
+    new_password = str(d.get("password", ""))
+
+    if not email or not code or len(code) != 6 or not code.isdigit():
+        return jsonify({"msg": "Email va 6 xonali kodni to‘g‘ri kiriting."}), 400
+    if len(new_password) < 8 or len(new_password) > 256:
+        return jsonify({"msg": "Yangi parol 8–256 belgidan iborat bo‘lishi kerak."}), 400
+
+    record = pending_password_resets.get(email)
+    if not record:
+        return jsonify({"msg": "Kod topilmadi yoki uning muddati tugagan. Yangi kod so‘rang."}), 400
+
+    if datetime.datetime.now() > record["expiry"]:
+        pending_password_resets.pop(email, None)
+        return jsonify({"msg": "Kodning amal qilish muddati tugagan. Yangi kod so‘rang."}), 400
+
+    record["attempts"] += 1
+    if not secrets.compare_digest(record["code"], code):
+        if record["attempts"] >= 5:
+            pending_password_resets.pop(email, None)
+            return jsonify({"msg": "Kod uchun urinishlar limiti tugadi. Yangi kod so‘rang."}), 429
+        return jsonify({"msg": "Tasdiqlash kodi noto‘g‘ri."}), 400
+
+    password_hash = generate_password_hash(new_password)
+    db.q(
+        "UPDATE users SET password=?, token_version=COALESCE(token_version,0)+1 WHERE id=?",
+        (password_hash, record["user_id"]),
+    ).close()
+    pending_password_resets.pop(email, None)
+    return jsonify({"msg": "ok"})
 
 
 @app.route("/logout", methods=["POST"])
