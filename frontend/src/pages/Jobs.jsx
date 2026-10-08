@@ -646,6 +646,7 @@ export default function Jobs() {
             title="Ishlar"
             subtitle="Tizimdagi ishlarni qidiring, tanlang va to‘liq ma’lumotlarini ko‘ring."
         >
+            <div className="jobs-page-shell">
             <div className="card jobs-controls-card" style={{ marginBottom: 18 }}>
                 <div className="section-toolbar" style={{ marginBottom: 0 }}>
                     <div className="page-head">
@@ -1141,6 +1142,7 @@ export default function Jobs() {
                     </div>
                 </div>
             )}
+            </div>
         </AppLayout>
     )
 }
