@@ -35,6 +35,10 @@ export default function Rating() {
         const fetchJob = async () => {
             if (!job && jobId) {
                 const jobData = await api(`/jobs/${jobId}`, { token })
+                if (jobData?.ok === false && [403, 404].includes(Number(jobData.status))) {
+                    navigate("/jobs", { replace: true })
+                    return
+                }
                 if (jobData?.id) {
                     setJob(jobData)
                     const targetId = String(jobData.user_id) === String(me?.id)
