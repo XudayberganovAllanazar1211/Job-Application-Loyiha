@@ -2740,3 +2740,46 @@ html[data-theme="dark"] .jobs-detail-loading-note{
     border-color:#1e3a8a;
     color:#93c5fd;
 }
+
+
+/* Final mobile Jobs detail scroll fix */
+@media(max-width:760px){
+    .jobs-detail-panel.has-active-job{
+        display:block!important;
+        position:fixed!important;
+        left:8px!important;
+        right:8px!important;
+        top:72px!important;
+        bottom:10px!important;
+        width:auto!important;
+        height:auto!important;
+        max-height:none!important;
+        overflow-y:auto!important;
+        overflow-x:hidden!important;
+        -webkit-overflow-scrolling:touch;
+        overscroll-behavior-y:contain;
+        touch-action:pan-y;
+    }
+    .jobs-detail-panel.has-active-job .jobs-detail-panel-head{
+        position:sticky;
+        top:0;
+        z-index:5;
+        background:var(--card,#fff);
+    }
+    .jobs-detail-panel.has-active-job .dashboard-job-detail-body{
+        min-height:auto!important;
+        overflow:visible!important;
+        padding-right:0;
+    }
+}
+@media(max-width:480px){
+    .jobs-detail-panel.has-active-job{
+        left:6px!important;
+        right:6px!important;
+        top:66px!important;
+        bottom:8px!important;
+    }
+}
+html[data-theme="dark"] .jobs-detail-panel.has-active-job .jobs-detail-panel-head{
+    background:#111827;
+}
