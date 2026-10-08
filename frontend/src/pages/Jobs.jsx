@@ -179,9 +179,7 @@ export default function Jobs() {
         if (!isDetailOpen) return undefined
 
         const previousOverflow = document.body.style.overflow
-        const previousTouchAction = document.body.style.touchAction
         document.body.style.overflow = "hidden"
-        document.body.style.touchAction = "none"
 
         const handleEscape = (event) => {
             if (event.key === "Escape") {
@@ -194,7 +192,6 @@ export default function Jobs() {
 
         return () => {
             document.body.style.overflow = previousOverflow
-            document.body.style.touchAction = previousTouchAction
             document.removeEventListener("keydown", handleEscape)
         }
     }, [isMobile, selectedJob?.id])
