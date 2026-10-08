@@ -735,6 +735,8 @@ export default function Dashboard() {
         )}
         </AppLayout>
     )
+}
+
 function DashboardChatAttachment({ url, name, type, apiBase, token, onOpen }) {
     const [src, setSrc] = useState("")
     const [error, setError] = useState(false)
