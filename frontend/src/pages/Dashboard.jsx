@@ -668,20 +668,50 @@ export default function Dashboard() {
                                                     <span>{formatMessageDate(message.sent_at)}</span>
                                                 </div>
                                             )}
-                                            <div className={`message ${mine ? "me" : "them"}`}>
-                                                <div className="message-meta">
-                                                    {mine ? "Siz" : (message.sender_name || "Foydalanuvchi")} • {formatMessageTime(message.sent_at)}
+                                            <div className={`dashboard-chat-message-row ${mine ? "mine" : "theirs"}`}>
+                                                {!mine && (
+                                                    message.sender_avatar_url ? (
+                                                        <img
+                                                            className="chat-avatar"
+                                                            src={getAvatarSrc(message.sender_avatar_url, API_BASE)}
+                                                            alt=""
+                                                        />
+                                                    ) : (
+                                                        <div className="chat-avatar chat-avatar-fallback">
+                                                            {getInitials(message.sender_name || "Foydalanuvchi")}
+                                                        </div>
+                                                    )
+                                                )}
+                                                <div className={`message ${mine ? "me" : "them"}`}>
+                                                    <div className="message-meta">
+                                                        {mine ? "Siz" : (message.sender_name || "Foydalanuvchi")} • {formatMessageTime(message.sent_at)}
+                                                    </div>
+                                                    {message.message && <div>{message.message}</div>}
+                                                    {message.attachment_url && (
+                                                        <DashboardChatAttachment
+                                                            url={message.attachment_url}
+                                                            name={message.attachment_name || "Fayl"}
+                                                            type={message.attachment_type || ""}
+                                                            apiBase={API_BASE}
+                                                            token={token}
+                                                            onOpen={openChatAttachment}
+                                                        />
+                                                    )}
                                                 </div>
-                                                {message.message && <div>{message.message}</div>}
-                                                {message.attachment_url && (
-                                                    <DashboardChatAttachment
-                                                        url={message.attachment_url}
-                                                        name={message.attachment_name || "Fayl"}
-                                                        type={message.attachment_type || ""}
-                                                        apiBase={API_BASE}
-                                                        token={token}
-                                                        onOpen={openChatAttachment}
-                                                    />
+                                                {mine && (
+                                                    message.sender_avatar_url ? (
+                                                        <img
+                                                            className="chat-avatar"
+                                                            src={getAvatarSrc(message.sender_avatar_url, API_BASE)}
+                                                            alt=""
+                                                        />
+                                                    ) : (
+                                                        <div className="chat-avatar chat-avatar-fallback">
+                                                            {getInitials(user?.first_name && user?.last_name
+                                                                ? `${user.first_name} ${user.last_name}`
+                                                                : user?.username || "Siz")}
+                                                        </div>
+                                                    )
                                                 )}
                                             </div>
                                         </div>
@@ -748,6 +778,16 @@ export default function Dashboard() {
         )}
         </AppLayout>
     )
+}
+
+function getAvatarSrc(url, apiBase) {
+    if (!url) return ""
+    return url.startsWith("http://") || url.startsWith("https://") ? url : apiBase + url
+}
+
+function getInitials(name) {
+    const parts = String(name || "").trim().split(/\\s+/).filter(Boolean)
+    return parts.slice(0, 2).map((part) => part[0].toUpperCase()).join("") || "?"
 }
 
 function getMessageDateKey(value) {
