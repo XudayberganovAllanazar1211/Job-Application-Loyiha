@@ -81,7 +81,7 @@ export default function Chat() {
 
     const loadPresence = async () => {
         if (!receiverId) return
-        const result = await api(`/presence/${receiverId}`, { token })
+        const result = await api(`/presence/${receiverId}?job_id=${encodeURIComponent(jobId)}`, { token })
         if (result?.ok) {
             setOtherOnline(Boolean(result.online))
             setOtherLastSeen(result.last_seen_at || "")
