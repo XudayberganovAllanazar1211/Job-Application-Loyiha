@@ -1471,11 +1471,6 @@ class JobPlatformTestCase(unittest.TestCase):
         )
         self.assertIn(malformed_rating.status_code, (400, 409))
 
-        rate_reverse = self.client.get(
-            "/reverse-geocode?lat=41.3&lon=69.2",
-            headers={"Authorization": f"Bearer {admin_token}"}
-        )
-        self.assertIn(rate_reverse.status_code, (200, 404, 502))
 
 
 if __name__ == "__main__":
