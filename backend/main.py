@@ -3769,7 +3769,9 @@ def conversations():
            JOIN jobs j ON j.id=m.job_id
            LEFT JOIN users s ON s.id=m.sender_id
            LEFT JOIN users r ON r.id=m.receiver_id
-           WHERE m.id IN (
+           WHERE j.worker_id IS NOT NULL
+             AND j.status NOT IN ('active', 'blocked')
+             AND m.id IN (
                SELECT MAX(m2.id) FROM messages m2
                WHERE m2.sender_id=? OR m2.receiver_id=?
                GROUP BY m2.job_id
@@ -3803,6 +3805,9 @@ def update_presence():
 @auth
 def get_presence(user_id):
     if user_id != request.uid:
+        block_response = enforce_block("chat")
+        if block_response:
+            return block_response
         raw_job_id = request.args.get("job_id")
         try:
             presence_job_id = int(raw_job_id)
