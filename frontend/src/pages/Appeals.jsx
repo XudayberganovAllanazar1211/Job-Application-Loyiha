@@ -29,12 +29,13 @@ export default function Appeals() {
     const [selectedBlock, setSelectedBlock] = useState(null)
     const [text, setText] = useState("")
     const [notice, setNotice] = useState("")
+    const [noticeType, setNoticeType] = useState("ok")
     const [loading, setLoading] = useState(false)
 
     const load = async () => {
         const result = await api("/appeals", { token })
         if (result?.ok) setData(result)
-        else setNotice(result?.msg || "Arizalar ma’lumotlarini yuklab bo‘lmadi.")
+        else { setNoticeType("warn"); setNotice(result?.msg || "Arizalar ma’lumotlarini yuklab bo‘lmadi.") }
     }
 
     useEffect(() => {
@@ -54,10 +55,12 @@ export default function Appeals() {
         if (result?.ok) {
             setText("")
             setSelectedBlock(null)
+            setNoticeType("ok")
             setNotice("Arizangiz yuborildi. Administratorlar uni ko‘rib chiqadi.")
             await load()
         } else {
-            setNotice(result?.msg || "Appeal yuborilmadi.")
+            setNoticeType("warn")
+            setNotice(result?.msg || "Ariza yuborilmadi.")
         }
         setLoading(false)
     }
@@ -66,13 +69,13 @@ export default function Appeals() {
 
     return (
         <AppLayout title="Blok bo‘yicha arizalar" subtitle="Hisobingizdagi cheklovlar sababini ko‘ring va norozi bo‘lsangiz qayta ko‘rib chiqish uchun ariza yuboring.">
-            {notice && <div className="notice ok" style={{ marginBottom: 16 }}>{notice}</div>}
+            {notice && <div className={"notice " + noticeType} style={{ marginBottom: 16 }} role="status">{notice}</div>}
 
             <div className="appeals-layout">
                 <div className="card appeals-hero">
                     <span className="appeals-eyebrow">HISOB XAVFSIZLIGI</span>
                     <h2>Cheklovlar va qayta ko‘rib chiqish</h2>
-                    <p>Har bir block alohida ko‘rsatiladi. Administrator qo‘ygan sabab, turi va tugash vaqtini ko‘rishingiz mumkin. Norozi bo‘lsangiz, aynan shu cheklov bo‘yicha qayta ko‘rib chiqish arizasini yuboring.</p>
+                    <p>Har bir cheklov alohida ko‘rsatiladi. Administrator qo‘ygan sabab, turi va tugash vaqtini ko‘rishingiz mumkin. Norozi bo‘lsangiz, aynan shu cheklov bo‘yicha qayta ko‘rib chiqish arizasini yuboring.</p>
                 </div>
 
                 <div className="card appeals-section">
@@ -111,8 +114,8 @@ export default function Appeals() {
                                             <strong>Ariza #{item.id}</strong>
                                             <span className={"admin-badge " + (item.status === "approved" ? "success" : item.status === "rejected" ? "danger" : "neutral")}>{appealStatus[item.status] || item.status}</span>
                                         </div>
-                                        <p><b>Block:</b> #{item.block_id} · {labels[item.block_type] || item.block_type}</p>
-                                        <p><b>Block sababi:</b> {item.block_reason}</p>
+                                        <p><b>Cheklov:</b> #{item.block_id} · {labels[item.block_type] || item.block_type}</p>
+                                        <p><b>Cheklov sababi:</b> {item.block_reason}</p>
                                         <p><b>Sizning fikringiz:</b> {item.appeal_text}</p>
                                         {item.admin_response && <p><b>Admin javobi:</b> {item.admin_response}</p>}
                                     </div>
@@ -131,7 +134,7 @@ export default function Appeals() {
                             <div>
                                 <span className="admin-search-eyebrow">ARIZA #{selectedBlock.id}</span>
                                 <h3>{labels[selectedBlock.block_type] || selectedBlock.block_type}</h3>
-                                <p>Block sababi: {selectedBlock.reason}</p>
+                                <p>Cheklov sababi: {selectedBlock.reason}</p>
                             </div>
                             <button className="admin-modal-close" onClick={() => setSelectedBlock(null)}>×</button>
                         </div>
