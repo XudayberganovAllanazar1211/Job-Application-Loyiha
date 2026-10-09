@@ -2658,3 +2658,18 @@ html[data-theme="dark"] .profile-trust-badge.reputation{background:#172554;borde
 .dispute-job-lock{display:grid;gap:10px;border-color:var(--primary,#2563eb);background:var(--primary-soft,#eff6ff)}
 .dispute-locked-meta{display:flex;flex-wrap:wrap;gap:8px}
 .dispute-locked-meta span{display:inline-flex;align-items:center;padding:6px 10px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:12px}
+
+
+/* Compact action buttons in dispute cards on desktop and mobile. */
+.dispute-item>.dispute-detail-btn,
+.dispute-item>.admin-dispute-review-btn{
+    width:fit-content;
+    min-height:32px;
+    padding:7px 11px;
+    font-size:12px;
+    line-height:1.2;
+    border-radius:9px;
+    justify-self:start;
+    align-self:start;
+    box-shadow:none;
+}
