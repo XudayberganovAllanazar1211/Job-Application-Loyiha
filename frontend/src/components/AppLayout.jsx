@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { NavLink, useLocation, useNavigate } from "react-router-dom"
 import { api } from "../api"
+import { formatTimeAgo } from "../utils/time"
 
 const navItems = [
     ["/", "Boshqaruv paneli", "⌂"],
@@ -72,20 +73,7 @@ export default function AppLayout({ title, subtitle, children }) {
         return () => { alive = false }
     }, [token])
 
-    const formatNotificationTime = (dateString) => {
-        if (!dateString) return "Vaqt noma'lum"
-        const value = new Date(String(dateString).replace(" ", "T"))
-        if (Number.isNaN(value.getTime())) return "Vaqt noma'lum"
-        const seconds = Math.max(0, Math.floor((Date.now() - value.getTime()) / 1000))
-        if (seconds < 60) return "Hozirgina"
-        const minutes = Math.floor(seconds / 60)
-        if (minutes < 60) return `${minutes} daqiqa oldin`
-        const hours = Math.floor(minutes / 60)
-        if (hours < 24) return `${hours} soat oldin`
-        const days = Math.floor(hours / 24)
-        if (days < 7) return `${days} kun oldin`
-        return value.toLocaleDateString("uz-UZ", { day: "2-digit", month: "short" })
-    }
+    const formatNotificationTime = formatTimeAgo
 
     useEffect(() => {
         const sendPresence = () => api("/presence", { method: "POST", token })
