@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react"
 import AppLayout from "../components/AppLayout"
+import VerificationBadges from "../components/VerificationBadges"
 import { api } from "../api"
 import { formatTimeAgo } from "../utils/time"
 
@@ -562,11 +563,7 @@ export default function Profile() {
                         <div className="profile-verification-grid">
                             <div>
                                 <div className="profile-verification-title">Tasdiqlash</div>
-                                <div className="profile-badge-list">
-                                    {(form.verification?.badges || []).length ? form.verification.badges.map((badge) => (
-                                        <span key={badge.key} className="profile-trust-badge">{badge.label}</span>
-                                    )) : <span className="muted">Tasdiqlash ma’lumotlari yuklanmoqda.</span>}
-                                </div>
+                                <VerificationBadges verification={form.verification} />
                             </div>
                             <div>
                                 <div className="profile-verification-title">Reputatsiya</div>
