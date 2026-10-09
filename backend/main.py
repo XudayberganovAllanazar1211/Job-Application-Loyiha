@@ -1838,6 +1838,8 @@ def update_report(report_id):
         return jsonify({"msg": "Foydalanuvchi chorasi noto‘g‘ri"}), 400
     if len(response) > 3000:
         return jsonify({"msg": "Admin izohi 3000 belgidan oshmasligi kerak"}), 400
+    if sanction_type != "none" and len(response.strip()) < 10:
+        return jsonify({"msg": "Foydalanuvchiga cheklov qo‘yish uchun kamida 10 belgidan iborat aniq sabab yozing."}), 400
 
     is_final = status in ("resolved", "rejected")
     has_actions = payment_action != "none" or job_action != "none" or sanction_type != "none" or notify_target != "none"
@@ -2044,8 +2046,8 @@ def admin_create_block(user_id):
     duration_raw=data.get("duration_minutes")
     if block_type not in BLOCK_TYPE_LABELS:
         return jsonify({"msg":"Block turi noto‘g‘ri"}),400
-    if not reason or len(reason)>2000:
-        return jsonify({"msg":"Block sababi 1–2000 belgidan iborat bo‘lishi kerak"}),400
+    if len(reason)<10 or len(reason)>2000:
+        return jsonify({"msg":"Block sababi 10–2000 belgidan iborat aniq izoh bo‘lishi kerak"}),400
     if user_id==int(request.uid):
         return jsonify({"msg":"O‘zingizni bloklay olmaysiz"}),400
     target=db.q("SELECT id,username,role FROM users WHERE id=?",(user_id,)).fetchone()
@@ -2101,8 +2103,8 @@ def admin_update_block(block_id):
         if duration < 1 or duration > 525600:
             return jsonify({"msg": "Yangi muddat 1 daqiqadan 365 kungacha bo‘lishi kerak"}), 400
         reason = str(data.get("reason", "")).strip()
-        if not reason or len(reason) > 2000:
-            return jsonify({"msg": "Yangi sabab 1–2000 belgidan iborat bo‘lishi kerak"}), 400
+        if len(reason) < 10 or len(reason) > 2000:
+            return jsonify({"msg": "Yangi sabab 10–2000 belgidan iborat aniq izoh bo‘lishi kerak"}), 400
         expires_at = (now_dt + datetime.timedelta(minutes=duration)).isoformat()
         db.q("UPDATE user_blocks SET duration_minutes=?,expires_at=?,reason=? WHERE id=?",
              (duration, expires_at, reason, block_id)).close()
