@@ -698,6 +698,22 @@ class DB:
                 cursor.execute("ALTER TABLE reports ADD COLUMN message_id INTEGER")
             except Exception:
                 pass
+        report_migrations = [
+            ("admin_response", "ALTER TABLE reports ADD COLUMN admin_response TEXT DEFAULT ''"),
+            ("decision", "ALTER TABLE reports ADD COLUMN decision TEXT DEFAULT ''"),
+            ("payment_action", "ALTER TABLE reports ADD COLUMN payment_action TEXT NOT NULL DEFAULT 'none'"),
+            ("job_action", "ALTER TABLE reports ADD COLUMN job_action TEXT NOT NULL DEFAULT 'none'"),
+            ("notify_target", "ALTER TABLE reports ADD COLUMN notify_target TEXT NOT NULL DEFAULT 'none'"),
+            ("sanction_user_id", "ALTER TABLE reports ADD COLUMN sanction_user_id INTEGER"),
+            ("sanction_type", "ALTER TABLE reports ADD COLUMN sanction_type TEXT NOT NULL DEFAULT 'none'"),
+            ("sanction_duration_minutes", "ALTER TABLE reports ADD COLUMN sanction_duration_minutes INTEGER"),
+        ]
+        for col_name, sql in report_migrations:
+            if col_name not in existing_report_cols:
+                try:
+                    cursor.execute(sql)
+                except Exception:
+                    pass
 
         if "created_at" not in existing_rating_cols:
             try:
@@ -1774,71 +1790,205 @@ def create_report():
 @app.route("/admin/report/<int:report_id>", methods=["PATCH"])
 @admin_required
 def update_report(report_id):
-    status=(request.json or {}).get("status")
-    if status not in ("open","reviewing","resolved","rejected"):
-        return jsonify({"msg":"Report holati noto‘g‘ri"}),400
+    data = request.json or {}
+    status = str(data.get("status", "")).strip().lower()
+    response = str(data.get("admin_response", "")).strip()
+    decision = str(data.get("decision", "")).strip().lower()
+    payment_action = str(data.get("payment_action", "none")).strip().lower()
+    job_action = str(data.get("job_action", "none")).strip().lower()
+    notify_target = str(data.get("notify_target", "none")).strip().lower()
+    sanction_target = str(data.get("sanction_target", "reported")).strip().lower()
+    sanction_type = str(data.get("sanction_type", "none")).strip().lower()
+    duration_raw = data.get("sanction_duration_minutes", 1440)
+    rich_review = any(key in data for key in (
+        "admin_response", "decision", "payment_action", "job_action",
+        "notify_target", "sanction_target", "sanction_type", "sanction_duration_minutes"
+    ))
 
-    report=db.q(
-        "SELECT reporter_id, reported_user_id, job_id, message_id, status FROM reports WHERE id=?",
+    if status not in ("open", "reviewing", "resolved", "rejected"):
+        return jsonify({"msg": "Shikoyat holati noto‘g‘ri"}), 400
+
+    report = db.q(
+        "SELECT reporter_id,reported_user_id,job_id,message_id,status FROM reports WHERE id=?",
         (report_id,)
     ).fetchone()
     if not report:
-        return jsonify({"msg":"Shikoyat topilmadi"}),404
+        return jsonify({"msg": "Shikoyat topilmadi"}), 404
 
     reporter_id, reported_user_id, job_id, message_id, old_status = report
-    result=db.q("UPDATE reports SET status=? WHERE id=?",(status,report_id))
-    if result.rowcount!=1:
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+    # Legacy clients that only send status keep the former reviewed/refund/block behavior.
+    if not rich_review:
+        result = db.q("UPDATE reports SET status=? WHERE id=?", (status, report_id))
+        if result.rowcount != 1:
+            result.close()
+            return jsonify({"msg": "Shikoyat topilmadi"}), 404
         result.close()
-        return jsonify({"msg":"Shikoyat topilmadi"}),404
-    result.close()
-
-    if status in ("resolved", "rejected") and old_status != status:
-        if status == "resolved":
-            if job_id and not message_id:
-                refund_payment = app.config.get("FINJOB_REFUND_PAYMENT")
-                if refund_payment:
-                    refund_ok, refund_message, refund_data = refund_payment(job_id)
-                    if not refund_ok and refund_message not in ("Faqat waiting holatidagi to‘lovni refund qilish mumkin",):
-                        db.q("UPDATE reports SET status=? WHERE id=?", (old_status, report_id)).close()
-                        return jsonify({"msg": refund_message}), 400
-                db.q(
-                    "UPDATE jobs SET status='blocked', finished_at=NULL, owner_finished=0, worker_finished=0 WHERE id=?",
-                    (job_id,)
-                ).close()
-
-            create_notification(
-                reporter_id,
-                "report_resolved",
-                "Shikoyat hal qilindi",
-                "Siz yuborgan shikoyat admin tomonidan ko‘rib chiqildi va ish bloklandi.",
-                "/jobs"
+        if status in ("resolved", "rejected") and old_status != status:
+            if status == "resolved":
+                if job_id and not message_id:
+                    refund_payment = app.config.get("FINJOB_REFUND_PAYMENT")
+                    if refund_payment:
+                        refund_ok, refund_message, _ = refund_payment(job_id)
+                        if not refund_ok and refund_message not in ("Faqat waiting holatidagi to‘lovni refund qilish mumkin",):
+                            db.q("UPDATE reports SET status=? WHERE id=?", (old_status, report_id)).close()
+                            return jsonify({"msg": refund_message}), 400
+                    db.q(
+                        "UPDATE jobs SET status='blocked', finished_at=NULL, owner_finished=0, worker_finished=0 WHERE id=?",
+                        (job_id,)
+                    ).close()
+            title = "Shikoyat hal qilindi" if status == "resolved" else "Shikoyat rad etildi"
+            message = (
+                "Administrator shikoyatni ko‘rib chiqdi. Ish bo‘yicha chora ko‘rildi."
+                if status == "resolved" else "Administrator shikoyatni ko‘rib chiqdi va rad etdi."
             )
-            create_notification(
-                reported_user_id,
-                "report_resolved",
-                "Shikoyat bo‘yicha qaror",
-                "Siz qatnashgan ish bo‘yicha shikoyat admin tomonidan ko‘rib chiqildi va ish bloklandi.",
-                "/jobs"
-            )
-        else:
-            create_notification(
-                reporter_id,
-                "report_rejected",
-                "Shikoyat rad etildi",
-                "Siz yuborgan shikoyat admin tomonidan ko‘rib chiqildi va rad etildi.",
-                "/jobs"
-            )
-            create_notification(
-                reported_user_id,
-                "report_rejected",
-                "Shikoyat rad etildi",
-                "Siz qatnashgan ish bo‘yicha berilgan shikoyat admin tomonidan rad etildi.",
-                "/jobs"
-            )
+            for uid in {reporter_id, reported_user_id} - {None}:
+                create_notification(uid, "report_update", title, message, "/jobs")
+        admin_audit("report_status_update", "report", report_id, f"status={status}; legacy")
+        return jsonify({"msg": "Shikoyat holati yangilandi", "status": status})
 
-    admin_audit("report_status_update","report",report_id,f"status={status}")
-    return jsonify({"msg":"Shikoyat holati yangilandi","status":status})
+    decisions = {
+        "violation", "no_violation", "insufficient_evidence", "duplicate", "mistake", "other"
+    }
+    if decision and decision not in decisions:
+        return jsonify({"msg": "Shikoyat hukmi noto‘g‘ri"}), 400
+    if payment_action not in {"none", "refund_payer", "release_to_worker"}:
+        return jsonify({"msg": "To‘lov chorasi noto‘g‘ri"}), 400
+    if job_action not in {"none", "block"}:
+        return jsonify({"msg": "Ish chorasi noto‘g‘ri"}), 400
+    if notify_target not in {"none", "reporter", "reported", "both"}:
+        return jsonify({"msg": "Ogohlantirish oluvchisi noto‘g‘ri"}), 400
+    if sanction_type not in {"none", *BLOCK_TYPE_LABELS.keys()}:
+        return jsonify({"msg": "Foydalanuvchi chorasi noto‘g‘ri"}), 400
+    if len(response) > 3000:
+        return jsonify({"msg": "Admin izohi 3000 belgidan oshmasligi kerak"}), 400
 
+    is_final = status in ("resolved", "rejected")
+    has_actions = payment_action != "none" or job_action != "none" or sanction_type != "none" or notify_target != "none"
+    if is_final and (not decision or not response):
+        return jsonify({"msg": "Yakuniy shikoyat qarori uchun hukm va asoslangan admin izohi majburiy"}), 400
+    if not is_final and has_actions:
+        return jsonify({"msg": "Shikoyat choralarini yakuniy qaror bilan birga qo‘llang"}), 400
+    if job_action == "block" and not job_id:
+        return jsonify({"msg": "Bu shikoyatga bog‘langan ish yo‘q"}), 400
+    if job_action == "block" and payment_action == "release_to_worker":
+        return jsonify({"msg": "Ishni bloklash va pulni ijrochiga o‘tkazish bir vaqtda mumkin emas"}), 400
+    if payment_action != "none" and (not job_id or message_id):
+        return jsonify({"msg": "To‘lov amali faqat ish bo‘yicha shikoyatlarda mumkin"}), 400
+    if notify_target in {"reporter", "both"} and not reporter_id:
+        return jsonify({"msg": "Shikoyat yuboruvchisi topilmadi"}), 404
+    if notify_target in {"reported", "both"} and not reported_user_id:
+        return jsonify({"msg": "Shikoyat qilingan foydalanuvchi topilmadi"}), 404
+    if sanction_type != "none" and sanction_target not in {"reporter", "reported"}:
+        return jsonify({"msg": "Cheklov oluvchisi noto‘g‘ri"}), 400
+
+    sanction_user_id = None
+    sanction_duration = None
+    existing_sanction = None
+    if sanction_type != "none":
+        sanction_user_id = reporter_id if sanction_target == "reporter" else reported_user_id
+        if not sanction_user_id:
+            return jsonify({"msg": "Cheklov oluvchisi topilmadi"}), 404
+        if int(sanction_user_id) == int(request.uid):
+            return jsonify({"msg": "O‘zingizga cheklov qo‘ya olmaysiz"}), 400
+        target = db.q("SELECT role FROM users WHERE id=?", (sanction_user_id,)).fetchone()
+        if not target:
+            return jsonify({"msg": "Cheklov oluvchisi topilmadi"}), 404
+        if target[0] == "admin":
+            return jsonify({"msg": "Administrator hisobiga cheklov qo‘yib bo‘lmaydi"}), 400
+        if duration_raw not in (None, "", "null", "0", 0):
+            try:
+                sanction_duration = int(duration_raw)
+            except (TypeError, ValueError):
+                return jsonify({"msg": "Cheklov muddati noto‘g‘ri"}), 400
+            if sanction_duration < 1 or sanction_duration > 525600:
+                return jsonify({"msg": "Cheklov muddati 1 daqiqadan 365 kungacha bo‘lishi kerak"}), 400
+        existing_sanction = _active_block_row(sanction_user_id, sanction_type)
+        if existing_sanction:
+            return jsonify({"msg": "Bu turdagi faol cheklov allaqachon mavjud"}), 409
+
+    if payment_action != "none":
+        payment_handler = (
+            app.config.get("FINJOB_REFUND_PAYMENT") if payment_action == "refund_payer"
+            else app.config.get("FINJOB_RELEASE_PAYMENT")
+        )
+        if not payment_handler:
+            return jsonify({"msg": "To‘lov amali hozir mavjud emas"}), 503
+        payment_ok, payment_message, _ = payment_handler(job_id)
+        if not payment_ok:
+            return jsonify({"msg": payment_message or "To‘lov chorasi bajarilmadi"}), 400
+
+    if job_action == "block":
+        held = db.q("SELECT id FROM payments WHERE job_id=? AND status='held' LIMIT 1", (job_id,)).fetchone()
+        if held:
+            return jsonify({"msg": "Ishda escrow to‘lovi bor. Avval pulni qaytarish yoki to‘lovni alohida hal qilish kerak."}), 409
+        db.q(
+            "UPDATE jobs SET status='blocked',finished_at=NULL,owner_finished=0,worker_finished=0 WHERE id=?",
+            (job_id,)
+        ).close()
+
+    if sanction_type != "none":
+        block_now = datetime.datetime.now(datetime.timezone.utc)
+        expires_at = (block_now + datetime.timedelta(minutes=sanction_duration)).isoformat() if sanction_duration else None
+        block_result = db.q(
+            """INSERT INTO user_blocks(user_id,block_type,reason,duration_minutes,created_at,expires_at,active,created_by)
+               VALUES(?,?,?,?,?,?,1,?)""",
+            (sanction_user_id, sanction_type, f"Shikoyat #{report_id}: {response}"[:2000],
+             sanction_duration, block_now.isoformat(), expires_at, request.uid)
+        )
+        block_result.close()
+        if sanction_type == "full":
+            db.q("UPDATE users SET is_blocked=1 WHERE id=?", (sanction_user_id,)).close()
+        create_notification(
+            sanction_user_id, "account_moderation", "Hisobingizga cheklov qo‘yildi",
+            f"Shikoyat #{report_id} bo‘yicha {BLOCK_TYPE_LABELS[sanction_type]} qo‘llandi. Sabab: {response}.",
+            "/appeals"
+        )
+
+    db.q(
+        """UPDATE reports SET status=?,admin_response=?,decision=?,payment_action=?,job_action=?,
+                  notify_target=?,sanction_user_id=?,sanction_type=?,sanction_duration_minutes=?
+           WHERE id=?""",
+        (status, response, decision, payment_action, job_action, notify_target,
+         sanction_user_id, sanction_type, sanction_duration, report_id)
+    ).close()
+
+    if is_final:
+        effects = []
+        if payment_action == "refund_payer":
+            effects.append("Escrowdagi to‘lov buyurtmachiga qaytarildi.")
+        elif payment_action == "release_to_worker":
+            effects.append("Escrowdagi to‘lov ijrochiga o‘tkazildi.")
+        if job_action == "block":
+            effects.append("Ish bloklandi.")
+        if sanction_type != "none":
+            effects.append(f"{BLOCK_TYPE_LABELS[sanction_type]} qo‘llandi.")
+        summary = f"Shikoyat #{report_id} bo‘yicha qaror: {decision}. {response} " + " ".join(effects)
+        title = "Shikoyat bo‘yicha yakuniy qaror"
+        for uid in {reporter_id, reported_user_id} - {None}:
+            create_notification(uid, "report_update", title, summary.strip(), "/jobs")
+    if notify_target != "none":
+        target_ids = []
+        if notify_target in {"reporter", "both"} and reporter_id:
+            target_ids.append(reporter_id)
+        if notify_target in {"reported", "both"} and reported_user_id:
+            target_ids.append(reported_user_id)
+        for uid in set(target_ids):
+            create_notification(uid, "report_warning", "Shikoyat bo‘yicha ogohlantirish",
+                                response, "/jobs")
+
+    admin_audit(
+        "report_decision", "report", report_id,
+        f"status={status}; decision={decision}; payment={payment_action}; job={job_action}; "
+        f"notify={notify_target}; sanction={sanction_type}:{sanction_user_id}"
+    )
+    return jsonify({
+        "msg": "Shikoyat bo‘yicha qaror va tanlangan choralar saqlandi.",
+        "status": status, "decision": decision, "payment_action": payment_action,
+        "job_action": job_action, "notify_target": notify_target,
+        "sanction_type": sanction_type, "sanction_user_id": sanction_user_id
+    })
 
 @app.route("/admin/user/<int:user_id>/blocks")
 @admin_required
@@ -1939,12 +2089,31 @@ def admin_update_block(block_id):
     block=db.q("SELECT id,user_id,block_type,active FROM user_blocks WHERE id=?",(block_id,)).fetchone()
     if not block:
         return jsonify({"msg":"Block topilmadi"}),404
-    action=str((request.json or {}).get("action","")).strip().lower()
-    if action!="lift":
-        return jsonify({"msg":"Faqat lift amali qo‘llab-quvvatlanadi"}),400
+    data = request.json or {}
+    action = str(data.get("action", "")).strip().lower()
     if not block[3]:
-        return jsonify({"msg":"Block allaqachon olib tashlangan"}),409
-    now=datetime.datetime.now(datetime.timezone.utc).isoformat()
+        return jsonify({"msg": "Block allaqachon olib tashlangan"}), 409
+    now_dt = datetime.datetime.now(datetime.timezone.utc)
+    now = now_dt.isoformat()
+    if action == "modify":
+        try:
+            duration = int(data.get("duration_minutes"))
+        except (TypeError, ValueError):
+            return jsonify({"msg": "Muddatni daqiqalarda kiriting"}), 400
+        if duration < 1 or duration > 525600:
+            return jsonify({"msg": "Yangi muddat 1 daqiqadan 365 kungacha bo‘lishi kerak"}), 400
+        reason = str(data.get("reason", "")).strip()
+        if not reason or len(reason) > 2000:
+            return jsonify({"msg": "Yangi sabab 1–2000 belgidan iborat bo‘lishi kerak"}), 400
+        expires_at = (now_dt + datetime.timedelta(minutes=duration)).isoformat()
+        db.q("UPDATE user_blocks SET duration_minutes=?,expires_at=?,reason=? WHERE id=?",
+             (duration, expires_at, reason, block_id)).close()
+        admin_audit("user_block_modified", "user", block[1], f"block={block_id}; duration={duration}; {reason}")
+        create_notification(block[1], "account_moderation", "Cheklov muddati yangilandi",
+                            f"Cheklov muddati {duration} daqiqaga yangilandi. Sabab: {reason}", "/appeals")
+        return jsonify({"msg": "Cheklov muddati va sababi yangilandi", "expires_at": expires_at})
+    if action != "lift":
+        return jsonify({"msg": "Lift yoki modify amalini tanlang"}), 400
     db.q("UPDATE user_blocks SET active=0,lifted_at=?,lifted_by=? WHERE id=?",(now,request.uid,block_id)).close()
     if block[2] == "full" and not _active_block_row(block[1], "full"):
         db.q("UPDATE users SET is_blocked=0 WHERE id=?", (block[1],)).close()
@@ -2040,32 +2209,80 @@ def admin_appeals():
 @app.route("/admin/appeal/<int:appeal_id>", methods=["PATCH"])
 @admin_required
 def admin_review_appeal(appeal_id):
-    data=request.json or {}
-    status=str(data.get("status","")).strip().lower()
-    response=str(data.get("admin_response","")).strip()
-    if status not in ("reviewing","approved","rejected"): return jsonify({"msg":"Appeal status noto‘g‘ri"}),400
-    if len(response)>3000: return jsonify({"msg":"Admin javobi 3000 belgidan oshmasligi kerak"}),400
-    row=db.q("SELECT id,user_id,block_id,status FROM appeals WHERE id=?",(appeal_id,)).fetchone()
-    if not row: return jsonify({"msg":"Appeal topilmadi"}),404
-    if row[3] in ("approved","rejected") and status!=row[3]: return jsonify({"msg":"Yakunlangan appealni qayta o‘zgartirib bo‘lmaydi"}),409
-    now=datetime.datetime.now(datetime.timezone.utc).isoformat()
-    db.q("UPDATE appeals SET status=?,admin_response=?,reviewed_at=?,reviewed_by=? WHERE id=?",
-         (status,response if status!="reviewing" else "",now,request.uid,appeal_id)).close()
-    if status=="approved":
-        db.q("UPDATE user_blocks SET active=0,lifted_at=?,lifted_by=? WHERE id=?",(now,request.uid,row[2])).close()
+    data = request.json or {}
+    status = str(data.get("status", "")).strip().lower()
+    response = str(data.get("admin_response", "")).strip()
+    block_action = str(data.get("block_action", "")).strip().lower()
+    duration_raw = data.get("duration_minutes", 1440)
+    new_block_type = str(data.get("new_block_type", "")).strip().lower()
+
+    if status not in ("reviewing", "approved", "rejected", "modified"):
+        return jsonify({"msg": "Appeal status noto‘g‘ri"}), 400
+    if len(response) > 3000:
+        return jsonify({"msg": "Admin javobi 3000 belgidan oshmasligi kerak"}), 400
+
+    row = db.q("SELECT id,user_id,block_id,status FROM appeals WHERE id=?", (appeal_id,)).fetchone()
+    if not row:
+        return jsonify({"msg": "Appeal topilmadi"}), 404
+    if row[3] in ("approved", "rejected", "modified") and status != row[3]:
+        return jsonify({"msg": "Yakunlangan appealni qayta o‘zgartirib bo‘lmaydi"}), 409
+
+    now_dt = datetime.datetime.now(datetime.timezone.utc)
+    now = now_dt.isoformat()
+    if status == "modified":
+        if block_action not in ("reduce_duration", "change_type"):
+            return jsonify({"msg": "Cheklovni qisqartirish yoki yengilroq turga almashtirishni tanlang"}), 400
+        block = db.q(
+            "SELECT id,user_id,block_type,reason,active,expires_at FROM user_blocks WHERE id=?",
+            (row[2],)
+        ).fetchone()
+        if not block or not block[4] or (block[5] and block[5] <= now):
+            return jsonify({"msg": "Faol cheklov topilmadi; uni o‘zgartirib bo‘lmaydi"}), 409
+        try:
+            duration = int(duration_raw)
+        except (TypeError, ValueError):
+            return jsonify({"msg": "Yangi cheklov muddati noto‘g‘ri"}), 400
+        if duration < 1 or duration > 525600:
+            return jsonify({"msg": "Yangi muddat 1 daqiqadan 365 kungacha bo‘lishi kerak"}), 400
+        updated_type = block[2]
+        if block_action == "change_type":
+            lighter_types = {"chat", "job_creation", "job_accept", "proposal", "rating", "withdrawal"}
+            if new_block_type not in lighter_types:
+                return jsonify({"msg": "Yengilroq cheklov turini tanlang"}), 400
+            updated_type = new_block_type
+        expires_at = (now_dt + datetime.timedelta(minutes=duration)).isoformat()
+        new_reason = block[3]
+        if response:
+            new_reason = (str(block[3] or "") + f" [Appeal #{appeal_id}: {response}]")[:2000]
+        db.q(
+            "UPDATE user_blocks SET block_type=?,reason=?,duration_minutes=?,expires_at=? WHERE id=?",
+            (updated_type, new_reason, duration, expires_at, row[2])
+        ).close()
+        if block[2] == "full" and updated_type != "full" and not _active_block_row(block[1], "full"):
+            db.q("UPDATE users SET is_blocked=0 WHERE id=?", (block[1],)).close()
+        message = f"Cheklov yengillashtirildi: {BLOCK_TYPE_LABELS.get(updated_type, updated_type)}, {duration} daqiqa."
+    elif status == "approved":
+        db.q("UPDATE user_blocks SET active=0,lifted_at=?,lifted_by=? WHERE id=?", (now, request.uid, row[2])).close()
         block_row = db.q("SELECT user_id,block_type FROM user_blocks WHERE id=?", (row[2],)).fetchone()
         if block_row and block_row[1] == "full" and not _active_block_row(block_row[0], "full"):
             db.q("UPDATE users SET is_blocked=0 WHERE id=?", (block_row[0],)).close()
-        message="Appealingiz tasdiqlandi va ushbu cheklov olib tashlandi."
-    elif status=="rejected":
-        message="Appealingiz rad etildi."
+        message = "Appealingiz tasdiqlandi va ushbu cheklov olib tashlandi."
+    elif status == "rejected":
+        message = "Appealingiz rad etildi; cheklov saqlanadi."
     else:
-        message="Appealingiz administrator tomonidan ko‘rib chiqilmoqda."
-    admin_audit("appeal_reviewed","appeal",appeal_id,f"status={status}; {response}")
-    create_notification(row[1],"appeal","Appeal bo‘yicha qaror",
-                        message+(f" Admin izohi: {response}" if response else "" ),"/appeals")
-    return jsonify({"msg":"Appeal yangilandi","status":status})
+        message = "Appealingiz administrator tomonidan ko‘rib chiqilmoqda."
 
+    db.q("UPDATE appeals SET status=?,admin_response=?,reviewed_at=?,reviewed_by=? WHERE id=?",
+         (status, response, now, request.uid, appeal_id)).close()
+    admin_audit(
+        "appeal_reviewed", "appeal", appeal_id,
+        f"status={status}; block_action={block_action or 'none'}; new_type={new_block_type or 'same'}; duration={duration_raw}; {response}"
+    )
+    create_notification(
+        row[1], "appeal", "Appeal bo‘yicha qaror",
+        message + (f" Admin izohi: {response}" if response else ""), "/appeals"
+    )
+    return jsonify({"msg": "Appeal bo‘yicha qaror saqlandi", "status": status, "block_action": block_action})
 
 @app.route("/admin/overview")
 @admin_required
@@ -2107,7 +2324,8 @@ def admin_overview():
     reports = db.q(
         """SELECT r.id,r.job_id,r.message_id,r.reason,r.details,r.status,r.created_at,
                   f.username AS reporter_username,t.username AS reported_username,
-                  m.attachment_url,m.attachment_name,m.attachment_type
+                  m.attachment_url,m.attachment_name,m.attachment_type,r.admin_response,r.decision,
+                  r.payment_action,r.job_action,r.notify_target,r.sanction_user_id,r.sanction_type,r.sanction_duration_minutes
            FROM reports r
            LEFT JOIN users f ON f.id=r.reporter_id
            LEFT JOIN users t ON t.id=r.reported_user_id
@@ -2132,7 +2350,7 @@ def admin_overview():
         "jobs":rows(jobs,["id","title","price","currency","location","status","created_at","creator_username","worker_username"]),
         "services":rows(services,["id","name","parent_id","parent_name","created_by"]),
         "ratings":rows(ratings,["id","job_id","score","comment","created_at","from_username","to_username"]),
-        "reports":rows(reports,["id","job_id","message_id","reason","details","status","created_at","reporter_username","reported_username","attachment_url","attachment_name","attachment_type"]),
+        "reports":rows(reports,["id","job_id","message_id","reason","details","status","created_at","reporter_username","reported_username","attachment_url","attachment_name","attachment_type","admin_response","decision","payment_action","job_action","notify_target","sanction_user_id","sanction_type","sanction_duration_minutes"]),
     })
 
 
@@ -2640,6 +2858,49 @@ def admin_create_service():
     return jsonify({"msg": "Xizmat qo‘shildi.", "id": new_id}), 201
 
 
+@app.route("/admin/service/<int:service_id>", methods=["PATCH"])
+@admin_required
+def admin_update_service(service_id):
+    data = request.json or {}
+    name = str(data.get("name", "")).strip()
+    parent_raw = data.get("parent_id")
+    if not name or len(name) > 120:
+        return jsonify({"msg": "Xizmat nomi 1–120 belgidan iborat bo‘lishi kerak"}), 400
+    service = db.q("SELECT id,name,parent_id FROM services WHERE id=?", (service_id,)).fetchone()
+    if not service:
+        return jsonify({"msg": "Xizmat topilmadi"}), 404
+    if parent_raw in ("", None, "null"):
+        parent_id = None
+    else:
+        try:
+            parent_id = int(parent_raw)
+        except (TypeError, ValueError):
+            return jsonify({"msg": "Ota kategoriya noto‘g‘ri"}), 400
+        if parent_id == service_id:
+            return jsonify({"msg": "Xizmat o‘ziga ota kategoriya bo‘la olmaydi"}), 400
+        parent = db.q("SELECT id FROM services WHERE id=?", (parent_id,)).fetchone()
+        if not parent:
+            return jsonify({"msg": "Ota kategoriya topilmadi"}), 404
+        descendant = db.q(
+            """WITH RECURSIVE descendants(id) AS (
+                   SELECT id FROM services WHERE parent_id=?
+                   UNION ALL
+                   SELECT s.id FROM services s JOIN descendants d ON s.parent_id=d.id
+               ) SELECT id FROM descendants WHERE id=? LIMIT 1""",
+            (service_id, parent_id)
+        ).fetchone()
+        if descendant:
+            return jsonify({"msg": "Xizmatni o‘zining ichidagi kategoriyaga ko‘chira olmaysiz"}), 400
+    duplicate = db.q("SELECT id FROM services WHERE name=? AND parent_id IS ? AND id!=?",
+                     (name, parent_id, service_id)).fetchone()
+    if duplicate:
+        return jsonify({"msg": "Bu ota kategoriya ichida bunday xizmat bor"}), 409
+    db.q("UPDATE services SET name=?,parent_id=? WHERE id=?", (name, parent_id, service_id)).close()
+    admin_audit("service_update", "service", service_id,
+                f"name={name}; parent_id={parent_id}")
+    return jsonify({"msg": "Xizmat yangilandi", "id": service_id, "name": name, "parent_id": parent_id})
+
+
 @app.route("/admin/service/<int:service_id>", methods=["DELETE"])
 @admin_required
 def admin_delete_service(service_id):
@@ -2666,6 +2927,10 @@ def admin_delete_service(service_id):
 @app.route("/admin/rating/<int:rating_id>", methods=["DELETE"])
 @admin_required
 def admin_delete_rating(rating_id):
+    data = request.json or {}
+    reason = str(data.get("reason", "")).strip()
+    if len(reason) > 1000:
+        return jsonify({"msg": "O‘chirish sababi 1000 belgidan oshmasligi kerak"}), 400
     rating = db.q("SELECT id FROM ratings WHERE id=?", (rating_id,)).fetchone()
     if not rating:
         return jsonify({"msg": "Baho topilmadi."}), 404
@@ -2680,7 +2945,7 @@ def admin_delete_rating(rating_id):
         ).fetchone()[0]
         db.q("UPDATE users SET average_rating=? WHERE id=?", (round(float(average), 2), target[0])).close()
 
-    admin_audit("rating_delete","rating",rating_id,"Admin bahoni o‘chirdi.")
+    admin_audit("rating_delete","rating",rating_id,("Sabab: " + reason) if reason else "Admin bahoni o‘chirdi.")
     return jsonify({"msg": "Baho o‘chirildi."})
 
 
