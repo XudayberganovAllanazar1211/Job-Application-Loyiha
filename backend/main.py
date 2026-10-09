@@ -2114,12 +2114,15 @@ def admin_update_block(block_id):
         return jsonify({"msg": "Cheklov muddati va sababi yangilandi", "expires_at": expires_at})
     if action != "lift":
         return jsonify({"msg": "Lift yoki modify amalini tanlang"}), 400
+    reason = str(data.get("reason", "")).strip()
+    if len(reason) > 1000:
+        return jsonify({"msg": "Sabab 1000 belgidan oshmasligi kerak"}), 400
     db.q("UPDATE user_blocks SET active=0,lifted_at=?,lifted_by=? WHERE id=?",(now,request.uid,block_id)).close()
     if block[2] == "full" and not _active_block_row(block[1], "full"):
         db.q("UPDATE users SET is_blocked=0 WHERE id=?", (block[1],)).close()
-    admin_audit("user_block_lifted","user",block[1],f"block={block_id}:{block[2]}")
+    admin_audit("user_block_lifted","user",block[1],f"block={block_id}:{block[2]}; {reason}")
     create_notification(block[1],"account_moderation","Cheklov olib tashlandi",
-                        f"{BLOCK_TYPE_LABELS.get(block[2],block[2])} administrator tomonidan olib tashlandi.","/appeals")
+                        f"{BLOCK_TYPE_LABELS.get(block[2],block[2])} administrator tomonidan olib tashlandi." + (f" Sabab: {reason}" if reason else ""),"/appeals")
     return jsonify({"msg":"Block olib tashlandi"})
 
 
@@ -2180,7 +2183,7 @@ def admin_appeals():
     search=str(request.args.get("q","")).strip()[:100]
     where=[]; params=[]
     if status!="all":
-        if status not in ("open","reviewing","approved","rejected"): return jsonify({"msg":"Appeal status noto‘g‘ri"}),400
+        if status not in ("open","reviewing","approved","rejected","modified"): return jsonify({"msg":"Appeal status noto‘g‘ri"}),400
         where.append("a.status=?"); params.append(status)
     if search:
         like=f"%{search}%"
@@ -2693,6 +2696,9 @@ def admin_update_user(user_id):
 @app.route("/admin/user/<int:user_id>", methods=["DELETE"])
 @admin_required
 def admin_delete_user(user_id):
+    deletion_reason = str((request.json or {}).get("reason", "")).strip()
+    if len(deletion_reason) > 1000:
+        return jsonify({"msg": "O‘chirish sababi 1000 belgidan oshmasligi kerak"}), 400
     if user_id == int(request.uid):
         return jsonify({"msg": "O'zingizni o'chira olmaysiz."}), 400
 
@@ -2761,7 +2767,7 @@ def admin_delete_user(user_id):
         _remove_stored_upload(stored_url, "/uploads/portfolio/", PORTFOLIO_UPLOAD_DIR)
         _remove_stored_upload(stored_url, "/uploads/chat/", CHAT_UPLOAD_DIR)
 
-    admin_audit("user_delete","user",user_id,"Admin foydalanuvchini o‘chirdi.")
+    admin_audit("user_delete","user",user_id,("Sabab: " + deletion_reason) if deletion_reason else "Admin foydalanuvchini o‘chirdi.")
     return jsonify({"msg": "Foydalanuvchi va unga bog'liq ma'lumotlar o'chirildi."})
 
 
@@ -2770,6 +2776,9 @@ def admin_delete_user(user_id):
 def admin_update_job(job_id):
     d = request.json or {}
     status = str(d.get("status", "")).strip().lower()
+    reason = str(d.get("reason", "")).strip()
+    if len(reason) > 2000:
+        return jsonify({"msg": "Sabab 2000 belgidan oshmasligi kerak."}), 400
     allowed = {"active", "payment_pending", "accepted", "pending_finish", "finished", "blocked"}
 
     if status not in allowed:
@@ -2779,8 +2788,8 @@ def admin_update_job(job_id):
     if not job:
         return jsonify({"msg": "Ish topilmadi."}), 404
 
-    job_state = db.q("SELECT worker_id FROM jobs WHERE id=?", (job_id,)).fetchone()
-    worker_id = job_state[0] if job_state else None
+    job_state = db.q("SELECT user_id,worker_id,title,status FROM jobs WHERE id=?", (job_id,)).fetchone()
+    owner_id, worker_id, job_title, old_status = job_state if job_state else (None, None, "", "")
     held_payment = db.q(
         "SELECT id FROM payments WHERE job_id=? AND status='held' LIMIT 1",
         (job_id,),
@@ -2819,13 +2828,22 @@ def admin_update_job(job_id):
                 db.q("UPDATE jobs SET status='accepted', finished_at=NULL WHERE id=?", (job_id,)).close()
                 return jsonify({"msg": message}), 400
 
-    admin_audit("job_status_update","job",job_id,f"status={status}")
-    return jsonify({"msg": "Ish holati yangilandi."})
+    admin_audit("job_status_update","job",job_id,f"from={old_status}; status={status}; reason={reason}")
+    if status != old_status:
+        message = f"Administrator «{job_title}» ishining holatini «{status}» ga o‘zgartirdi."
+        if reason:
+            message += f" Sabab: {reason}"
+        for uid in {owner_id, worker_id} - {None}:
+            create_notification(uid, "admin_job_update", "Ish holati o‘zgartirildi", message, "/jobs")
+    return jsonify({"msg": "Ish holati o‘zgartirildi."})
 
 
 @app.route("/admin/job/<int:job_id>", methods=["DELETE"])
 @admin_required
 def admin_delete_job(job_id):
+    deletion_reason = str((request.json or {}).get("reason", "")).strip()
+    if len(deletion_reason) > 1000:
+        return jsonify({"msg": "O‘chirish sababi 1000 belgidan oshmasligi kerak."}), 400
     job = db.q("SELECT id FROM jobs WHERE id=?", (job_id,)).fetchone()
     if not job:
         return jsonify({"msg": "Ish topilmadi."}), 404
@@ -2860,7 +2878,7 @@ def admin_delete_job(job_id):
     for attachment_url in attachment_urls_to_remove:
         _remove_stored_upload(attachment_url, "/uploads/chat/", CHAT_UPLOAD_DIR)
 
-    admin_audit("job_delete","job",job_id,"Admin jobni o‘chirdi.")
+    admin_audit("job_delete","job",job_id,("Sabab: " + deletion_reason) if deletion_reason else "Admin jobni o‘chirdi.")
     return jsonify({"msg": "Ish o‘chirildi."})
 
 
@@ -2950,6 +2968,9 @@ def admin_update_service(service_id):
 @app.route("/admin/service/<int:service_id>", methods=["DELETE"])
 @admin_required
 def admin_delete_service(service_id):
+    deletion_reason = str((request.json or {}).get("reason", "")).strip()
+    if len(deletion_reason) > 1000:
+        return jsonify({"msg": "O‘chirish sababi 1000 belgidan oshmasligi kerak."}), 400
     service = db.q("SELECT id FROM services WHERE id=?", (service_id,)).fetchone()
     if not service:
         return jsonify({"msg": "Xizmat topilmadi."}), 404
@@ -2966,7 +2987,7 @@ def admin_delete_service(service_id):
         return jsonify({"msg": "Bu xizmat mavjud joblarda ishlatilgan, o'chirib bo'lmaydi."}), 409
 
     db.q("DELETE FROM services WHERE id=?", (service_id,)).close()
-    admin_audit("service_delete","service",service_id,"Admin xizmatni o‘chirdi.")
+    admin_audit("service_delete","service",service_id,("Sabab: " + deletion_reason) if deletion_reason else "Admin xizmatni o‘chirdi.")
     return jsonify({"msg": "Xizmat o‘chirildi."})
 
 
