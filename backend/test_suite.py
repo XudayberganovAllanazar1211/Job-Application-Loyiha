@@ -1694,7 +1694,7 @@ class JobPlatformTestCase(unittest.TestCase):
         self.assertEqual(accepted.status_code, 200)
 
         eligible_before = self.client.get(
-            "/disputes/eligible-jobs",
+            f"/disputes/eligible-jobs?job_id={job_id}",
             headers={"Authorization": f"Bearer {owner_token}"},
         )
         self.assertEqual(eligible_before.status_code, 200)
@@ -1749,8 +1749,11 @@ class JobPlatformTestCase(unittest.TestCase):
 
         final_view = self.client.get("/disputes", headers={"Authorization": f"Bearer {owner_token}"})
         self.assertEqual(final_view.status_code, 200)
-        item = next(item for item in final_view.get_json() if item["id"] == dispute_id)
-        self.assertEqual(item["status"], "resolved")
+        self.assertFalse(any(item["id"] == dispute_id for item in final_view.get_json()))
+
+        worker_final_view = self.client.get("/disputes", headers={"Authorization": f"Bearer {worker_token}"})
+        self.assertEqual(worker_final_view.status_code, 200)
+        self.assertFalse(any(item["id"] == dispute_id for item in worker_final_view.get_json()))
 
 
     def test_10g_profile_email_change_requires_reauthentication(self):
