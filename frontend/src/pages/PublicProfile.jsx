@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import AppLayout from "../components/AppLayout"
+import VerificationBadges from "../components/VerificationBadges"
 import { api } from "../api"
 
 export default function PublicProfile() {
@@ -161,11 +162,7 @@ export default function PublicProfile() {
                             <div className="profile-verification-grid">
                                 <div>
                                     <div className="profile-verification-title">Tasdiqlanganlar</div>
-                                    <div className="profile-badge-list">
-                                        {(profile.verification?.badges || []).length ? profile.verification.badges.map((badge) => (
-                                            <span key={badge.key} className="profile-trust-badge">{badge.label}</span>
-                                        )) : <span className="muted">Hali tasdiqlash belgisi yo‘q.</span>}
-                                    </div>
+                                    <VerificationBadges verification={profile.verification} />
                                 </div>
                                 <div>
                                     <div className="profile-verification-title">Reputatsiya</div>
