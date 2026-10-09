@@ -2696,7 +2696,7 @@ def admin_update_user(user_id):
 @app.route("/admin/user/<int:user_id>", methods=["DELETE"])
 @admin_required
 def admin_delete_user(user_id):
-    deletion_reason = str((request.json or {}).get("reason", "")).strip()
+    deletion_reason = str((request.get_json(silent=True) or {}).get("reason", "")).strip()
     if len(deletion_reason) > 1000:
         return jsonify({"msg": "O‘chirish sababi 1000 belgidan oshmasligi kerak"}), 400
     if user_id == int(request.uid):
@@ -2994,7 +2994,7 @@ def admin_delete_service(service_id):
 @app.route("/admin/rating/<int:rating_id>", methods=["DELETE"])
 @admin_required
 def admin_delete_rating(rating_id):
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     reason = str(data.get("reason", "")).strip()
     if len(reason) > 1000:
         return jsonify({"msg": "O‘chirish sababi 1000 belgidan oshmasligi kerak"}), 400
