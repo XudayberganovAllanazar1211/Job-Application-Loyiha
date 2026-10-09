@@ -17,7 +17,7 @@ import CommunityRules from "./pages/CommunityRules"
 import Admin from "./pages/Admin"
 import Appeals from "./pages/Appeals"
 import Payments from "./pages/Payments"
-import Disputes from "./pages/Disputes"
+import Disputes, { CreateDispute } from "./pages/Disputes"
 
 function AdminOnly({ children }) {
     const user = JSON.parse(localStorage.getItem("user") || "null")
@@ -51,6 +51,7 @@ export default function App() {
             <Route path="/rating/:jobId" element={<Protected><Rating /></Protected>} />
             <Route path="/payments" element={<Protected><Payments /></Protected>} />
             <Route path="/payments/job/:jobId" element={<Protected><Payments /></Protected>} />
+            <Route path="/disputes/new" element={<Protected><CreateDispute /></Protected>} />
             <Route path="/disputes" element={<Protected><Disputes /></Protected>} />
 
             <Route path="/leaderboard" element={<Protected><Leaderboard /></Protected>} />
