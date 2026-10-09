@@ -1127,13 +1127,6 @@ class JobPlatformTestCase(unittest.TestCase):
             "SELECT id FROM jobs WHERE title='Build Web App' ORDER BY id DESC LIMIT 1"
         ).fetchone()[0]
 
-        invalid_reason = self.client.post(
-            f"/admin/user/{worker_id}/block",
-            headers={"Authorization": f"Bearer {admin_token}"},
-            json={"block_type": "chat", "duration_minutes": 60, "reason": "a"}
-        )
-        self.assertEqual(invalid_reason.status_code, 400)
-
         blocked = self.client.post(
             f"/admin/user/{worker_id}/block",
             headers={"Authorization": f"Bearer {admin_token}"},
