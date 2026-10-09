@@ -685,16 +685,16 @@ class JobPlatformTestCase(unittest.TestCase):
                 "job_action": "none",
                 "notify_target": "both",
                 "sanction_target": "reported",
-                "sanction_type": "chat",
+                "sanction_type": "withdrawal",
                 "sanction_duration_minutes": 60
             }
         )
         self.assertEqual(rich_decision.status_code, 200)
         self.assertEqual(rich_decision.get_json()["decision"], "violation")
-        self.assertEqual(rich_decision.get_json()["sanction_type"], "chat")
+        self.assertEqual(rich_decision.get_json()["sanction_type"], "withdrawal")
         worker_id = self.client.get("/profile", headers={"Authorization": f"Bearer {token_worker}"}).get_json()["id"]
         active_report_block = main.db.q(
-            "SELECT id FROM user_blocks WHERE user_id=? AND block_type='chat' AND active=1 ORDER BY id DESC LIMIT 1",
+            "SELECT id FROM user_blocks WHERE user_id=? AND block_type='withdrawal' AND active=1 ORDER BY id DESC LIMIT 1",
             (worker_id,)
         ).fetchone()
         self.assertIsNotNone(active_report_block)
@@ -1174,7 +1174,7 @@ class JobPlatformTestCase(unittest.TestCase):
             headers={"Authorization": f"Bearer {admin_token}"},
             json={
                 "block_type": "job_creation",
-                "duration_minutes": 60,
+                "duration_minutes": 600,
                 "reason": "Ish e’lonlarida qoidabuzarlik."
             }
         )
