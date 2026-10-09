@@ -2711,3 +2711,48 @@ html[data-theme="dark"] .profile-trust-badge.reputation{background:#172554;borde
 .create-job-guidance{margin:16px 0 20px;padding:15px 17px;border:1px solid #bfdbfe;border-radius:14px;background:#eff6ff;color:#1e3a8a}
 .create-job-guidance strong{display:block;font-size:14px;margin-bottom:7px}
 .create-job-guidance ol{margin:0;padding-left:20px;display:grid;gap:5px;font-size:13px;line-height:1.55}
+
+
+/* Help center: match the active dark theme. */
+html[data-theme="dark"] .help-center-button{
+    background:#111827;
+    border-color:#334155;
+    color:#e5e7eb;
+}
+html[data-theme="dark"] .help-center-button:hover{
+    background:#172554;
+    border-color:#3b82f6;
+    color:#bfdbfe;
+}
+html[data-theme="dark"] .help-center-dialog{
+    background:#111827;
+    border-color:#334155;
+    color:#e5e7eb;
+}
+html[data-theme="dark"] .help-center-heading{
+    border-bottom-color:#334155;
+}
+html[data-theme="dark"] .help-center-eyebrow,
+html[data-theme="dark"] .help-center-link{
+    color:#93c5fd;
+}
+html[data-theme="dark"] .help-center-close{
+    background:#1e293b;
+    color:#e2e8f0;
+}
+html[data-theme="dark"] .help-center-close:hover{
+    background:#334155;
+    color:#fff;
+}
+html[data-theme="dark"] .help-center-steps li{
+    border-bottom-color:#334155;
+}
+html[data-theme="dark"] .help-center-steps li>span{
+    background:#1e3a8a;
+    color:#dbeafe;
+}
+html[data-theme="dark"] .help-center-footnote{
+    background:#0f172a;
+    color:#cbd5e1;
+    border:1px solid #334155;
+}
