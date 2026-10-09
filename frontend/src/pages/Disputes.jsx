@@ -30,12 +30,12 @@ function ActiveDisputeList({ items, loading, userId }) {
         <section className="card">
             <div className="profile-section-head">
                 <div>
-                    <span className="profile-eyebrow">ACTIVE DISPUTES</span>
-                    <h2 className="section-title">Aktiv nizolar</h2>
+                    <span className="profile-eyebrow">HALI HAL BO‘LMAGAN NIZOLAR</span>
+                    <h2 className="section-title">Hal qilinmagan nizolar</h2>
                 </div>
                 <span className="profile-count">{items.length}</span>
             </div>
-            {loading ? <div className="empty-state">Nizolar yuklanmoqda...</div> : items.length === 0 ? (
+            {loading ? <div className="empty-state">Nizolar ro‘yxati yuklanmoqda...</div> : items.length === 0 ? (
                 <div className="profile-empty">
                     <strong>Aktiv nizo yo‘q</strong>
                     <span>Bu yerda siz ochgan yoki sizga ochilgan, hali hal qilinmagan nizolar ko‘rinadi.</span>
@@ -107,7 +107,7 @@ export default function Disputes() {
     }, [token])
 
     return (
-        <AppLayout title="Nizolar markazi" subtitle="Faqat siz ochgan yoki sizga ochilgan, hali aktiv bo‘lgan nizolar.">
+        <AppLayout title="Nizolar va yordam" subtitle="Bu yerda siz ochgan yoki sizga tegishli, hali hal qilinmagan nizolarni kuzatishingiz mumkin.">
             <div className="disputes-page">
                 <ActiveDisputeList items={items} loading={loading} userId={user?.id} />
             </div>
@@ -136,7 +136,7 @@ export function CreateDispute() {
             setSubmitted(false)
             if (!/^\d+$/.test(jobId)) {
                 if (alive) {
-                    setNotice("Nizo faqat ish sahifasidan ochilishi mumkin. Avval tegishli ishni tanlang.")
+                    setNotice("Nizo ochish uchun avval tegishli ishni tanlang. Nizoni ish sahifasidagi “Nizo ochish” tugmasi orqali boshlang.")
                     setCheckingJob(false)
                 }
                 return
@@ -146,7 +146,7 @@ export function CreateDispute() {
             const eligible = Array.isArray(result?.items) ? result.items : []
             const matchingJob = eligible.find((item) => String(item.id) === String(Number(jobId)))
             if (matchingJob) setJob(matchingJob)
-            else setNotice("Bu ish nizo ochish uchun yaroqli emas yoki u bo‘yicha allaqachon aktiv nizo mavjud.")
+            else setNotice("Bu ish bo‘yicha nizo ochib bo‘lmaydi yoki allaqachon hal qilinmagan nizo mavjud.")
             setCheckingJob(false)
         }
         verifyJob()
@@ -174,7 +174,7 @@ export function CreateDispute() {
     }
 
     return (
-        <AppLayout title="Nizo ochish" subtitle="Bu forma faqat tanlangan ish ichidan ochiladi. Ishni bu yerdan o‘zgartirib bo‘lmaydi.">
+        <AppLayout title="Nizo ochish" subtitle="Nizo aynan tanlangan ishga bog‘lanadi. Yuborishdan oldin ish nomi va muammo tafsilotlarini tekshiring.">
             <div className="disputes-page">
                 {notice && <div className={"notice " + (submitted ? "ok" : "warn")}>{notice}</div>}
                 {checkingJob ? (
@@ -184,7 +184,7 @@ export function CreateDispute() {
                         <div className="profile-empty">
                             <strong>Nizo formasini ochib bo‘lmadi</strong>
                             <span>Nizoni tegishli ish sahifasidagi “Nizo ochish” tugmasi orqali boshlang.</span>
-                            <button className="btn btn-secondary" type="button" onClick={() => navigate("/disputes")}>Aktiv nizolarga qaytish</button>
+                            <button className="btn btn-secondary" type="button" onClick={() => navigate("/disputes")}>Nizolar ro‘yxatiga qaytish</button>
                         </div>
                     </section>
                 ) : submitted ? (
@@ -209,7 +209,7 @@ export function CreateDispute() {
                         <section className="card">
                             <div className="profile-section-head">
                                 <div>
-                                    <span className="profile-eyebrow">DISPUTE CENTER</span>
+                                    <span className="profile-eyebrow">NIZO BO‘YICHA MUROJAAT</span>
                                     <h2 className="section-title">Nizo tafsilotlari</h2>
                                 </div>
                             </div>
