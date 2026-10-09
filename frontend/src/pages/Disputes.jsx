@@ -53,7 +53,7 @@ function ActiveDisputeList({ items, loading, userId }) {
                                     <span>{openedByMe ? "Siz ochgansiz" : "Sizga ochilgan"} · Ish #{item.job_id}</span>
                                     <p>{item.description}</p>
                                 </div>
-                                <button className="btn btn-secondary" type="button" onClick={() => setSelected(selected === item.id ? null : item.id)}>
+                                <button className="btn btn-secondary dispute-detail-btn" type="button" onClick={() => setSelected(selected === item.id ? null : item.id)}>
                                     {selected === item.id ? "Yopish" : "Batafsil"}
                                 </button>
                                 {selected === item.id && (
