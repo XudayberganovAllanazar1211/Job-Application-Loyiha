@@ -230,23 +230,24 @@ export default function CreateJob() {
         setLoading(false)
 
         if (result?.msg === "ok") {
-            setNotice("Ish yaratildi")
+            setNotice("Ish muvaffaqiyatli joylashtirildi. Endi mos bajaruvchilarni ko‘rish uchun ishlar sahifasiga o‘tasiz.")
             setTimeout(() => navigate("/jobs"), 700)
             return
         }
 
-        setNotice(result?.msg || "Ish yaratishda xato")
+        setNotice(result?.msg || "Ish joylashtirilmadi. Ma’lumotlarni tekshirib, qayta urinib ko‘ring.")
     }
 
     return (
         <AppLayout
-            title="Ish yaratish"
-            subtitle="Xizmat kategoriyasini tanlab, yangi ish e’lon qiling."
+            title="Yangi ish joylashtirish"
+            subtitle="Bajaruvchi izlayapsizmi? Vazifani tushunarli yozing, narxni belgilang va e’lon qiling."
         >
             <div className="create-job-layout">
                 <section className="card">
-                    <h2>Ish e’loni formasi</h2>
-                    <p className="muted">Barcha maydonlarni to‘ldiring.</p>
+                    <h2>Ish haqida ma’lumot</h2>
+                    <p className="muted">Qanchalik aniq yozsangiz, mos bajaruvchini topish shunchalik oson bo‘ladi.</p>
+                    <div className="create-job-guidance"><strong>Qisqa yo‘riqnoma</strong><ol><li>Avval xizmat sohasini tanlang.</li><li>Ish nomi va bajarilishi kerak bo‘lgan vazifani aniq yozing.</li><li>Budjetni so‘mda kiriting va e’lonni yuboring.</li></ol></div>
 
                     {notice && <div className="notice ok" style={{ marginBottom: 14 }}>{notice}</div>}
 
@@ -266,7 +267,7 @@ export default function CreateJob() {
                                             <button type="button" onClick={() => setCustomServices(customServices.filter((_, i) => i !== index))} aria-label="Sohani olib tashlash">×</button>
                                         </span>
                                     ))}
-                                    {!selectedServiceIds.length && !customServices.length && <span>Xizmatni tanlang</span>}
+                                    {!selectedServiceIds.length && !customServices.length && <span>Xizmat sohasi tanlanmagan</span>}
                                 </div>
                             </div>
                             <button
@@ -285,7 +286,7 @@ export default function CreateJob() {
                                         autoFocus
                                         className="input"
                                         type="search"
-                                        placeholder="Xizmat qidiring..."
+                                        placeholder="Xizmat nomini yozing (masalan, veb-sayt)..."
                                         value={serviceSearch}
                                         onChange={(e) => setServiceSearch(e.target.value)}
                                     />
@@ -294,7 +295,7 @@ export default function CreateJob() {
                             <div className="service-tree">
                                 {!showCategories && !serviceSearch.trim() ? (
                                     <div className="service-category-placeholder">
-                                        Soha tanlash uchun yuqoridagi tugmani bosing
+                                        Masalan: Dasturlash → Backend. Kategoriya tanlash uchun “Soha tanlang” tugmasini bosing.
                                     </div>
                                 ) : serviceSearch.trim() ? (
                                     (() => {
@@ -367,14 +368,19 @@ export default function CreateJob() {
 
                         <input
                             className="input"
-                            placeholder="Sarlavha"
+                            placeholder="Ish nomi (masalan, Internet-do‘kon yaratish)"
+                            aria-label="Ish nomi"
+                            required
                             value={form.title}
                             onChange={(e) => setForm({ ...form, title: e.target.value })}
                         />
 
                         <textarea
                             className="textarea"
-                            placeholder="Tavsif"
+                            placeholder="Vazifani batafsil yozing: nimalar qilinadi, qanday natija kutiladi va muhim talablar nimalar?"
+                            aria-label="Ish tavsifi"
+                            rows="5"
+                            required
                             value={form.description}
                             onChange={(e) => setForm({ ...form, description: e.target.value })}
                         />
@@ -388,7 +394,8 @@ export default function CreateJob() {
                                         min="0.01"
                                         max="100000000000"
                                         step="0.01"
-                                        placeholder="Narx"
+                                        placeholder="Budjet (so‘m)"
+                                        aria-label="Ish uchun budjet, so‘mda"
                                         value={form.price}
                                         onChange={(e) => {
                                             const value = e.target.value
@@ -416,7 +423,8 @@ export default function CreateJob() {
                                 <div className="location-input-row">
                                     <input
                                         className="input"
-                                        placeholder="Manzil"
+                                        placeholder="Manzil (ixtiyoriy)"
+                                        aria-label="Ish bajariladigan manzil, ixtiyoriy"
                                         value={form.location}
                                         onChange={(e) => {
                                             setForm({ ...form, location: e.target.value })
