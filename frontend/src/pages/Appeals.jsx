@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { Navigate } from "react-router-dom"
 import AppLayout from "../components/AppLayout"
 import { api } from "../api"
+import { formatTimeAgo } from "../utils/time"
 
 const labels = {
     full: "To‘liq blok",
@@ -20,11 +21,7 @@ const appealStatus = {
     rejected: "Rad etildi"
 }
 
-function formatDate(value) {
-    if (!value) return "—"
-    const d = new Date(String(value).replace(" ", "T"))
-    return Number.isNaN(d.getTime()) ? value : d.toLocaleString("uz-UZ")
-}
+const formatDate = formatTimeAgo
 
 export default function Appeals() {
     const token = localStorage.getItem("token") || ""
