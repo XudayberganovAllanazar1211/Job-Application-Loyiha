@@ -691,14 +691,8 @@ class DB:
             except Exception:
                 pass
 
-        cursor.execute("PRAGMA table_info(reports)")
-        existing_report_cols = [row[1] for row in cursor.fetchall()]
-        if "message_id" not in existing_report_cols:
-            try:
-                cursor.execute("ALTER TABLE reports ADD COLUMN message_id INTEGER")
-            except Exception:
-                pass
         report_migrations = [
+            ("message_id", "ALTER TABLE reports ADD COLUMN message_id INTEGER"),
             ("admin_response", "ALTER TABLE reports ADD COLUMN admin_response TEXT DEFAULT ''"),
             ("decision", "ALTER TABLE reports ADD COLUMN decision TEXT DEFAULT ''"),
             ("payment_action", "ALTER TABLE reports ADD COLUMN payment_action TEXT NOT NULL DEFAULT 'none'"),
@@ -709,11 +703,21 @@ class DB:
             ("sanction_duration_minutes", "ALTER TABLE reports ADD COLUMN sanction_duration_minutes INTEGER"),
         ]
         for col_name, sql in report_migrations:
+            existing_report_cols = {
+                row[1] for row in cursor.execute("PRAGMA table_info(reports)").fetchall()
+            }
             if col_name not in existing_report_cols:
                 try:
                     cursor.execute(sql)
-                except Exception:
-                    pass
+                except sqlite3.Error as exc:
+                    raise RuntimeError(
+                        f"reports jadvali migratsiyasi bajarilmadi ({col_name}): {exc}"
+                    ) from exc
+            verified_report_cols = {
+                row[1] for row in cursor.execute("PRAGMA table_info(reports)").fetchall()
+            }
+            if col_name not in verified_report_cols:
+                raise RuntimeError(f"reports jadvalida {col_name} ustuni yo‘q; migratsiya bajarilmadi.")
 
         if "created_at" not in existing_rating_cols:
             try:
@@ -1790,7 +1794,9 @@ def create_report():
 @app.route("/admin/report/<int:report_id>", methods=["PATCH"])
 @admin_required
 def update_report(report_id):
-    data = request.json or {}
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"msg": "Shikoyat ma’lumoti JSON obyektida yuborilishi kerak"}), 400
     status = str(data.get("status", "")).strip().lower()
     response = str(data.get("admin_response", "")).strip()
     decision = str(data.get("decision", "")).strip().lower()
@@ -1809,13 +1815,33 @@ def update_report(report_id):
         return jsonify({"msg": "Shikoyat holati noto‘g‘ri"}), 400
 
     report = db.q(
-        "SELECT reporter_id,reported_user_id,job_id,message_id,status FROM reports WHERE id=?",
+        """SELECT reporter_id,reported_user_id,job_id,message_id,status,
+                  payment_action,job_action,notify_target,sanction_user_id,sanction_type,sanction_duration_minutes
+           FROM reports WHERE id=?""",
         (report_id,)
     ).fetchone()
     if not report:
         return jsonify({"msg": "Shikoyat topilmadi"}), 404
 
-    reporter_id, reported_user_id, job_id, message_id, old_status = report
+    (reporter_id, reported_user_id, job_id, message_id, old_status,
+     old_payment_action, old_job_action, old_notify_target, old_sanction_user_id,
+     old_sanction_type, old_sanction_duration) = report
+    old_payment_action = str(old_payment_action or "none")
+    old_job_action = str(old_job_action or "none")
+    old_notify_target = str(old_notify_target or "none")
+    old_sanction_type = str(old_sanction_type or "none")
+    old_is_final = old_status in ("resolved", "rejected")
+    old_has_recorded_actions = (
+        old_payment_action != "none"
+        or old_job_action != "none"
+        or old_notify_target != "none"
+        or old_sanction_type != "none"
+    )
+    if old_is_final and status != old_status and old_has_recorded_actions:
+        return jsonify({
+            "msg": "Yakuniy shikoyatda bajarilgan to‘lov yoki moderatsiya choralarini oddiy tahrir bilan almashtirib bo‘lmaydi. Amaldagi chora alohida bo‘limda boshqariladi."
+        }), 409
+    editing_final = old_is_final and status == old_status
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
     # Legacy clients that only send status keep the former reviewed/refund/block behavior.
@@ -1905,10 +1931,29 @@ def update_report(report_id):
             if sanction_duration < 1 or sanction_duration > 525600:
                 return jsonify({"msg": "Cheklov muddati 1 daqiqadan 365 kungacha bo‘lishi kerak"}), 400
         existing_sanction = _active_block_row(sanction_user_id, sanction_type)
-        if existing_sanction:
+        if existing_sanction and not editing_final:
             return jsonify({"msg": "Bu turdagi faol cheklov allaqachon mavjud"}), 409
 
-    if payment_action != "none":
+    if editing_final:
+        same_actions = (
+            payment_action == old_payment_action
+            and job_action == old_job_action
+            and notify_target == old_notify_target
+            and sanction_type == old_sanction_type
+        )
+        same_sanction = (
+            sanction_type == "none"
+            or (
+                int(sanction_user_id or 0) == int(old_sanction_user_id or 0)
+                and sanction_duration == old_sanction_duration
+            )
+        )
+        if not same_actions or not same_sanction:
+            return jsonify({
+                "msg": "Bu shikoyat uchun yakuniy choralar allaqachon bajarilgan. Izoh va hukm matnini tahrirlashingiz mumkin, lekin bajarilgan to‘lov/cheklov amallarini bu oynadan qayta almashtirib bo‘lmaydi."
+            }), 409
+
+    if payment_action != "none" and not editing_final:
         payment_handler = (
             app.config.get("FINJOB_REFUND_PAYMENT") if payment_action == "refund_payer"
             else app.config.get("FINJOB_RELEASE_PAYMENT")
@@ -1919,7 +1964,7 @@ def update_report(report_id):
         if not payment_ok:
             return jsonify({"msg": payment_message or "To‘lov chorasi bajarilmadi"}), 400
 
-    if job_action == "block":
+    if job_action == "block" and not editing_final:
         held = db.q("SELECT id FROM payments WHERE job_id=? AND status='held' LIMIT 1", (job_id,)).fetchone()
         if held:
             return jsonify({"msg": "Ishda escrow to‘lovi bor. Avval pulni qaytarish yoki to‘lovni alohida hal qilish kerak."}), 409
@@ -1928,7 +1973,7 @@ def update_report(report_id):
             (job_id,)
         ).close()
 
-    if sanction_type != "none":
+    if sanction_type != "none" and not editing_final:
         block_now = datetime.datetime.now(datetime.timezone.utc)
         expires_at = (block_now + datetime.timedelta(minutes=sanction_duration)).isoformat() if sanction_duration else None
         block_result = db.q(
@@ -1954,7 +1999,7 @@ def update_report(report_id):
          sanction_user_id, sanction_type, sanction_duration, report_id)
     ).close()
 
-    if is_final:
+    if is_final and not editing_final:
         effects = []
         if payment_action == "refund_payer":
             effects.append("Escrowdagi to‘lov buyurtmachiga qaytarildi.")
@@ -1968,7 +2013,7 @@ def update_report(report_id):
         title = "Shikoyat bo‘yicha yakuniy qaror"
         for uid in {reporter_id, reported_user_id} - {None}:
             create_notification(uid, "report_update", title, summary.strip(), "/jobs")
-    if notify_target != "none":
+    if notify_target != "none" and not editing_final:
         target_ids = []
         if notify_target in {"reporter", "both"} and reporter_id:
             target_ids.append(reporter_id)
@@ -1979,12 +2024,16 @@ def update_report(report_id):
                                 response, "/jobs")
 
     admin_audit(
-        "report_decision", "report", report_id,
+        "report_decision_amended" if editing_final else "report_decision",
+        "report", report_id,
         f"status={status}; decision={decision}; payment={payment_action}; job={job_action}; "
         f"notify={notify_target}; sanction={sanction_type}:{sanction_user_id}"
     )
     return jsonify({
-        "msg": "Shikoyat bo‘yicha qaror va tanlangan choralar saqlandi.",
+        "msg": (
+            "Shikoyat matni va hukmi yangilandi; avval bajarilgan choralar takrorlanmadi."
+            if editing_final else "Shikoyat bo‘yicha qaror va tanlangan choralar saqlandi."
+        ),
         "status": status, "decision": decision, "payment_action": payment_action,
         "job_action": job_action, "notify_target": notify_target,
         "sanction_type": sanction_type, "sanction_user_id": sanction_user_id
