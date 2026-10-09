@@ -71,7 +71,7 @@ const actionLabel = {
     user_block_created: "Block qo‘yildi",
     user_block_lifted: "Block olib tashlandi",
     appeal_created: "Yangi appeal",
-    appeal_reviewed: "Appeal ko‘rib chiqildi",
+    appeal_reviewed: "Ariza ko‘rib chiqildi",
     dispute_decision: "Nizo bo‘yicha hukm",
     report_decision: "Shikoyat bo‘yicha hukm",
     user_block_modified: "Cheklov o‘zgartirildi",
@@ -338,7 +338,7 @@ export default function Admin() {
         const ok = await action("/admin/appeal/" + reviewingAppeal.id, {
             method: "PATCH",
             body: appealReviewForm
-        }, "Appeal bo‘yicha qaror saqlandi.")
+        }, "Ariza bo‘yicha qaror saqlandi.")
         if (ok) setReviewingAppeal(null)
     }
 
@@ -734,7 +734,7 @@ export default function Admin() {
     }, [data])
 
     const navTabs = [
-        ["dashboard", "Dashboard"],
+        ["dashboard", "Boshqaruv paneli"],
         ["users", "Foydalanuvchilar"],
         ["jobs", "Ishlar"],
         ["services", "Xizmatlar"],
@@ -815,7 +815,7 @@ export default function Admin() {
                             <div className="card admin-overview-card">
                                 <div className="admin-section-head"><div><span>PLATFORM HEALTH</span><h2>Bugungi nazorat markazi</h2></div></div>
                                 <div className="admin-health-grid">
-                                    <div><small>Jami to‘lovlar</small><strong>{money(paymentTotal)} UZS</strong><span>Payment yozuvlari bo‘yicha</span></div>
+                                    <div><small>Jami to‘lovlar</small><strong>{money(paymentTotal)} UZS</strong><span>To‘lov yozuvlari bo‘yicha</span></div>
                                     <div><small>Released</small><strong>{money(completedPayments?.amount)} UZS</strong><span>Yakunlangan to‘lovlar</span></div>
                                     <div><small>Escrow</small><strong>{money(walletSummary?.escrow_balance)} UZS</strong><span>Hozir ushlab turilgan</span></div>
                                     <div><small>Komissiya</small><strong>{Number(data.settings?.commission_percent || 0).toLocaleString("uz-UZ")}%</strong><span>Platforma sozlamasi</span></div>
@@ -889,7 +889,7 @@ export default function Admin() {
                 {data && tab === "jobs" && (
                     <div className="admin-section">
                         <div className="admin-filters">
-                            <input className="input" placeholder="Job nomi, username, manzil yoki ID..." value={jobQuery} onChange={(e) => { setJobPage(1); setJobQuery(e.target.value) }} />
+                            <input className="input" placeholder="Ish nomi, foydalanuvchi nomi, manzil yoki ID..." value={jobQuery} onChange={(e) => { setJobPage(1); setJobQuery(e.target.value) }} />
                             <select className="select" value={jobStatus} onChange={(e) => { setJobPage(1); setJobStatus(e.target.value) }}>
                                 <option value="all">Barcha holatlar</option>
                                 {Object.entries(statusLabel).slice(0, 6).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
@@ -898,7 +898,7 @@ export default function Admin() {
                         </div>
                         <div className="admin-table-wrap">
                             <table className="admin-table">
-                                <thead><tr><th>ID</th><th>Job</th><th>Egasi</th><th>Bajaruvchi</th><th>Narx</th><th>Holat</th><th>Manzil</th><th>Amal</th></tr></thead>
+                                <thead><tr><th>ID</th><th>Ish</th><th>Buyurtmachi</th><th>Bajaruvchi</th><th>Narx</th><th>Holat</th><th>Manzil</th><th>Amal</th></tr></thead>
                                 <tbody>
                                     {jobs.page.map((item) => (
                                         <tr key={item.id}>
@@ -913,7 +913,7 @@ export default function Admin() {
                                 </tbody>
                             </table>
                         </div>
-                        {!jobs.page.length && <div className="empty-state">Job topilmadi.</div>}
+                        {!jobs.page.length && <div className="empty-state">Ish topilmadi.</div>}
                         <Pager page={jobPage} pages={jobs.pages} total={jobs.all.length} onChange={setJobPage} />
                     </div>
                 )}
@@ -982,9 +982,9 @@ export default function Admin() {
                         </div>
                         <div className="admin-table-wrap">
                             <table className="admin-table">
-                                <thead><tr><th>ID</th><th>User</th><th>Block turi</th><th>Nega</th><th>Berilgan</th><th>Tugash</th><th>Admin</th><th>Amal</th></tr></thead>
+                                <thead><tr><th>ID</th><th>Foydalanuvchi</th><th>Cheklov turi</th><th>Sabab</th><th>Berilgan</th><th>Tugash</th><th>Administrator</th><th>Amal</th></tr></thead>
                                 <tbody>{filteredBlocks.page.map((item) => <tr key={item.id}>
-                                    <td>#{item.id}</td><td><strong>@{item.username}</strong><small>User ID: #{item.user_id}</small></td>
+                                    <td>#{item.id}</td><td><strong>@{item.username}</strong><small>Foydalanuvchi ID: #{item.user_id}</small></td>
                                     <td><span className={"admin-badge " + (item.active ? "danger" : "neutral")}>{item.block_label || blockLabels[item.block_type] || item.block_type}</span></td>
                                     <td>{item.reason}</td><td>{formatTimeAgo(item.created_at)}</td><td>{item.expires_at ? formatTimeAgo(item.expires_at) : "Muddatsiz"}</td><td>@{item.admin_username || "—"}</td>
                                     <td>{item.active ? <div className="admin-row-actions"><button className="btn btn-secondary admin-small-btn" onClick={() => reviseBlock(item)}>Muddat/sabab</button><button className="btn btn-secondary admin-small-btn" onClick={() => liftBlock(item)}>Olib tashlash</button></div> : "—"}</td>
@@ -999,12 +999,12 @@ export default function Admin() {
                 {data && tab === "appeals" && (
                     <div className="admin-section">
                         <div className="admin-filters">
-                            <input className="input" placeholder="User, appeal matni, sabab, block ID..." value={appealQuery} onChange={(e) => { setAppealPage(1); setAppealQuery(e.target.value) }} />
+                            <input className="input" placeholder="Foydalanuvchi, ariza matni, sabab yoki cheklov ID..." value={appealQuery} onChange={(e) => { setAppealPage(1); setAppealQuery(e.target.value) }} />
                             <select className="select" value={appealStatus} onChange={(e) => { setAppealPage(1); setAppealStatus(e.target.value) }}><option value="all">Barcha statuslar</option><option value="open">Ochiq</option><option value="reviewing">Ko‘rib chiqilmoqda</option><option value="approved">Tasdiqlangan</option><option value="modified">Qisman tasdiqlangan</option><option value="rejected">Rad etilgan</option></select>
                         </div>
                         <div className="admin-table-wrap">
                             <table className="admin-table admin-appeal-table">
-                                <thead><tr><th>Appeal</th><th>User</th><th>Block</th><th>Block sababi</th><th>Appeal matni</th><th>Vaqt</th><th>Status</th><th>Amal</th></tr></thead>
+                                <thead><tr><th>Ariza</th><th>Foydalanuvchi</th><th>Cheklov</th><th>Cheklov sababi</th><th>Ariza matni</th><th>Vaqt</th><th>Holat</th><th>Amal</th></tr></thead>
                                 <tbody>{filteredAppeals.page.map((item) => <tr key={item.id}>
                                     <td><strong>#{item.id}</strong><small>Block #{item.block_id}</small></td>
                                     <td><strong>@{item.username}</strong><small>User ID: #{item.user_id}</small></td>
@@ -1017,7 +1017,7 @@ export default function Admin() {
                                 </tr>)}</tbody>
                             </table>
                         </div>
-                        {!filteredAppeals.page.length && <div className="empty-state">Appeal topilmadi.</div>}
+                        {!filteredAppeals.page.length && <div className="empty-state">Ariza topilmadi.</div>}
                         <Pager page={appealPage} pages={filteredAppeals.pages} total={filteredAppeals.all.length} onChange={setAppealPage} />
                     </div>
                 )}
@@ -1164,7 +1164,7 @@ export default function Admin() {
                             <div className="admin-section-head"><div><span>RECENT TRANSACTIONS</span><h2>Wallet tranzaksiyalari</h2></div></div>
                             <div className="admin-table-wrap">
                                 <table className="admin-table">
-                                    <thead><tr><th>ID</th><th>User</th><th>Tur</th><th>Summa</th><th>Balansdan keyin</th><th>Tavsif</th><th>Sana</th></tr></thead>
+                                    <thead><tr><th>ID</th><th>Foydalanuvchi</th><th>Tur</th><th>Summa</th><th>Amaldan keyingi balans</th><th>Tavsif</th><th>Sana</th></tr></thead>
                                     <tbody>{(finance?.transactions || []).slice(0, 40).map((item) => <tr key={item.id}><td>#{item.id}</td><td>@{item.username}</td><td><span className="admin-badge neutral">{item.type}</span></td><td className={Number(item.amount) >= 0 ? "admin-amount-positive" : "admin-amount-negative"}>{Number(item.amount) >= 0 ? "+" : ""}{money(item.amount)} UZS</td><td>{money(item.balance_after)} UZS</td><td>{item.description}</td><td>{formatTimeAgo(item.created_at)}</td></tr>)}</tbody>
                                 </table>
                             </div>
@@ -1193,7 +1193,7 @@ export default function Admin() {
                         <div className="admin-filters"><input className="input" placeholder="Username, izoh yoki job ID..." value={ratingQuery} onChange={(e) => { setRatingPage(1); setRatingQuery(e.target.value) }} /></div>
                         <div className="admin-table-wrap">
                             <table className="admin-table">
-                                <thead><tr><th>ID</th><th>Job</th><th>Kimdan</th><th>Kimga</th><th>Baho</th><th>Izoh</th><th>Amal</th></tr></thead>
+                                <thead><tr><th>ID</th><th>Ish</th><th>Kimdan</th><th>Kimga</th><th>Baho</th><th>Izoh</th><th>Amal</th></tr></thead>
                                 <tbody>{ratings.page.map((item) => <tr key={item.id}><td>#{item.id}</td><td>#{item.job_id}</td><td>@{item.from_username || "—"}</td><td>@{item.to_username || "—"}</td><td><strong>{item.score}/10</strong></td><td>{item.comment || "—"}</td><td><button className="btn btn-danger admin-small-btn" onClick={() => deleteRating(item)}>O‘chirish</button></td></tr>)}</tbody>
                             </table>
                         </div>
@@ -1229,7 +1229,7 @@ export default function Admin() {
                         </div>
                         <div className="card admin-setting-card">
                             <div className="admin-section-head"><div><span>SECURITY</span><h2>Admin xavfsizligi</h2></div></div>
-                            <div className="admin-setting-list"><div><span>Admin-only API</span><strong>Faol</strong></div><div><span>Audit log</span><strong>Faol</strong></div><div><span>Token versioning</span><strong>Faol</strong></div><div><span>User blocking</span><strong>Faol</strong></div><div><span>Reports moderation</span><strong>Faol</strong></div></div>
+                            <div className="admin-setting-list"><div><span>Faqat administrator uchun API</span><strong>Faol</strong></div><div><span>Audit log</span><strong>Faol</strong></div><div><span>Token versiyasini tekshirish</span><strong>Faol</strong></div><div><span>Foydalanuvchini cheklash</span><strong>Faol</strong></div><div><span>Shikoyatlarni ko‘rib chiqish</span><strong>Faol</strong></div></div>
                         </div>
                     </div>
                 )}
@@ -1239,7 +1239,7 @@ export default function Admin() {
                 <div className="admin-modal-backdrop" onClick={() => setModeratingUser(null)}>
                     <div className="card admin-modal admin-moderation-modal" onClick={(e) => e.stopPropagation()}>
                         <div className="admin-modal-head">
-                            <div><span className="admin-search-eyebrow">MODERATION CENTER</span><h3>@{moderatingUser.username}</h3><p>User #{moderatingUser.id} · cheklovlarni boshqarish</p></div>
+                            <div><span className="admin-search-eyebrow">CHEKLOVLARNI BOSHQARISH</span><h3>@{moderatingUser.username}</h3><p>Foydalanuvchi ID: #{moderatingUser.id} · cheklovlarni boshqarish</p></div>
                             <button className="admin-modal-close" onClick={() => setModeratingUser(null)}>×</button>
                         </div>
                         <div className="admin-moderation-body">
