@@ -2295,7 +2295,8 @@ def admin_overview():
                       WHERE ub.user_id=users.id AND ub.active=1
                         AND (ub.expires_at IS NULL OR ub.expires_at>?)
                         AND ub.block_type='full'
-                  ) THEN 1 ELSE 0 END
+                  ) THEN 1 ELSE 0 END,
+                  COALESCE(email_verified,0),COALESCE(phone_verified,0),COALESCE(identity_verified,0)
            FROM users ORDER BY id DESC""",
         (datetime.datetime.now(datetime.timezone.utc).isoformat(),)
     ).fetchall()
@@ -2325,7 +2326,8 @@ def admin_overview():
         """SELECT r.id,r.job_id,r.message_id,r.reason,r.details,r.status,r.created_at,
                   f.username AS reporter_username,t.username AS reported_username,
                   m.attachment_url,m.attachment_name,m.attachment_type,r.admin_response,r.decision,
-                  r.payment_action,r.job_action,r.notify_target,r.sanction_user_id,r.sanction_type,r.sanction_duration_minutes
+                  r.payment_action,r.job_action,r.notify_target,r.sanction_user_id,r.sanction_type,r.sanction_duration_minutes,
+                  r.reporter_id,r.reported_user_id
            FROM reports r
            LEFT JOIN users f ON f.id=r.reporter_id
            LEFT JOIN users t ON t.id=r.reported_user_id
@@ -2346,11 +2348,11 @@ def admin_overview():
             "admins":sum(1 for u in users if str(u[8]).lower()=="admin"),
             "blocked_users":sum(1 for u in users if int(u[12] or 0)==1),
         },
-        "users":rows(users,["id","username","first_name","last_name","email","birthday","bio","skills","role","created_at","average_rating","balance","is_blocked"]),
+        "users":rows(users,["id","username","first_name","last_name","email","birthday","bio","skills","role","created_at","average_rating","balance","is_blocked","email_verified","phone_verified","identity_verified"]),
         "jobs":rows(jobs,["id","title","price","currency","location","status","created_at","creator_username","worker_username"]),
         "services":rows(services,["id","name","parent_id","parent_name","created_by"]),
         "ratings":rows(ratings,["id","job_id","score","comment","created_at","from_username","to_username"]),
-        "reports":rows(reports,["id","job_id","message_id","reason","details","status","created_at","reporter_username","reported_username","attachment_url","attachment_name","attachment_type","admin_response","decision","payment_action","job_action","notify_target","sanction_user_id","sanction_type","sanction_duration_minutes"]),
+        "reports":rows(reports,["id","job_id","message_id","reason","details","status","created_at","reporter_username","reported_username","attachment_url","attachment_name","attachment_type","admin_response","decision","payment_action","job_action","notify_target","sanction_user_id","sanction_type","sanction_duration_minutes","reporter_id","reported_user_id"]),
     })
 
 
@@ -2396,10 +2398,11 @@ def admin_finance():
     ).fetchall()
     payments = db.q(
         """SELECT p.id,p.job_id,p.amount,p.currency,p.status,p.provider,p.created_at,p.paid_at,p.released_at,p.refunded_at,
-                  payer.username,payee.username
+                  payer.username,payee.username,j.status
            FROM payments p
            LEFT JOIN users payer ON payer.id=p.payer_id
            LEFT JOIN users payee ON payee.id=p.payee_id
+           LEFT JOIN jobs j ON j.id=p.job_id
            ORDER BY p.id DESC LIMIT 100"""
     ).fetchall()
     wallet=db.q("SELECT COALESCE(balance,0),COALESCE(escrow_balance,0) FROM platform_wallet WHERE id=1").fetchone()
@@ -2413,10 +2416,53 @@ def admin_finance():
         "payments":[
             {"id":x[0],"job_id":x[1],"amount":float(x[2] or 0),"currency":x[3],"status":x[4],"provider":x[5],
              "created_at":x[6],"paid_at":x[7],"released_at":x[8],"refunded_at":x[9],
-             "payer_username":x[10] or "—","payee_username":x[11] or "—"}
+             "payer_username":x[10] or "—","payee_username":x[11] or "—","job_status":x[12] or ""}
             for x in payments
         ],
     })
+
+
+@app.route("/admin/payment/<int:job_id>", methods=["PATCH"])
+@admin_required
+def admin_payment_action(job_id):
+    data = request.json or {}
+    action = str(data.get("action", "")).strip().lower()
+    reason = str(data.get("reason", "")).strip()
+    if action not in {"refund", "release"}:
+        return jsonify({"msg": "Qaytarish yoki ijrochiga o‘tkazishni tanlang"}), 400
+    if len(reason) < 5 or len(reason) > 2000:
+        return jsonify({"msg": "Moliyaviy qaror sababi 5–2000 belgidan iborat bo‘lishi kerak"}), 400
+    payment = db.q(
+        """SELECT p.status,j.status,j.user_id,j.worker_id,j.title
+           FROM payments p JOIN jobs j ON j.id=p.job_id WHERE p.job_id=?""",
+        (job_id,)
+    ).fetchone()
+    if not payment:
+        return jsonify({"msg": "Ish yoki to‘lov topilmadi"}), 404
+    payment_status, job_status, owner_id, worker_id, title = payment
+    if payment_status != "held":
+        return jsonify({"msg": "Faqat escrowda ushlab turilgan to‘lovga amal bajarish mumkin"}), 409
+    if action == "release" and job_status not in {"pending_finish", "finished"}:
+        return jsonify({"msg": "To‘lovni chiqarish uchun ish yakunlash bosqichida bo‘lishi kerak"}), 409
+
+    handler = app.config.get("FINJOB_REFUND_PAYMENT" if action == "refund" else "FINJOB_RELEASE_PAYMENT")
+    if not handler:
+        return jsonify({"msg": "To‘lov amali hozir mavjud emas"}), 503
+    ok, message, _ = handler(job_id)
+    if not ok:
+        return jsonify({"msg": message or "To‘lov bo‘yicha amal bajarilmadi"}), 400
+
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    if action == "refund":
+        db.q("UPDATE jobs SET status='blocked',finished_at=NULL,owner_finished=0,worker_finished=0 WHERE id=?", (job_id,)).close()
+        summary = f"«{title}» bo‘yicha escrowdagi to‘lov buyurtmachiga qaytarildi. Sabab: {reason}"
+    else:
+        db.q("UPDATE jobs SET status='finished',finished_at=COALESCE(finished_at,?) WHERE id=?", (now, job_id)).close()
+        summary = f"«{title}» bo‘yicha to‘lov ijrochiga o‘tkazildi. Sabab: {reason}"
+    for uid in {owner_id, worker_id} - {None}:
+        create_notification(uid, "admin_payment_decision", "To‘lov bo‘yicha admin qarori", summary, "/payments")
+    admin_audit("admin_payment_action", "job", job_id, f"action={action}; reason={reason}")
+    return jsonify({"msg": "To‘lov bo‘yicha qaror bajarildi", "action": action})
 
 
 @app.route("/admin/audit-log")
