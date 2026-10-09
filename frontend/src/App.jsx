@@ -19,8 +19,17 @@ import Appeals from "./pages/Appeals"
 import Payments from "./pages/Payments"
 import Disputes, { CreateDispute } from "./pages/Disputes"
 
+function getStoredUser() {
+    try {
+        return JSON.parse(localStorage.getItem("user") || "null")
+    } catch {
+        localStorage.removeItem("user")
+        return null
+    }
+}
+
 function AdminOnly({ children }) {
-    const user = JSON.parse(localStorage.getItem("user") || "null")
+    const user = getStoredUser()
     return user?.role === "admin" ? children : <Navigate to="/" replace />
 }
 
