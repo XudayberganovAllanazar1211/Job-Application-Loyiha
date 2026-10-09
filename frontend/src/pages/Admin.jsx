@@ -817,7 +817,7 @@ export default function Admin() {
                                         {item.admin_response && <p><strong>Admin javobi:</strong> {item.admin_response}</p>}
                                         <small>{item.created_at || "Sana noma’lum"}</small>
                                     </div>
-                                    <button className="btn btn-primary" type="button" onClick={() => openDisputeReview(item)}>
+                                    <button className="btn btn-primary admin-dispute-review-btn" type="button" onClick={() => openDisputeReview(item)}>
                                         {reviewingDispute?.id === item.id ? "Yopish" : "Ko‘rib chiqish"}
                                     </button>
                                     {reviewingDispute?.id === item.id && (
