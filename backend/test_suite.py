@@ -1693,6 +1693,13 @@ class JobPlatformTestCase(unittest.TestCase):
         )
         self.assertEqual(accepted.status_code, 200)
 
+        eligible_before = self.client.get(
+            "/disputes/eligible-jobs",
+            headers={"Authorization": f"Bearer {owner_token}"},
+        )
+        self.assertEqual(eligible_before.status_code, 200)
+        self.assertIn(job_id, [item["id"] for item in eligible_before.get_json()["items"]])
+
         opened = self.client.post(
             "/disputes",
             headers={"Authorization": f"Bearer {owner_token}"},
@@ -1705,6 +1712,13 @@ class JobPlatformTestCase(unittest.TestCase):
         )
         self.assertEqual(opened.status_code, 201)
         dispute_id = opened.get_json()["id"]
+
+        eligible_after = self.client.get(
+            "/disputes/eligible-jobs",
+            headers={"Authorization": f"Bearer {owner_token}"},
+        )
+        self.assertEqual(eligible_after.status_code, 200)
+        self.assertNotIn(job_id, [item["id"] for item in eligible_after.get_json()["items"]])
 
         worker_view = self.client.get("/disputes", headers={"Authorization": f"Bearer {worker_token}"})
         self.assertEqual(worker_view.status_code, 200)

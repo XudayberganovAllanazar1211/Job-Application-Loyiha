@@ -92,6 +92,7 @@ _RATE_LIMIT_RULES = {
     "/saved-searches/": (30, 600),
     "/recently-viewed/": (60, 60),
     "/disputes": (10, 600),
+    "/disputes/": (30, 600),
 }
 
 
@@ -1347,6 +1348,29 @@ def update_user_verification(user_id):
 @auth
 def get_my_reputation():
     return jsonify(_reputation_payload(request.uid))
+
+
+@app.route("/disputes/eligible-jobs", methods=["GET"])
+@auth
+def eligible_dispute_jobs():
+    rows = db.q(
+        """SELECT j.id,j.title,j.status,j.user_id,j.worker_id
+           FROM jobs j
+           WHERE j.worker_id IS NOT NULL
+             AND (j.user_id=? OR j.worker_id=?)
+             AND j.status IN ('payment_pending','accepted','pending_finish','finished')
+             AND NOT EXISTS (
+                 SELECT 1 FROM disputes d
+                 WHERE d.job_id=j.id AND d.status IN ('open','reviewing')
+             )
+           ORDER BY j.id DESC
+           LIMIT 200""",
+        (request.uid, request.uid),
+    ).fetchall()
+    return jsonify({"items": [{
+        "id": row[0], "title": row[1], "status": row[2],
+        "user_id": row[3], "worker_id": row[4],
+    } for row in rows]})
 
 
 @app.route("/disputes", methods=["GET", "POST"])

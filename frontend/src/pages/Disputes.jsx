@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import AppLayout from "../components/AppLayout"
 import { api } from "../api"
@@ -23,14 +23,32 @@ export default function Disputes() {
     const [loading, setLoading] = useState(true)
     const [notice, setNotice] = useState("")
     const [selected, setSelected] = useState(null)
+    const [eligibleJobs, setEligibleJobs] = useState([])
+    const [jobsLoading, setJobsLoading] = useState(true)
     const [form, setForm] = useState({ job_id: "", category: "payment", description: "", evidence: "" })
     const [searchParams] = useSearchParams()
     const token = localStorage.getItem("token") || ""
+    const user = JSON.parse(localStorage.getItem("user") || "null")
+    const prefillHandled = useRef(false)
+
+    const loadEligibleJobs = async () => {
+        setJobsLoading(true)
+        const result = await api("/disputes/eligible-jobs", { token })
+        setEligibleJobs(Array.isArray(result?.items) ? result.items : [])
+        setJobsLoading(false)
+    }
 
     useEffect(() => {
+        if (prefillHandled.current || jobsLoading) return
+        prefillHandled.current = true
         const jobId = searchParams.get("job")
-        if (jobId && /^\d+$/.test(jobId)) setForm((current) => ({ ...current, job_id: jobId }))
-    }, [searchParams])
+        if (!jobId || !/^\d+$/.test(jobId)) return
+        if (eligibleJobs.some((job) => String(job.id) === jobId)) {
+            setForm((current) => ({ ...current, job_id: jobId }))
+        } else {
+            setNotice("Tanlangan ish nizo ochish uchun yaroqli emas yoki u bo‘yicha ochiq nizo mavjud.")
+        }
+    }, [searchParams, eligibleJobs, jobsLoading])
 
     const load = async () => {
         setLoading(true)
@@ -39,7 +57,7 @@ export default function Disputes() {
         setLoading(false)
     }
 
-    useEffect(() => { load() }, [])
+    useEffect(() => { load(); loadEligibleJobs() }, [])
 
     const submit = async (event) => {
         event.preventDefault()
@@ -56,7 +74,7 @@ export default function Disputes() {
         if (result?.ok) {
             setNotice("Nizo muvaffaqiyatli ochildi.")
             setForm({ job_id: "", category: "payment", description: "", evidence: "" })
-            await load()
+            await Promise.all([load(), loadEligibleJobs()])
         } else setNotice(result?.msg || "Nizo ochilmadi.")
     }
 
@@ -74,12 +92,29 @@ export default function Disputes() {
                     <form className="form" onSubmit={submit}>
                         <div className="form-row">
                             <div>
-                                <label className="helper">Ish ID</label>
-                                <input className="input" type="number" min="1" value={form.job_id} onChange={(e) => setForm({ ...form, job_id: e.target.value })} placeholder="Masalan: 42" required />
+                                <label className="helper" htmlFor="dispute-job">Ishni tanlang</label>
+                                <select
+                                    id="dispute-job"
+                                    className="select"
+                                    value={form.job_id}
+                                    onChange={(e) => setForm({ ...form, job_id: e.target.value })}
+                                    required
+                                    disabled={jobsLoading || eligibleJobs.length === 0}
+                                >
+                                    <option value="">{jobsLoading ? "Ishlar yuklanmoqda..." : "Nizo ochiladigan ishni tanlang"}</option>
+                                    {eligibleJobs.map((job) => (
+                                        <option key={job.id} value={job.id}>
+                                            #{job.id} · {job.title} — {Number(job.user_id) === Number(user?.id) ? "Mijoz" : "Ijrochi"} · {statusLabels[job.status] || job.status}
+                                        </option>
+                                    ))}
+                                </select>
+                                {!jobsLoading && eligibleJobs.length === 0 && (
+                                    <p className="helper">Nizo ochish mumkin bo‘lgan ish topilmadi. Ish qabul qilingan yoki yakunlanayotgan/yakunlangan bo‘lishi va unda ochiq nizo bo‘lmasligi kerak.</p>
+                                )}
                             </div>
                             <div>
-                                <label className="helper">Sabab</label>
-                                <select className="select" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
+                                <label className="helper" htmlFor="dispute-category">Sabab</label>
+                                <select id="dispute-category" className="select" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
                                     {Object.entries(categories).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
                                 </select>
                             </div>
@@ -92,7 +127,7 @@ export default function Disputes() {
                             <label className="helper">Dalillar</label>
                             <textarea className="textarea" rows="4" maxLength="3000" value={form.evidence} onChange={(e) => setForm({ ...form, evidence: e.target.value })} placeholder="Xabarlar, to‘lov yoki boshqa dalillar haqida ma’lumot..." />
                         </div>
-                        <button className="btn btn-primary" type="submit">Nizoni yuborish</button>
+                        <button className="btn btn-primary" type="submit" disabled={jobsLoading || !form.job_id || eligibleJobs.length === 0}>Nizoni yuborish</button>
                     </form>
                 </section>
 

@@ -73,12 +73,15 @@ export default function Admin() {
     const [finance, setFinance] = useState(null)
     const [adminBlocks, setAdminBlocks] = useState([])
     const [adminAppeals, setAdminAppeals] = useState([])
+    const [adminDisputes, setAdminDisputes] = useState([])
     const [audit, setAudit] = useState(null)
     const [moderatingUser, setModeratingUser] = useState(null)
     const [userBlocks, setUserBlocks] = useState([])
     const [blockForm, setBlockForm] = useState({ block_type: "chat", duration_minutes: "1440", reason: "" })
     const [reviewingAppeal, setReviewingAppeal] = useState(null)
     const [appealReviewForm, setAppealReviewForm] = useState({ status: "reviewing", admin_response: "" })
+    const [reviewingDispute, setReviewingDispute] = useState(null)
+    const [disputeReviewForm, setDisputeReviewForm] = useState({ status: "reviewing", admin_response: "" })
     const [auditPage, setAuditPage] = useState(1)
 
     const [notice, setNotice] = useState("")
@@ -89,6 +92,8 @@ export default function Admin() {
     const [appealQuery, setAppealQuery] = useState("")
     const [appealStatus, setAppealStatus] = useState("all")
     const [appealPage, setAppealPage] = useState(1)
+    const [disputeQuery, setDisputeQuery] = useState("")
+    const [disputeStatus, setDisputeStatus] = useState("open")
     const [blockQuery, setBlockQuery] = useState("")
     const [blockStatus, setBlockStatus] = useState("active")
     const [blockPage, setBlockPage] = useState(1)
@@ -123,13 +128,14 @@ export default function Admin() {
 
     const load = async () => {
         setNotice("")
-        const [result, wallet, stats, financeData, blocks, appeals] = await Promise.all([
+        const [result, wallet, stats, financeData, blocks, appeals, disputesData] = await Promise.all([
             api("/admin/overview", { token }),
             api("/admin/wallet/summary", { token }),
             api("/admin/analytics", { token }),
             api("/admin/finance", { token }),
             api("/admin/blocks?status=active", { token }),
-            api("/admin/appeals", { token })
+            api("/admin/appeals", { token }),
+            api("/admin/disputes", { token })
         ])
         if (result?.ok) {
             setData(result)
@@ -139,6 +145,7 @@ export default function Admin() {
             if (financeData?.ok) setFinance(financeData)
             if (blocks?.ok) setAdminBlocks(blocks.items || [])
             if (appeals?.ok) setAdminAppeals(appeals.items || [])
+            if (disputesData?.ok) setAdminDisputes(Array.isArray(disputesData) ? disputesData : (disputesData.items || []))
         } else {
             setNoticeType("warn")
             setNotice(result?.msg || "Admin ma'lumotlarini yuklab bo'lmadi.")
@@ -254,6 +261,24 @@ export default function Admin() {
             body: appealReviewForm
         }, "Appeal yangilandi.")
         if (ok) setReviewingAppeal(null)
+    }
+
+    const openDisputeReview = (item) => {
+        setReviewingDispute(item)
+        setDisputeReviewForm({
+            status: item.status === "open" ? "reviewing" : item.status,
+            admin_response: item.admin_response || ""
+        })
+    }
+
+    const submitDisputeReview = async (event) => {
+        event.preventDefault()
+        if (!reviewingDispute) return
+        const ok = await action("/admin/disputes/" + reviewingDispute.id, {
+            method: "PATCH",
+            body: disputeReviewForm
+        }, "Nizo holati yangilandi.")
+        if (ok) setReviewingDispute(null)
     }
 
     const editUser = (item) => {
@@ -406,6 +431,17 @@ export default function Admin() {
         return { all: items, page: items.slice((appealPage - 1) * PAGE_SIZE, appealPage * PAGE_SIZE), pages: Math.max(1, Math.ceil(items.length / PAGE_SIZE)) }
     }, [adminAppeals, appealQuery, appealStatus, appealPage])
 
+    const filteredDisputes = useMemo(() => {
+        const q = disputeQuery.trim().toLowerCase()
+        return adminDisputes.filter((item) => {
+            const text = [
+                item.id, item.job_id, item.job_title, item.opened_by_username,
+                item.against_username, item.category, item.description, item.evidence
+            ].join(" ").toLowerCase()
+            return (!q || text.includes(q)) && (disputeStatus === "all" || item.status === disputeStatus)
+        })
+    }, [adminDisputes, disputeQuery, disputeStatus])
+
     const filteredBlocks = useMemo(() => {
         const q = blockQuery.trim().toLowerCase()
         const items = adminBlocks.filter((item) => {
@@ -471,6 +507,7 @@ export default function Admin() {
         ["jobs", "Ishlar"],
         ["services", "Xizmatlar"],
         ["reports", "Shikoyatlar"],
+        ["disputes", "Nizolar"],
         ["blocks", "Blocks"],
         ["appeals", "Appeals"],
         ["finance", "Moliya"],
@@ -533,6 +570,7 @@ export default function Admin() {
                         <button key={key} className={"admin-tab " + (tab === key ? "active" : "")} onClick={() => setTab(key)}>
                             {label}
                             {key === "reports" && stats.pending_reports > 0 && <b className="admin-tab-count">{stats.pending_reports}</b>}
+                            {key === "disputes" && adminDisputes.filter((item) => ["open", "reviewing"].includes(item.status)).length > 0 && <b className="admin-tab-count">{adminDisputes.filter((item) => ["open", "reviewing"].includes(item.status)).length}</b>}
                         </button>
                     ))}
                 </div>
@@ -748,6 +786,65 @@ export default function Admin() {
                         </div>
                         {!filteredAppeals.page.length && <div className="empty-state">Appeal topilmadi.</div>}
                         <Pager page={appealPage} pages={filteredAppeals.pages} total={filteredAppeals.all.length} onChange={setAppealPage} />
+                    </div>
+                )}
+
+                {data && tab === "disputes" && (
+                    <div className="admin-section">
+                        <div className="admin-section-head">
+                            <div><span>DISPUTE CENTER</span><h2>Nizolarni ko‘rib chiqish</h2><p className="muted">Tomonlar, dalillar va nizo holatini shu bo‘limda boshqaring.</p></div>
+                            <span className="profile-count">{filteredDisputes.length} ta</span>
+                        </div>
+                        <div className="admin-filters">
+                            <input className="input" placeholder="Ish nomi, foydalanuvchi, nizo ID yoki matn..." value={disputeQuery} onChange={(e) => setDisputeQuery(e.target.value)} />
+                            <select className="select" value={disputeStatus} onChange={(e) => setDisputeStatus(e.target.value)}>
+                                <option value="open">Ochiq</option>
+                                <option value="reviewing">Ko‘rib chiqilmoqda</option>
+                                <option value="resolved">Hal qilingan</option>
+                                <option value="rejected">Rad etilgan</option>
+                                <option value="all">Barcha holatlar</option>
+                            </select>
+                        </div>
+                        <div className="dispute-list">
+                            {filteredDisputes.map((item) => (
+                                <article className="dispute-item" key={item.id}>
+                                    <div>
+                                        <strong>#{item.id} · {item.job_title || `Ish #${item.job_id}`}</strong>
+                                        <span>{({ payment: "To‘lov", quality: "Ish sifati", deadline: "Muddat", communication: "Muloqot", other: "Boshqa" })[item.category] || item.category} · {statusLabel[item.status] || item.status}</span>
+                                        <p><strong>Muammo:</strong> {item.description}</p>
+                                        <span>Ochildi: @{item.opened_by_username || "—"} · Qarshi tomon: @{item.against_username || "—"} · Ish ID: #{item.job_id}</span>
+                                        {item.evidence && <p><strong>Dalillar:</strong> {item.evidence}</p>}
+                                        {item.admin_response && <p><strong>Admin javobi:</strong> {item.admin_response}</p>}
+                                        <small>{item.created_at || "Sana noma’lum"}</small>
+                                    </div>
+                                    <button className="btn btn-primary" type="button" onClick={() => openDisputeReview(item)}>
+                                        {reviewingDispute?.id === item.id ? "Yopish" : "Ko‘rib chiqish"}
+                                    </button>
+                                    {reviewingDispute?.id === item.id && (
+                                        <form className="dispute-detail" onSubmit={submitDisputeReview}>
+                                            <label className="field">
+                                                <span>Nizo holati</span>
+                                                <select className="select" value={disputeReviewForm.status} onChange={(e) => setDisputeReviewForm({ ...disputeReviewForm, status: e.target.value })}>
+                                                    <option value="open">Ochiq</option>
+                                                    <option value="reviewing">Ko‘rib chiqilmoqda</option>
+                                                    <option value="resolved">Hal qilindi</option>
+                                                    <option value="rejected">Rad etildi</option>
+                                                </select>
+                                            </label>
+                                            <label className="field">
+                                                <span>Administrator javobi</span>
+                                                <textarea className="textarea" rows="4" maxLength="3000" required={["resolved", "rejected"].includes(disputeReviewForm.status)} value={disputeReviewForm.admin_response} onChange={(e) => setDisputeReviewForm({ ...disputeReviewForm, admin_response: e.target.value })} placeholder="Tomonlar uchun qaror va izoh..." />
+                                            </label>
+                                            <div className="form-row">
+                                                <button className="btn btn-primary" type="submit">Qarorni saqlash</button>
+                                                <button className="btn btn-secondary" type="button" onClick={() => setReviewingDispute(null)}>Bekor qilish</button>
+                                            </div>
+                                        </form>
+                                    )}
+                                </article>
+                            ))}
+                        </div>
+                        {!filteredDisputes.length && <div className="empty-state">Bu filtrga mos nizo topilmadi.</div>}
                     </div>
                 )}
 
