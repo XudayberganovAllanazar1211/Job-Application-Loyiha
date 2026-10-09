@@ -68,8 +68,8 @@ const actionLabel = {
     rating_delete: "Baho o‘chirildi",
     report_status_update: "Shikoyat holati o‘zgardi",
     wallet_topup: "Test balansi qo‘shildi",
-    user_block_created: "Block qo‘yildi",
-    user_block_lifted: "Block olib tashlandi",
+    user_block_created: "Cheklov qo‘yildi",
+    user_block_lifted: "Cheklov olib tashlandi",
     appeal_created: "Yangi appeal",
     appeal_reviewed: "Ariza ko‘rib chiqildi",
     dispute_decision: "Nizo bo‘yicha hukm",
@@ -198,7 +198,7 @@ export default function Admin() {
             if (disputesData?.ok) setAdminDisputes(Array.isArray(disputesData) ? disputesData : (disputesData.items || []))
         } else {
             setNoticeType("warn")
-            setNotice(result?.msg || "Admin ma'lumotlarini yuklab bo'lmadi.")
+            setNotice(result?.msg || "Administrator ma’lumotlarini yuklab bo‘lmadi.")
         }
     }
 
@@ -287,7 +287,7 @@ export default function Admin() {
                 duration_minutes: blockForm.duration_minutes || null,
                 reason: blockForm.reason.trim()
             }
-        }, "Block qo‘yildi.")
+        }, "Cheklov qo‘yildi.")
         if (result) {
             setBlockForm({ block_type: "chat", duration_minutes: "1440", reason: "" })
             const refreshed = await api("/admin/user/" + moderatingUser.id + "/blocks", { token })
@@ -299,7 +299,7 @@ export default function Admin() {
         if (!window.confirm("#" + block.id + " blockni olib tashlashni tasdiqlaysizmi?")) return
         const reason = window.prompt("Blockni olib tashlash sababi (ixtiyoriy):")
         if (reason === null) return
-        const ok = await action("/admin/block/" + block.id, { method: "PATCH", body: { action: "lift", reason: reason.trim() } }, "Block olib tashlandi.")
+        const ok = await action("/admin/block/" + block.id, { method: "PATCH", body: { action: "lift", reason: reason.trim() } }, "Cheklov olib tashlandi.")
         if (ok && moderatingUser) {
             const refreshed = await api("/admin/user/" + moderatingUser.id + "/blocks", { token })
             if (refreshed?.ok) setUserBlocks(refreshed.blocks || [])
@@ -756,7 +756,7 @@ export default function Admin() {
     if (user?.role !== "admin") return <Navigate to="/" replace />
 
     return (
-        <AppLayout title="Admin 2.0" subtitle="FinJob platformasini markazdan boshqaring.">
+        <AppLayout title="Administrator paneli" subtitle="FinJob foydalanuvchilari, ishlar, to‘lovlar va murojaatlarni boshqaring.">
             {notice && <div className={"notice " + (noticeType === "ok" ? "ok" : "warn")} style={{ marginBottom: 16 }}>{notice}</div>}
 
             <div className="admin-search-panel card">
@@ -791,7 +791,7 @@ export default function Admin() {
             <div className="card admin-panel">
                 <div className="admin-toolbar">
                     <div>
-                        <span className="admin-toolbar-eyebrow">CONTROL CENTER</span>
+                        <span className="admin-toolbar-eyebrow">BOSHQARUV MARKAZI</span>
                         <strong>Platforma boshqaruvi</strong>
                     </div>
                     <button className="btn btn-secondary" onClick={load}>Yangilash</button>
@@ -991,7 +991,7 @@ export default function Admin() {
                                 </tr>)}</tbody>
                             </table>
                         </div>
-                        {!filteredBlocks.page.length && <div className="empty-state">Block topilmadi.</div>}
+                        {!filteredBlocks.page.length && <div className="empty-state">Cheklov topilmadi.</div>}
                         <Pager page={blockPage} pages={filteredBlocks.pages} total={filteredBlocks.all.length} onChange={setBlockPage} />
                     </div>
                 )}
@@ -1006,8 +1006,8 @@ export default function Admin() {
                             <table className="admin-table admin-appeal-table">
                                 <thead><tr><th>Ariza</th><th>Foydalanuvchi</th><th>Cheklov</th><th>Cheklov sababi</th><th>Ariza matni</th><th>Vaqt</th><th>Holat</th><th>Amal</th></tr></thead>
                                 <tbody>{filteredAppeals.page.map((item) => <tr key={item.id}>
-                                    <td><strong>#{item.id}</strong><small>Block #{item.block_id}</small></td>
-                                    <td><strong>@{item.username}</strong><small>User ID: #{item.user_id}</small></td>
+                                    <td><strong>#{item.id}</strong><small>Cheklov #{item.block_id}</small></td>
+                                    <td><strong>@{item.username}</strong><small>Foydalanuvchi ID: #{item.user_id}</small></td>
                                     <td><span className="admin-badge danger">{item.block_label || blockLabels[item.block_type] || item.block_type}</span><small>{item.expires_at ? "Tugaydi: " + formatTimeAgo(item.expires_at) : "Muddatsiz"}</small></td>
                                     <td>{item.block_reason}</td>
                                     <td className="admin-long-cell">{item.appeal_text}</td>
@@ -1025,7 +1025,7 @@ export default function Admin() {
                 {data && tab === "disputes" && (
                     <div className="admin-section">
                         <div className="admin-section-head">
-                            <div><span>DISPUTE CENTER</span><h2>Nizolarni ko‘rib chiqish</h2><p className="muted">Tomonlar, dalillar va nizo holatini shu bo‘limda boshqaring.</p></div>
+                            <div><span>NIZOLAR MARKAZI</span><h2>Nizolarni ko‘rib chiqish</h2><p className="muted">Tomonlar, dalillar va nizo holatini shu bo‘limda boshqaring.</p></div>
                             <span className="profile-count">{filteredDisputes.length} ta</span>
                         </div>
                         <div className="admin-filters">
@@ -1047,7 +1047,7 @@ export default function Admin() {
                                         <p><strong>Muammo:</strong> {item.description}</p>
                                         <span>Ochildi: @{item.opened_by_username || "—"} · Qarshi tomon: @{item.against_username || "—"} · Ish ID: #{item.job_id}</span>
                                         {item.evidence && <p><strong>Dalillar:</strong> {item.evidence}</p>}
-                                        {item.admin_response && <p><strong>Admin javobi:</strong> {item.admin_response}</p>}
+                                        {item.admin_response && <p><strong>Administrator javobi:</strong> {item.admin_response}</p>}
                                         {item.decision && <p><strong>Hukm:</strong> {disputeDecisionLabels[item.decision] || item.decision}</p>}
                                         {item.payment_action && item.payment_action !== "none" && <p><strong>To‘lov chorasi:</strong> {disputePaymentActionLabels[item.payment_action] || item.payment_action}</p>}
                                         {item.job_action && item.job_action !== "none" && <p><strong>Ish bo‘yicha:</strong> {disputeJobActionLabels[item.job_action] || item.job_action}</p>}
@@ -1207,7 +1207,7 @@ export default function Admin() {
                         <div className="admin-filters"><input className="input" placeholder="Action, target, admin yoki tafsilot..." onChange={(e) => { setAuditPage(1); loadAudit(1, e.target.value) }} /><button className="btn btn-secondary admin-small-btn" type="button" onClick={exportAuditCsv}>Joriy sahifani CSV</button></div>
                         <div className="admin-table-wrap">
                             <table className="admin-table">
-                                <thead><tr><th>ID</th><th>Admin</th><th>Amal</th><th>Target</th><th>Tafsilot</th><th>Sana</th></tr></thead>
+                                <thead><tr><th>ID</th><th>Administrator</th><th>Amal</th><th>Obyekt</th><th>Tafsilot</th><th>Sana</th></tr></thead>
                                 <tbody>{(audit?.items || []).map((item) => <tr key={item.id}><td>#{item.id}</td><td>@{item.admin_username || "—"}</td><td><strong>{actionLabel[item.action] || item.action}</strong><small>{item.action}</small></td><td>{item.target_type || "—"}{item.target_id ? " #" + item.target_id : ""}</td><td>{item.details || "—"}</td><td>{formatTimeAgo(item.created_at)}</td></tr>)}</tbody>
                             </table>
                         </div>
@@ -1228,7 +1228,7 @@ export default function Admin() {
                             </form>
                         </div>
                         <div className="card admin-setting-card">
-                            <div className="admin-section-head"><div><span>SECURITY</span><h2>Admin xavfsizligi</h2></div></div>
+                            <div className="admin-section-head"><div><span>XAVFSIZLIK</span><h2>Admin xavfsizligi</h2></div></div>
                             <div className="admin-setting-list"><div><span>Faqat administrator uchun API</span><strong>Faol</strong></div><div><span>Audit log</span><strong>Faol</strong></div><div><span>Token versiyasini tekshirish</span><strong>Faol</strong></div><div><span>Foydalanuvchini cheklash</span><strong>Faol</strong></div><div><span>Shikoyatlarni ko‘rib chiqish</span><strong>Faol</strong></div></div>
                         </div>
                     </div>
@@ -1257,10 +1257,10 @@ export default function Admin() {
                             </div>
                             <form className="admin-user-form admin-create-block-form" onSubmit={createUserBlock}>
                                 <div className="admin-subtitle-row"><strong>Yangi cheklov</strong><span>Sabab majburiy</span></div>
-                                <label>Block turi<select className="select" value={blockForm.block_type} onChange={(e) => setBlockForm({ ...blockForm, block_type: e.target.value })}>{Object.entries(blockLabels).map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+                                <label>Cheklov turi<select className="select" value={blockForm.block_type} onChange={(e) => setBlockForm({ ...blockForm, block_type: e.target.value })}>{Object.entries(blockLabels).map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></label>
                                 <label>Muddati<select className="select" value={blockForm.duration_minutes} onChange={(e) => setBlockForm({ ...blockForm, duration_minutes: e.target.value })}><option value="60">1 soat</option><option value="360">6 soat</option><option value="1440">1 kun</option><option value="10080">7 kun</option><option value="43200">30 kun</option><option value="">Muddatsiz</option></select></label>
                                 <label>Nega block qilinyapti<textarea className="input admin-textarea" maxLength="2000" value={blockForm.reason} onChange={(e) => setBlockForm({ ...blockForm, reason: e.target.value })} placeholder="Aniq va tushunarli sabab yozing..." /></label>
-                                <button className="btn btn-danger" type="submit" disabled={!blockForm.reason.trim()}>Block qo‘yish</button>
+                                <button className="btn btn-danger" type="submit" disabled={!blockForm.reason.trim()}>Cheklov qo‘yish</button>
                             </form>
                         </div>
                     </div>
@@ -1333,11 +1333,11 @@ export default function Admin() {
             {reviewingAppeal && (
                 <div className="admin-modal-backdrop" onClick={() => setReviewingAppeal(null)}>
                     <div className="card admin-modal appeal-review-modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="admin-modal-head"><div><span className="admin-search-eyebrow">APPEAL #{reviewingAppeal.id}</span><h3>@{reviewingAppeal.username}</h3><p>{blockLabels[reviewingAppeal.block_type] || reviewingAppeal.block_type} · Block #{reviewingAppeal.block_id}</p></div><button className="admin-modal-close" onClick={() => setReviewingAppeal(null)}>×</button></div>
+                        <div className="admin-modal-head"><div><span className="admin-search-eyebrow">ARIZA #{reviewingAppeal.id}</span><h3>@{reviewingAppeal.username}</h3><p>{blockLabels[reviewingAppeal.block_type] || reviewingAppeal.block_type} · Cheklov #{reviewingAppeal.block_id}</p></div><button className="admin-modal-close" onClick={() => setReviewingAppeal(null)}>×</button></div>
                         <div className="admin-appeal-detail">
                             <div><span>BLOCK SABABI</span><p>{reviewingAppeal.block_reason}</p></div>
                             <div><span>APPEAL MATNI</span><p>{reviewingAppeal.appeal_text}</p></div>
-                            <div className="admin-appeal-meta"><span>Berilgan: {formatTimeAgo(reviewingAppeal.created_at)}</span><span>Block tugashi: {reviewingAppeal.expires_at ? formatTimeAgo(reviewingAppeal.expires_at) : "Muddatsiz"}</span></div>
+                            <div className="admin-appeal-meta"><span>Berilgan: {formatTimeAgo(reviewingAppeal.created_at)}</span><span>Cheklov tugashi: {reviewingAppeal.expires_at ? formatTimeAgo(reviewingAppeal.expires_at) : "Muddatsiz"}</span></div>
                         </div>
                         <form className="admin-user-form" onSubmit={submitAppealReview}>
                             <label>Qaror<select className="select" value={appealReviewForm.status} disabled={["approved", "rejected", "modified"].includes(reviewingAppeal.status)} onChange={(e) => setAppealReviewForm({ ...appealReviewForm, status: e.target.value })}><option value="reviewing">Ko‘rib chiqilmoqda</option><option value="approved">To‘liq tasdiqlash — cheklovni olib tashlash</option><option value="rejected">Rad etish — cheklov qoladi</option><option value="modified">Qisman tasdiqlash — cheklovni yengillashtirish</option></select></label>
