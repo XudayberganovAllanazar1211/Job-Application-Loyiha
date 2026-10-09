@@ -701,6 +701,34 @@ class JobPlatformTestCase(unittest.TestCase):
         worker_notices = self.client.get("/notifications", headers={"Authorization": f"Bearer {token_worker}"}).get_json()["items"]
         self.assertTrue(any(item["type"] == "report_warning" for item in worker_notices))
 
+        # Editing an already finalized report must not repeat its payment, block, or notifications.
+        warning_count_before = sum(1 for item in worker_notices if item["type"] == "report_warning")
+        repeated_decision = self.client.patch(
+            f"/admin/report/{second_report_id}",
+            headers={"Authorization": f"Bearer {token_admin}"},
+            json={
+                "status": "resolved",
+                "decision": "violation",
+                "admin_response": "Qoidabuzarlik tekshiruv bilan tasdiqlandi.",
+                "payment_action": "none",
+                "job_action": "none",
+                "notify_target": "both",
+                "sanction_target": "reported",
+                "sanction_type": "withdrawal",
+                "sanction_duration_minutes": 60
+            }
+        )
+        self.assertEqual(repeated_decision.status_code, 200, repeated_decision.get_json())
+        self.assertIn("takrorlanmadi", repeated_decision.get_json()["msg"])
+        block_count = main.db.q(
+            "SELECT COUNT(*) FROM user_blocks WHERE user_id=? AND block_type='withdrawal' AND active=1 AND reason LIKE ?",
+            (worker_id, f"Shikoyat #{second_report_id}:%")
+        ).fetchone()[0]
+        self.assertEqual(block_count, 1)
+        worker_notices_after = self.client.get("/notifications", headers={"Authorization": f"Bearer {token_worker}"}).get_json()["items"]
+        warning_count_after = sum(1 for item in worker_notices_after if item["type"] == "report_warning")
+        self.assertEqual(warning_count_after, warning_count_before)
+
     def test_09b_chat_attachment_report_and_admin_access(self):
         owner_login = self.client.post(
             "/login",
