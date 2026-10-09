@@ -2841,7 +2841,7 @@ def admin_update_job(job_id):
 @app.route("/admin/job/<int:job_id>", methods=["DELETE"])
 @admin_required
 def admin_delete_job(job_id):
-    deletion_reason = str((request.json or {}).get("reason", "")).strip()
+    deletion_reason = str((request.get_json(silent=True) or {}).get("reason", "")).strip()
     if len(deletion_reason) > 1000:
         return jsonify({"msg": "O‘chirish sababi 1000 belgidan oshmasligi kerak."}), 400
     job = db.q("SELECT id FROM jobs WHERE id=?", (job_id,)).fetchone()
@@ -2968,7 +2968,7 @@ def admin_update_service(service_id):
 @app.route("/admin/service/<int:service_id>", methods=["DELETE"])
 @admin_required
 def admin_delete_service(service_id):
-    deletion_reason = str((request.json or {}).get("reason", "")).strip()
+    deletion_reason = str((request.get_json(silent=True) or {}).get("reason", "")).strip()
     if len(deletion_reason) > 1000:
         return jsonify({"msg": "O‘chirish sababi 1000 belgidan oshmasligi kerak."}), 400
     service = db.q("SELECT id FROM services WHERE id=?", (service_id,)).fetchone()
