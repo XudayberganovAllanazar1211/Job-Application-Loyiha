@@ -1198,7 +1198,7 @@ export default function Jobs() {
                                     {detailIsParticipant && ["payment_pending", "accepted", "pending_finish", "finished"].includes(detailStatus) && (
                                         <button
                                             className="btn btn-warn"
-                                            onClick={() => navigate(`/disputes?job=${activeJobDetails.id}`)}
+                                            onClick={() => navigate(`/disputes/new?job=${activeJobDetails.id}`)}
                                         >
                                             Nizo ochish
                                         </button>
