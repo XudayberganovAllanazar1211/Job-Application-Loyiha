@@ -1052,7 +1052,7 @@ export default function Profile() {
                                     if (file.size > 10 * 1024 * 1024) {
                                         event.target.value = ""
                                         setPortfolioFile(null)
-                                        setNotice("Portfolio fayli 10 MB dan oshmasligi kerak.")
+                                        setNotice("Ish namunasi fayli 10 MB dan oshmasligi kerak.")
                                         return
                                     }
                                     setPortfolioFile(file)
