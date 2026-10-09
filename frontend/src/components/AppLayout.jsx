@@ -5,10 +5,10 @@ import { formatTimeAgo } from "../utils/time"
 
 const navItems = [
     ["/", "Boshqaruv paneli", "⌂"],
-    ["/create", "Ish yaratish", "+"],
-    ["/jobs", "Ishlar", "▤"],
-    ["/payments", "To‘lovlar", "₿"],
-    ["/disputes", "Nizolar", "⚑"],
+    ["/create", "Ish joylashtirish", "+"],
+    ["/jobs", "Ishlarni topish", "▤"],
+    ["/payments", "To‘lov va balans", "₿"],
+    ["/disputes", "Nizo va yordam", "⚑"],
     ["/leaderboard", "Reyting jadvali", "★"]
 ]
 
@@ -20,6 +20,7 @@ export default function AppLayout({ title, subtitle, children }) {
     const [unreadNotifications, setUnreadNotifications] = useState(0)
     const [unreadMessages, setUnreadMessages] = useState(0)
     const [showNotifications, setShowNotifications] = useState(false)
+    const [showHelp, setShowHelp] = useState(false)
     const [showMobileMenu, setShowMobileMenu] = useState(false)
     const notificationRef = useRef(null)
     const token = localStorage.getItem("token") || ""
@@ -120,8 +121,9 @@ export default function AppLayout({ title, subtitle, children }) {
     }, [showNotifications])
 
     const openNotifications = async () => {
-        setShowNotifications((value) => !value)
-        if (unreadNotifications > 0) {
+        const opening = !showNotifications
+        setShowNotifications(opening)
+        if (opening && unreadNotifications > 0) {
             setUnreadNotifications(0)
             await api("/notifications/read", { method: "POST", token })
             setNotifications((items) => items.map((item) => ({ ...item, is_read: 1 })))
@@ -172,7 +174,7 @@ export default function AppLayout({ title, subtitle, children }) {
                     {unreadMessages > 0 && <span className="notification-sidebar-badge">{unreadMessages > 99 ? "99+" : unreadMessages}</span>}
                 </NavLink>
                 <NavLink to="/appeals" className={({isActive}) => `nav-link ${isActive ? "active" : ""}`}>
-                    <span className="nav-link-icon">⚑</span><span className="nav-link-label">Appeals</span>
+                    <span className="nav-link-icon">⚑</span><span className="nav-link-label">Blok bo‘yicha ariza</span>
                 </NavLink>
                 {isAdmin && (
                     <NavLink to="/admin" className={({isActive}) => `nav-link admin-nav-link ${isActive ? "active" : ""}`}>
@@ -238,11 +240,12 @@ export default function AppLayout({ title, subtitle, children }) {
             <main className="main">
                 <div className="app-topbar">
                     <div className="page-head">
-                        <div className="chip" style={{width:"fit-content",color:"#2563eb",background:"#eff6ff",borderColor:"#dbeafe"}}>FINJOB / ISH MAYDONI</div>
+                        <div className="chip" style={{width:"fit-content",color:"#2563eb",background:"#eff6ff",borderColor:"#dbeafe"}}>ISH VA XIZMAT PLATFORMASI</div>
                         <h1 className="page-title">{title}</h1>
                         <p className="page-subtitle">{subtitle}</p>
                     </div>
                     <div className="topbar-actions">
+                        <button className="help-center-button" type="button" onClick={() => setShowHelp(true)} aria-haspopup="dialog">? <span>Yordam</span></button>
                         <div className="notification-wrap" ref={notificationRef}>
                             <button className="notification-button" type="button" onClick={openNotifications} aria-label="Bildirishnomalar">
                                 <span className="notification-icon" aria-hidden="true">🔔</span>
@@ -272,6 +275,27 @@ export default function AppLayout({ title, subtitle, children }) {
                 </div>
                 {children}
             </main>
+            {showHelp && (
+                <div className="help-center-backdrop" onClick={() => setShowHelp(false)}>
+                    <section className="help-center-dialog" role="dialog" aria-modal="true" aria-labelledby="help-center-title" onClick={(event) => event.stopPropagation()}>
+                        <div className="help-center-heading">
+                            <div>
+                                <span className="help-center-eyebrow">FINJOB YORDAM MARKAZI</span>
+                                <h2 id="help-center-title">Qanday boshlash kerak?</h2>
+                                <p>FinJob’da ish beruvchi ham, ish bajaruvchi ham bitta hisobdan foydalanadi.</p>
+                            </div>
+                            <button type="button" className="help-center-close" onClick={() => setShowHelp(false)} aria-label="Yordam oynasini yopish">×</button>
+                        </div>
+                        <ol className="help-center-steps">
+                            <li><span>1</span><div><strong>Profilingizni to‘ldiring</strong><p>Ism, rasm va ko‘nikmalaringizni kiriting. Bu boshqalarga sizni yaxshiroq tanishga yordam beradi.</p><button type="button" className="help-center-link" onClick={() => { setShowHelp(false); navigate("/profile") }}>Profilni ochish →</button></div></li>
+                            <li><span>2</span><div><strong>Ish toping yoki ish joylashtiring</strong><p>Bajaruvchi bo‘lsangiz, “Ishlarni topish” bo‘limidan mos taklifni qidiring. Buyurtmachi bo‘lsangiz, “Ish joylashtirish” orqali vazifa va budjetni yozing.</p><div className="help-center-actions"><button type="button" className="btn btn-secondary" onClick={() => { setShowHelp(false); navigate("/jobs") }}>Ishlarni topish</button><button type="button" className="btn btn-primary" onClick={() => { setShowHelp(false); navigate("/create") }}>Ish joylashtirish</button></div></div></li>
+                            <li><span>3</span><div><strong>Kelishib oling va yozishmalarda qoling</strong><p>Ish bo‘yicha savollarni suhbatda muhokama qiling, muddat va narxni oldindan aniqlashtiring.</p><button type="button" className="help-center-link" onClick={() => { setShowHelp(false); navigate("/conversations") }}>Suhbatlarni ochish →</button></div></li>
+                            <li><span>4</span><div><strong>To‘lov va ish holatini tekshiring</strong><p>To‘lovlar bo‘limida balans va operatsiyalarni kuzating. Muammo yuz bersa, “Nizo va yordam” bo‘limidan murojaat qiling.</p><div className="help-center-actions"><button type="button" className="btn btn-secondary" onClick={() => { setShowHelp(false); navigate("/payments") }}>To‘lovlar</button><button type="button" className="btn btn-secondary" onClick={() => { setShowHelp(false); navigate("/disputes") }}>Yordam</button></div></div></li>
+                        </ol>
+                        <p className="help-center-footnote">Maslahat: shaxsiy parolingizni yoki tasdiqlash kodlarini hech kimga bermang.</p>
+                    </section>
+                </div>
+            )}
         </div>
     )
 }
