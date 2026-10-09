@@ -678,19 +678,28 @@ class JobPlatformTestCase(unittest.TestCase):
             f"/admin/report/{second_report_id}",
             headers={"Authorization": f"Bearer {token_admin}"},
             json={
-                "status": "rejected",
-                "decision": "no_violation",
-                "admin_response": "Tekshiruvda qoidabuzarlik aniqlanmadi.",
+                "status": "resolved",
+                "decision": "violation",
+                "admin_response": "Qoidabuzarlik tekshiruv bilan tasdiqlandi.",
                 "payment_action": "none",
                 "job_action": "none",
-                "notify_target": "none",
+                "notify_target": "both",
                 "sanction_target": "reported",
-                "sanction_type": "none",
-                "sanction_duration_minutes": 1440
+                "sanction_type": "chat",
+                "sanction_duration_minutes": 60
             }
         )
         self.assertEqual(rich_decision.status_code, 200)
-        self.assertEqual(rich_decision.get_json()["decision"], "no_violation")
+        self.assertEqual(rich_decision.get_json()["decision"], "violation")
+        self.assertEqual(rich_decision.get_json()["sanction_type"], "chat")
+        worker_id = self.client.get("/profile", headers={"Authorization": f"Bearer {token_worker}"}).get_json()["id"]
+        active_report_block = main.db.q(
+            "SELECT id FROM user_blocks WHERE user_id=? AND block_type='chat' AND active=1 ORDER BY id DESC LIMIT 1",
+            (worker_id,)
+        ).fetchone()
+        self.assertIsNotNone(active_report_block)
+        worker_notices = self.client.get("/notifications", headers={"Authorization": f"Bearer {token_worker}"}).get_json()["items"]
+        self.assertTrue(any(item["type"] == "report_warning" for item in worker_notices))
 
     def test_09b_chat_attachment_report_and_admin_access(self):
         owner_login = self.client.post(
@@ -1639,6 +1648,63 @@ class JobPlatformTestCase(unittest.TestCase):
 
         main.db.q("DELETE FROM payments WHERE payment_uuid=?", (payment_uuid,)).close()
         main.db.q("DELETE FROM jobs WHERE id=?", (job_id,)).close()
+
+        # Exercise the exact admin-finance refund action used by the new admin UI.
+        action_job_id = conn_job_id = None
+        now_action = "2026-10-08T12:00:00+00:00"
+        conn = main.db.get_connection()
+        try:
+            action_job_id = conn.execute(
+                """INSERT INTO jobs(
+                    user_id,service_id,title,description,price,currency,location,
+                    worker_id,status,created_at,finished_at,custom_service,agreed_price
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    owner_id,1,"Admin Payment Action Regression",
+                    "Verify admin escrow refund endpoint",250000,"UZS","Remote",
+                    worker_id,"accepted",now_action,None,"",250000
+                ),
+            ).lastrowid
+            action_uuid = "test-admin-action-payment-uuid"
+            conn.execute(
+                """INSERT INTO payments(
+                    payment_uuid,job_id,payer_id,payee_id,amount,currency,provider,status,
+                    provider_transaction_id,created_at,paid_at,released_at,refunded_at
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    action_uuid,action_job_id,owner_id,worker_id,250000,"UZS","dummy","held",
+                    "test-admin-action-provider",now_action,now_action,None,None
+                ),
+            )
+            conn.execute(
+                "UPDATE platform_wallet SET escrow_balance=ROUND(escrow_balance+?,2) WHERE id=1",
+                (250000,)
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        admin_refund = self.client.patch(
+            f"/admin/payment/{action_job_id}",
+            headers={"Authorization": f"Bearer {owner_token}"},
+            json={"action": "refund", "reason": "Admin review regression test refund."}
+        )
+        self.assertEqual(admin_refund.status_code, 200)
+        action_payment = main.db.q(
+            "SELECT status FROM payments WHERE payment_uuid=?", (action_uuid,)
+        ).fetchone()
+        self.assertEqual(action_payment[0], "refunded")
+        action_job_status = main.db.q(
+            "SELECT status FROM jobs WHERE id=?", (action_job_id,)
+        ).fetchone()
+        self.assertEqual(action_job_status[0], "blocked")
+        self.assertTrue(main.db.q(
+            "SELECT id FROM admin_audit_log WHERE target_type='job' AND target_id=? AND action='admin_payment_action'",
+            (action_job_id,)
+        ).fetchone())
+        main.db.q("DELETE FROM wallet_transactions WHERE job_id=?", (action_job_id,)).close()
+        main.db.q("DELETE FROM payments WHERE payment_uuid=?", (action_uuid,)).close()
+        main.db.q("DELETE FROM jobs WHERE id=?", (action_job_id,)).close()
 
 
     def test_99_server_search_saved_and_recent(self):
