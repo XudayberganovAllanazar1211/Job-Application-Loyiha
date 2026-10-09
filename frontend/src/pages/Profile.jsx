@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react"
 import AppLayout from "../components/AppLayout"
 import { api } from "../api"
+import { formatTimeAgo } from "../utils/time"
 
 function buildServiceTree(services) {
     const nodes = Object.fromEntries(services.map((service) => [
@@ -167,12 +168,7 @@ export default function Profile() {
         loadServices()
     }, [])
 
-    const formatWalletDate = (dateString) => {
-        if (!dateString) return "Vaqt noma'lum"
-        const date = new Date(String(dateString).replace(" ", "T"))
-        if (Number.isNaN(date.getTime())) return "Vaqt noma'lum"
-        return date.toLocaleString("uz-UZ", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })
-    }
+    const formatWalletDate = formatTimeAgo
 
     const submitWithdrawal = async (event) => {
         event.preventDefault()
