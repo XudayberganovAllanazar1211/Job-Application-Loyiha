@@ -244,6 +244,10 @@ export default function Admin() {
 
     const changeRole = async (item, role) => {
         if (role === item.role) return
+        if (role === "admin" && !window.confirm("@" + item.username + " ga administrator huquqi berilsinmi? U barcha admin amallarini bajara oladi.")) {
+            await load()
+            return
+        }
         await action("/admin/user-role", {
             method: "PATCH",
             body: { user_id: item.id, role }
@@ -278,7 +282,9 @@ export default function Admin() {
 
     const liftBlock = async (block) => {
         if (!window.confirm("#" + block.id + " blockni olib tashlashni tasdiqlaysizmi?")) return
-        const ok = await action("/admin/block/" + block.id, { method: "PATCH", body: { action: "lift" } }, "Block olib tashlandi.")
+        const reason = window.prompt("Blockni olib tashlash sababi (ixtiyoriy):")
+        if (reason === null) return
+        const ok = await action("/admin/block/" + block.id, { method: "PATCH", body: { action: "lift", reason: reason.trim() } }, "Block olib tashlandi.")
         if (ok && moderatingUser) {
             const refreshed = await api("/admin/user/" + moderatingUser.id + "/blocks", { token })
             if (refreshed?.ok) setUserBlocks(refreshed.blocks || [])
@@ -476,17 +482,29 @@ export default function Admin() {
 
     const deleteUser = async (item) => {
         if (!window.confirm("@" + item.username + " foydalanuvchisini va unga bog‘liq ma'lumotlarni o‘chirishni tasdiqlaysizmi?")) return
-        await action("/admin/user/" + item.id, { method: "DELETE" }, "Foydalanuvchi o‘chirildi.")
+        const reason = window.prompt("O‘chirish sababi (ixtiyoriy):")
+        if (reason === null) return
+        await action("/admin/user/" + item.id, { method: "DELETE", body: { reason: reason.trim() } }, "Foydalanuvchi o‘chirildi.")
     }
 
     const updateJobStatus = async (item, status) => {
         if (status === item.status) return
-        await action("/admin/job/" + item.id, { method: "PATCH", body: { status } }, "Ish holati o‘zgartirildi.")
+        let reason = ""
+        if (["blocked", "finished", "active"].includes(status)) {
+            if (!window.confirm("#" + item.id + " — " + item.title + " ishini «" + (statusLabel[status] || status) + "» holatiga o‘tkazasizmi?")) {
+                await load()
+                return
+            }
+            reason = window.prompt("Holatni o‘zgartirish sababi (ixtiyoriy):") || ""
+        }
+        await action("/admin/job/" + item.id, { method: "PATCH", body: { status, reason: reason.trim() } }, "Ish holati o‘zgartirildi.")
     }
 
     const deleteJob = async (item) => {
-        if (!window.confirm("#" + item.id + " — " + item.title + " jobini o‘chirishni tasdiqlaysizmi?")) return
-        await action("/admin/job/" + item.id, { method: "DELETE" }, "Ish o‘chirildi.")
+        if (!window.confirm("#" + item.id + " — " + item.title + " ishini o‘chirishni tasdiqlaysizmi?")) return
+        const reason = window.prompt("Ishni o‘chirish sababi (ixtiyoriy):")
+        if (reason === null) return
+        await action("/admin/job/" + item.id, { method: "DELETE", body: { reason: reason.trim() } }, "Ish o‘chirildi.")
     }
 
     const createService = async (event) => {
@@ -508,7 +526,9 @@ export default function Admin() {
 
     const deleteService = async (item) => {
         if (!window.confirm('"' + item.name + '" xizmatini o‘chirishni tasdiqlaysizmi?')) return
-        await action("/admin/service/" + item.id, { method: "DELETE" }, "Xizmat o‘chirildi.")
+        const reason = window.prompt("Xizmatni o‘chirish sababi (ixtiyoriy):")
+        if (reason === null) return
+        await action("/admin/service/" + item.id, { method: "DELETE", body: { reason: reason.trim() } }, "Xizmat o‘chirildi.")
     }
 
     const deleteRating = async (item) => {
