@@ -44,7 +44,21 @@ function ActiveDisputeList({ items, loading, userId }) {
                     {items.map((item) => {
                         const openedByMe = Number(item.opened_by) === Number(userId)
                         return (
-                            <article className="dispute-item" key={item.id}>
+                            <article
+                                className={"dispute-item" + (selected === item.id ? " is-expanded" : "")}
+                                key={item.id}
+                                role="button"
+                                tabIndex={0}
+                                aria-expanded={selected === item.id}
+                                aria-controls={"dispute-detail-" + item.id}
+                                onClick={() => setSelected(selected === item.id ? null : item.id)}
+                                onKeyDown={(event) => {
+                                    if (event.key === "Enter" || event.key === " ") {
+                                        event.preventDefault()
+                                        setSelected(selected === item.id ? null : item.id)
+                                    }
+                                }}
+                            >
                                 <div>
                                     <strong>{item.job_title || "Ish #" + item.job_id}</strong>
                                     <span>
@@ -53,11 +67,8 @@ function ActiveDisputeList({ items, loading, userId }) {
                                     <span>{openedByMe ? "Siz ochgansiz" : "Sizga ochilgan"} · Ish #{item.job_id}</span>
                                     <p>{item.description}</p>
                                 </div>
-                                <button className="btn btn-secondary dispute-detail-btn" type="button" onClick={() => setSelected(selected === item.id ? null : item.id)}>
-                                    {selected === item.id ? "Yopish" : "Batafsil"}
-                                </button>
                                 {selected === item.id && (
-                                    <div className="dispute-detail">
+                                    <div id={"dispute-detail-" + item.id} className="dispute-detail" onClick={(event) => event.stopPropagation()}>
                                         <div><strong>Qarshi tomon:</strong> @{(openedByMe ? item.against_username : item.opened_by_username) || "foydalanuvchi"}</div>
                                         {item.evidence && <div><strong>Dalillar:</strong> {item.evidence}</div>}
                                         {item.admin_response && <div><strong>Admin javobi:</strong> {item.admin_response}</div>}
