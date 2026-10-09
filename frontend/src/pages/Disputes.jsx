@@ -58,7 +58,7 @@ function ActiveDisputeList({ items, loading, userId }) {
                                 </button>
                                 {selected === item.id && (
                                     <div className="dispute-detail">
-                                        <div><strong>Qarshi tomon:</strong> @{item.against_username || "foydalanuvchi"}</div>
+                                        <div><strong>Qarshi tomon:</strong> @{(openedByMe ? item.against_username : item.opened_by_username) || "foydalanuvchi"}</div>
                                         {item.evidence && <div><strong>Dalillar:</strong> {item.evidence}</div>}
                                         {item.admin_response && <div><strong>Admin javobi:</strong> {item.admin_response}</div>}
                                         <div><strong>Holat:</strong> {statusLabels[item.status] || item.status}</div>
