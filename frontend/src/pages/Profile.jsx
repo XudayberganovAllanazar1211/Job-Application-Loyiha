@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react"
 import AppLayout from "../components/AppLayout"
+import VerificationBadges from "../components/VerificationBadges"
 import { api } from "../api"
+import { formatTimeAgo } from "../utils/time"
 
 function buildServiceTree(services) {
     const nodes = Object.fromEntries(services.map((service) => [
@@ -122,7 +124,9 @@ export default function Profile() {
                     completed_jobs_count: result.completed_jobs_count || 0,
                     avg_rating: result.avg_rating || 0,
                     balance: Number(result.balance) || 0,
-                    role: result.role || "user"
+                    role: result.role || "user",
+                    verification: result.verification || { badges: [] },
+                    reputation: result.reputation || { badges: [], reviews_count: 0, success_rate: 0, completed_worker_jobs: 0 }
                 }
 
                 const profileSkills = Array.isArray(result.skills)
@@ -165,12 +169,7 @@ export default function Profile() {
         loadServices()
     }, [])
 
-    const formatWalletDate = (dateString) => {
-        if (!dateString) return "Vaqt noma'lum"
-        const date = new Date(String(dateString).replace(" ", "T"))
-        if (Number.isNaN(date.getTime())) return "Vaqt noma'lum"
-        return date.toLocaleString("uz-UZ", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })
-    }
+    const formatWalletDate = formatTimeAgo
 
     const submitWithdrawal = async (event) => {
         event.preventDefault()
@@ -553,6 +552,35 @@ export default function Profile() {
                         </div>
                     </section>
 
+                    <section className="card profile-verification-card" style={{ marginBottom: 18 }}>
+                        <div className="profile-section-head">
+                            <div>
+                                <span className="profile-eyebrow">ISHONCH</span>
+                                <h3 className="section-title">Tasdiqlash va reputatsiya</h3>
+                            </div>
+                            <button className="btn btn-secondary" type="button" onClick={() => window.location.assign("/disputes")}>Nizolar markazi</button>
+                        </div>
+                        <div className="profile-verification-grid">
+                            <div>
+                                <div className="profile-verification-title">Tasdiqlash</div>
+                                <VerificationBadges verification={form.verification} interactive />
+                            </div>
+                            <div>
+                                <div className="profile-verification-title">Reputatsiya</div>
+                                <div className="profile-reputation-metrics">
+                                    <strong>{Number(form.reputation?.average_rating || form.avg_rating || 0).toFixed(1)} ★</strong>
+                                    <span>{form.reputation?.reviews_count || 0} sharh</span>
+                                    <span>{Number(form.reputation?.success_rate || 0).toFixed(0)}% success</span>
+                                    <span>{form.reputation?.completed_worker_jobs || form.completed_jobs_count || 0} yakunlangan ish</span>
+                                </div>
+                            </div>
+                        </div>
+                        {(form.reputation?.badges || []).length > 0 && (
+                            <div className="profile-badge-list" style={{ marginTop: 12 }}>
+                                {form.reputation.badges.map((badge) => <span key={badge.key} className="profile-trust-badge reputation">{badge.label}</span>)}
+                            </div>
+                        )}
+                    </section>
                     <section className="profile-stat-grid">
                         <div className="profile-stat card">
                             <span className="profile-stat-icon">01</span>
@@ -589,7 +617,7 @@ export default function Profile() {
                             <div>
                                 <span className="profile-wallet-eyebrow">HAMYON</span>
                                 <h3>FinJob balansingiz</h3>
-                                <p>To‘lovlardan tushgan mablag‘ va wallet faoliyatingiz.</p>
+                                <p>FinJob ichidagi sinov balansingiz va unga oid operatsiyalar.</p>
                             </div>
                             <div className="profile-wallet-balance">
                                 <span>Joriy balans</span>
@@ -599,17 +627,17 @@ export default function Profile() {
                         </div>
                         <div className="profile-wallet-controls">
                             <button type="button" className="profile-wallet-withdraw-btn" onClick={() => setWithdrawOpen((current) => !current)} disabled={walletLoading || Number(form.balance) <= 0}>
-                                {withdrawOpen ? "Yopish" : "Yechib olish"}
+                                {withdrawOpen ? "Yopish" : "Test balansdan yechish"}
                             </button>
-                            <span>Hozircha test wallet ishlatilmoqda. Yechib olishda qo‘shimcha komissiya olinmaydi.</span>
+                            <span>Muhim: bu sinov balansi. Bu amal bank kartasi yoki haqiqiy hisobingizga pul o‘tkazmaydi. Sinov rejimida yechib olish uchun qo‘shimcha komissiya olinmaydi.</span>
                         </div>
                         {withdrawOpen && (
                             <form className="profile-withdraw-box" onSubmit={submitWithdrawal}>
                                 <div className="profile-withdraw-field">
-                                    <label>Yechib olinadigan summa</label>
+                                    <label>Sinov balansidan yechiladigan summa</label>
                                     <div className="profile-withdraw-row">
                                         <input className="input" type="number" min="1" max={Number(form.balance || 0)} step="0.01" placeholder="Masalan: 100000" value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} />
-                                        <button type="button" className="btn btn-secondary" onClick={() => setWithdrawAmount(String(Number(form.balance || 0)))}>Hammasini olish</button>
+                                        <button type="button" className="btn btn-secondary" onClick={() => setWithdrawAmount(String(Number(form.balance || 0)))}>To‘liq balans</button>
                                     </div>
                                 </div>
                                 <button type="submit" className="btn btn-success" disabled={withdrawLoading || !withdrawAmount}>
@@ -715,8 +743,9 @@ export default function Profile() {
                                         className="input"
                                         type="email"
                                         value={form.email}
-                                        onChange={(e) => setForm({ ...form, email: e.target.value })}
-                                        disabled={!isEditing}
+                                        disabled
+                                        readOnly
+                                        title="Emailni o‘zgartirish uchun xavfsiz qayta tasdiqlash jarayoni talab qilinadi"
                                         required
                                     />
                                 </div>
@@ -868,7 +897,7 @@ export default function Profile() {
                 <section className="card" style={{ marginTop: 18 }}>
                     <div className="profile-section-head">
                         <div>
-                            <span className="profile-eyebrow">PORTFOLIO</span>
+                            <span className="profile-eyebrow">ISH NAMUNALARI</span>
                             <h3 className="section-title">Ish namunalari</h3>
                             <p className="muted">Bajargan loyihalaringizni qisqacha ko‘rsating.</p>
                         </div>
@@ -898,7 +927,7 @@ export default function Profile() {
                                                 )}
                                                 {item.file_url && (
                                                     <a href={(import.meta.env.VITE_API_URL || "http://localhost:5000") + item.file_url} target="_blank" rel="noreferrer">
-                                                        {item.file_name || "Portfolio faylini ochish"} →
+                                                        {item.file_name || "Ish namunasini ochish"} →
                                                     </a>
                                                 )}
                                             </div>
@@ -910,9 +939,9 @@ export default function Profile() {
                                                 const result = await api(`/portfolio/${item.id}`, { method: "DELETE", token: localStorage.getItem("token") || "" })
                                                 if (result?.ok) {
                                                     setPortfolio((items) => items.filter((current) => current.id !== item.id))
-                                                    setNotice("Portfolio o‘chirildi.")
+                                                    setNotice("Ish namunasi o‘chirildi.")
                                                 } else {
-                                                    setNotice(result?.msg || "Portfolio o‘chirilmadi.")
+                                                    setNotice(result?.msg || "Ish namunasini o‘chirib bo‘lmadi.")
                                                 }
                                             }}
                                         >
@@ -924,14 +953,14 @@ export default function Profile() {
                         </div>
                     ) : (
                         <div className="profile-empty" style={{ marginBottom: 14 }}>
-                            <strong>Hali portfolio yo‘q</strong>
+                            <strong>Hali ish namunalari qo‘shilmagan</strong>
                             <span>Kamida 1–2 ta yaxshi ish namunasi qo‘shish profilingizni kuchaytiradi.</span>
                         </div>
                     )}
 
                     {portfolio.length >= 3 && (
                         <div className="notice" style={{ marginTop: 12 }}>
-                            Portfolio limiti to‘ldi: <strong>{portfolio.length}/3</strong>. Yangi portfolio qo‘shish uchun avval mavjud portfolioingizdan birini o‘chiring.
+                            Ish namunalari limiti to‘ldi: <strong>{portfolio.length}/3</strong>. Yangi ish namunasi qo‘shish uchun avval mavjud namunadan birini o‘chiring.
                         </div>
                     )}
 
@@ -941,15 +970,15 @@ export default function Profile() {
                         onSubmit={async (event) => {
                             event.preventDefault()
                             if (portfolio.length >= 3) {
-                                setNotice("Siz maksimal 3 ta portfolio qo‘sha olasiz. Yangi portfolio qo‘shish uchun avval bittasini o‘chiring.")
+                                setNotice("Ko‘pi bilan 3 ta ish namunasi qo‘shish mumkin. Yangi namuna qo‘shish uchun avval mavjud namunadan birini o‘chiring.")
                                 return
                             }
                             if (!portfolioFile && !portfolioForm.title.trim()) {
-                                setNotice("Portfolio nomini kiriting yoki fayl tanlang.")
+                                setNotice("Ish namunasi nomini kiriting yoki fayl tanlang.")
                                 return
                             }
                             if (portfolioFile && portfolioFile.size > 10 * 1024 * 1024) {
-                                setNotice("Portfolio fayli 10 MB dan oshmasligi kerak.")
+                                setNotice("Ish namunasi fayli 10 MB dan oshmasligi kerak.")
                                 return
                             }
 
@@ -984,16 +1013,16 @@ export default function Profile() {
                                 setPortfolioForm({ title: "", description: "", url: "" })
                                 setPortfolioFile(null)
                                 if (portfolioFileRef.current) portfolioFileRef.current.value = ""
-                                setNotice("Portfolio qo‘shildi.")
+                                setNotice("Ish namunasi qo‘shildi.")
                             } else {
-                                setNotice(result?.msg || "Portfolio qo‘shilmadi.")
+                                setNotice(result?.msg || "Ish namunasini qo‘shib bo‘lmadi.")
                             }
                         }}
                     >
                         <div className="form-row">
                             <label>
                                 <span className="helper profile-label">Loyiha nomi</span>
-                                <input className="input" maxLength={120} value={portfolioForm.title} onChange={(e) => setPortfolioForm({ ...portfolioForm, title: e.target.value })} placeholder="Masalan: FinJob marketplace" />
+                                <input className="input" maxLength={120} value={portfolioForm.title} onChange={(e) => setPortfolioForm({ ...portfolioForm, title: e.target.value })} placeholder="Masalan: Internet-do‘kon loyihasi" />
                             </label>
                             <label>
                                 <span className="helper profile-label">Havola</span>
@@ -1002,10 +1031,10 @@ export default function Profile() {
                         </div>
                         <label>
                             <span className="helper profile-label">Qisqa tavsif</span>
-                            <textarea className="textarea" maxLength={2000} value={portfolioForm.description} onChange={(e) => setPortfolioForm({ ...portfolioForm, description: e.target.value })} placeholder="Loyihada nima qildingiz?" />
+                            <textarea className="textarea" maxLength={2000} value={portfolioForm.description} onChange={(e) => setPortfolioForm({ ...portfolioForm, description: e.target.value })} placeholder="Bu loyihada nimalarni bajardingiz va qanday natija chiqdi?" />
                         </label>
                         <label>
-                            <span className="helper profile-label">Portfolio fayli</span>
+                            <span className="helper profile-label">Ish namunasi fayli</span>
                             <input
                                 ref={portfolioFileRef}
                                 className="input"
@@ -1020,7 +1049,7 @@ export default function Profile() {
                                     if (file.size > 10 * 1024 * 1024) {
                                         event.target.value = ""
                                         setPortfolioFile(null)
-                                        setNotice("Portfolio fayli 10 MB dan oshmasligi kerak.")
+                                        setNotice("Ish namunasi fayli 10 MB dan oshmasligi kerak.")
                                         return
                                     }
                                     setPortfolioFile(file)
@@ -1030,7 +1059,7 @@ export default function Profile() {
                             <span className="helper">PDF, DOC, DOCX, PNG, JPG yoki WEBP. Maksimal hajm: 10 MB.</span>
                         </label>
                         <button className="btn btn-primary" type="submit" disabled={portfolioLoading}>
-                            {portfolioLoading ? "Saqlanmoqda..." : "Portfolio qo‘shish"}
+                            {portfolioLoading ? "Saqlanmoqda..." : "Ish namunasini qo‘shish"}
                         </button>
                     </form>
                 </section>

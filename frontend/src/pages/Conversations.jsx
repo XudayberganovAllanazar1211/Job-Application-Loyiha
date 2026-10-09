@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 import AppLayout from "../components/AppLayout"
 import { api } from "../api"
+import { formatTimeAgo } from "../utils/time"
 
 export default function Conversations() {
     const navigate = useNavigate()
@@ -63,7 +64,7 @@ export default function Conversations() {
                                     <div style={{ minWidth: 0 }}>
                                         <strong>{item.title || `Ish #${item.job_id}`}</strong>
                                         <div className="muted" style={{ marginTop: 4 }}>
-                                            @{item.other_username || "foydalanuvchi"} · {item.sent_at || "Vaqt noma'lum"}
+                                            @{item.other_username || "foydalanuvchi"} · {formatTimeAgo(item.sent_at)}
                                         </div>
                                     </div>
                                     {item.unread > 0 && <span className="chip">{item.unread} yangi</span>}

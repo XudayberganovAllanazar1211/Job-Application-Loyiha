@@ -657,6 +657,78 @@ class JobPlatformTestCase(unittest.TestCase):
         ).get_json()["balance"]
         self.assertAlmostEqual(balance_after, 500000.0, places=2)
 
+        second_report = self.client.post(
+            "/report",
+            headers={"Authorization": f"Bearer {token_admin}"},
+            json={
+                "job_id": job_id,
+                "reported_user_id": self.client.get(
+                    "/profile", headers={"Authorization": f"Bearer {token_worker}"}
+                ).get_json()["id"],
+                "reason": "Rich report review",
+                "details": "Test explicit admin decision workflow."
+            }
+        )
+        self.assertEqual(second_report.status_code, 201)
+        reports_after = self.client.get(
+            "/admin/overview", headers={"Authorization": f"Bearer {token_admin}"}
+        ).get_json()["reports"]
+        second_report_id = next(item["id"] for item in reports_after if item["reason"] == "Rich report review")
+        rich_decision = self.client.patch(
+            f"/admin/report/{second_report_id}",
+            headers={"Authorization": f"Bearer {token_admin}"},
+            json={
+                "status": "resolved",
+                "decision": "violation",
+                "admin_response": "Qoidabuzarlik tekshiruv bilan tasdiqlandi.",
+                "payment_action": "none",
+                "job_action": "none",
+                "notify_target": "both",
+                "sanction_target": "reported",
+                "sanction_type": "withdrawal",
+                "sanction_duration_minutes": 60
+            }
+        )
+        self.assertEqual(rich_decision.status_code, 200)
+        self.assertEqual(rich_decision.get_json()["decision"], "violation")
+        self.assertEqual(rich_decision.get_json()["sanction_type"], "withdrawal")
+        worker_id = self.client.get("/profile", headers={"Authorization": f"Bearer {token_worker}"}).get_json()["id"]
+        active_report_block = main.db.q(
+            "SELECT id FROM user_blocks WHERE user_id=? AND block_type='withdrawal' AND active=1 ORDER BY id DESC LIMIT 1",
+            (worker_id,)
+        ).fetchone()
+        self.assertIsNotNone(active_report_block)
+        worker_notices = self.client.get("/notifications", headers={"Authorization": f"Bearer {token_worker}"}).get_json()["items"]
+        self.assertTrue(any(item["type"] == "report_warning" for item in worker_notices))
+
+        # Editing an already finalized report must not repeat its payment, block, or notifications.
+        warning_count_before = sum(1 for item in worker_notices if item["type"] == "report_warning")
+        repeated_decision = self.client.patch(
+            f"/admin/report/{second_report_id}",
+            headers={"Authorization": f"Bearer {token_admin}"},
+            json={
+                "status": "resolved",
+                "decision": "violation",
+                "admin_response": "Qoidabuzarlik tekshiruv bilan tasdiqlandi.",
+                "payment_action": "none",
+                "job_action": "none",
+                "notify_target": "both",
+                "sanction_target": "reported",
+                "sanction_type": "withdrawal",
+                "sanction_duration_minutes": 60
+            }
+        )
+        self.assertEqual(repeated_decision.status_code, 200, repeated_decision.get_json())
+        self.assertIn("takrorlanmadi", repeated_decision.get_json()["msg"])
+        block_count = main.db.q(
+            "SELECT COUNT(*) FROM user_blocks WHERE user_id=? AND block_type='withdrawal' AND active=1 AND reason LIKE ?",
+            (worker_id, f"Shikoyat #{second_report_id}:%")
+        ).fetchone()[0]
+        self.assertEqual(block_count, 1)
+        worker_notices_after = self.client.get("/notifications", headers={"Authorization": f"Bearer {token_worker}"}).get_json()["items"]
+        warning_count_after = sum(1 for item in worker_notices_after if item["type"] == "report_warning")
+        self.assertEqual(warning_count_after, warning_count_before)
+
     def test_09b_chat_attachment_report_and_admin_access(self):
         owner_login = self.client.post(
             "/login",
@@ -1130,7 +1202,7 @@ class JobPlatformTestCase(unittest.TestCase):
             headers={"Authorization": f"Bearer {admin_token}"},
             json={
                 "block_type": "job_creation",
-                "duration_minutes": 60,
+                "duration_minutes": 600,
                 "reason": "Ish e’lonlarida qoidabuzarlik."
             }
         )
@@ -1156,12 +1228,60 @@ class JobPlatformTestCase(unittest.TestCase):
         self.assertTrue(any(item["active"] and item["block_type"] == "job_creation" for item in worker_blocks.get_json()["blocks"]))
 
         lift_target = next(item for item in worker_blocks.get_json()["blocks"] if item["active"] and item["block_type"] == "job_creation")
+        edited_block = self.client.patch(
+            f"/admin/block/{lift_target['id']}",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"action": "modify", "duration_minutes": 120, "reason": "Cheklov muddati qayta belgilandi."}
+        )
+        self.assertEqual(edited_block.status_code, 200)
+
+        block_appeal = self.client.post(
+            "/appeals",
+            headers={"Authorization": f"Bearer {worker_token}"},
+            json={"block_id": lift_target["id"], "appeal_text": "Cheklov muddatini kamaytirishingizni so‘rayman."}
+        )
+        self.assertEqual(block_appeal.status_code, 201)
+        modified_appeal = self.client.patch(
+            f"/admin/appeal/{block_appeal.get_json()['appeal_id']}",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"status": "modified", "block_action": "reduce_duration", "duration_minutes": 90,
+                  "admin_response": "Cheklov muddati qisqartirildi."}
+        )
+        self.assertEqual(modified_appeal.status_code, 200)
+        self.assertEqual(modified_appeal.get_json()["status"], "modified")
+        modified_block = main.db.q("SELECT duration_minutes FROM user_blocks WHERE id=?", (lift_target["id"],)).fetchone()
+        self.assertEqual(modified_block[0], 90)
+
         lifted = self.client.patch(
             f"/admin/block/{lift_target['id']}",
             headers={"Authorization": f"Bearer {admin_token}"},
-            json={"action": "lift"}
+            json={"action": "lift", "reason": "Qo‘shimcha tekshiruvdan keyin olib tashlandi."}
         )
         self.assertEqual(lifted.status_code, 200)
+
+        verification_changed = self.client.patch(
+            f"/admin/user/{worker_id}/verification",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"phone_verified": True}
+        )
+        self.assertEqual(verification_changed.status_code, 200)
+        admin_overview = self.client.get("/admin/overview", headers={"Authorization": f"Bearer {admin_token}"}).get_json()
+        worker_overview = next(item for item in admin_overview["users"] if item["id"] == worker_id)
+        self.assertEqual(worker_overview["phone_verified"], 1)
+
+        created_service = self.client.post(
+            "/admin/service",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"name": "Admin Service Edit Regression", "parent_id": None}
+        )
+        self.assertEqual(created_service.status_code, 201)
+        changed_service = self.client.patch(
+            f"/admin/service/{created_service.get_json()['id']}",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"name": "Admin Service Edit Regression Updated", "parent_id": None}
+        )
+        self.assertEqual(changed_service.status_code, 200)
+        self.assertEqual(changed_service.get_json()["name"], "Admin Service Edit Regression Updated")
 
         full_block = self.client.post(
             f"/admin/user/{worker_id}/block",
@@ -1556,6 +1676,301 @@ class JobPlatformTestCase(unittest.TestCase):
 
         main.db.q("DELETE FROM payments WHERE payment_uuid=?", (payment_uuid,)).close()
         main.db.q("DELETE FROM jobs WHERE id=?", (job_id,)).close()
+
+        # Exercise the exact admin-finance refund action used by the new admin UI.
+        action_job_id = conn_job_id = None
+        now_action = "2026-10-08T12:00:00+00:00"
+        conn = main.db.get_connection()
+        try:
+            action_job_id = conn.execute(
+                """INSERT INTO jobs(
+                    user_id,service_id,title,description,price,currency,location,
+                    worker_id,status,created_at,finished_at,custom_service,agreed_price
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    owner_id,1,"Admin Payment Action Regression",
+                    "Verify admin escrow refund endpoint",250000,"UZS","Remote",
+                    worker_id,"accepted",now_action,None,"",250000
+                ),
+            ).lastrowid
+            action_uuid = "test-admin-action-payment-uuid"
+            conn.execute(
+                """INSERT INTO payments(
+                    payment_uuid,job_id,payer_id,payee_id,amount,currency,provider,status,
+                    provider_transaction_id,created_at,paid_at,released_at,refunded_at
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    action_uuid,action_job_id,owner_id,worker_id,250000,"UZS","dummy","held",
+                    "test-admin-action-provider",now_action,now_action,None,None
+                ),
+            )
+            conn.execute(
+                "UPDATE platform_wallet SET escrow_balance=ROUND(escrow_balance+?,2) WHERE id=1",
+                (250000,)
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        admin_refund = self.client.patch(
+            f"/admin/payment/{action_job_id}",
+            headers={"Authorization": f"Bearer {owner_token}"},
+            json={"action": "refund", "reason": "Admin review regression test refund."}
+        )
+        self.assertEqual(admin_refund.status_code, 200)
+        action_payment = main.db.q(
+            "SELECT status FROM payments WHERE payment_uuid=?", (action_uuid,)
+        ).fetchone()
+        self.assertEqual(action_payment[0], "refunded")
+        action_job_status = main.db.q(
+            "SELECT status FROM jobs WHERE id=?", (action_job_id,)
+        ).fetchone()
+        self.assertEqual(action_job_status[0], "blocked")
+        self.assertTrue(main.db.q(
+            "SELECT id FROM admin_audit_log WHERE target_type='job' AND target_id=? AND action='admin_payment_action'",
+            (action_job_id,)
+        ).fetchone())
+        main.db.q("DELETE FROM wallet_transactions WHERE job_id=?", (action_job_id,)).close()
+        main.db.q("DELETE FROM payments WHERE payment_uuid=?", (action_uuid,)).close()
+        main.db.q("DELETE FROM jobs WHERE id=?", (action_job_id,)).close()
+
+
+    def test_99_server_search_saved_and_recent(self):
+        login = self.client.post(
+            "/login",
+            json={"username": "tester_creator", "password": "Password123!"}
+        )
+        self.assertEqual(login.status_code, 200)
+        token = login.get_json()["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        created = self.client.post(
+            "/job",
+            headers=headers,
+            json={
+                "service_id": 1,
+                "title": "Server Search Unique",
+                "description": "Backend search pagination regression",
+                "price": 123000,
+                "location": "Tashkent, Yunusobod"
+            }
+        )
+        self.assertEqual(created.status_code, 200)
+
+        search = self.client.get(
+            "/jobs?page=1&page_size=1&search=Server%20Search",
+            headers=headers
+        )
+        self.assertEqual(search.status_code, 200)
+        search_data = search.get_json()
+        self.assertEqual(search_data["pagination"]["total"], 1)
+        self.assertEqual(len(search_data["items"]), 1)
+        self.assertEqual(search_data["items"][0]["title"], "Server Search Unique")
+
+        price_filtered = self.client.get(
+            "/jobs?page=1&page_size=10&min_price=200000",
+            headers=headers
+        )
+        self.assertEqual(price_filtered.status_code, 200)
+        self.assertFalse(any(item["title"] == "Server Search Unique" for item in price_filtered.get_json()["items"]))
+
+        job_id = search_data["items"][0]["id"]
+        favorite = self.client.post(
+            "/favorites",
+            headers=headers,
+            json={"target_type": "job", "target_id": job_id}
+        )
+        self.assertEqual(favorite.status_code, 200)
+
+        saved_only = self.client.get(
+            "/jobs?page=1&page_size=10&saved_only=1",
+            headers=headers
+        )
+        self.assertEqual(saved_only.status_code, 200)
+        self.assertTrue(any(item["id"] == job_id for item in saved_only.get_json()["items"]))
+
+        saved = self.client.post(
+            "/saved-searches",
+            headers=headers,
+            json={
+                "name": "Backend jobs",
+                "filters": {
+                    "search": "Server Search",
+                    "min_price": "100000",
+                    "max_price": "200000",
+                    "time_filter": "month",
+                    "location": "Tashkent",
+                    "service_ids": [1]
+                }
+            }
+        )
+        self.assertEqual(saved.status_code, 201)
+        saved_id = saved.get_json()["id"]
+
+        saved_list = self.client.get("/saved-searches", headers=headers)
+        self.assertEqual(saved_list.status_code, 200)
+        self.assertTrue(any(item["id"] == saved_id and item["filters"]["search"] == "Server Search" for item in saved_list.get_json()))
+
+        recent = self.client.post(
+            f"/recently-viewed/{job_id}",
+            headers=headers
+        )
+        self.assertEqual(recent.status_code, 200)
+
+        recent_list = self.client.get("/recently-viewed", headers=headers)
+        self.assertEqual(recent_list.status_code, 200)
+        self.assertTrue(any(item["job_id"] == job_id for item in recent_list.get_json()))
+
+        deleted = self.client.delete(
+            f"/saved-searches/{saved_id}",
+            headers=headers
+        )
+        self.assertEqual(deleted.status_code, 200)
+
+
+    def test_10f_verification_reputation_and_dispute_flow(self):
+        owner = self.client.post("/login", json={"username": "tester_creator", "password": "Password123!"})
+        worker = self.client.post("/login", json={"username": "tester_worker", "password": "Password123!"})
+        self.assertEqual(owner.status_code, 200)
+        self.assertEqual(worker.status_code, 200)
+        owner_token = owner.get_json()["token"]
+        worker_token = worker.get_json()["token"]
+
+        verification = self.client.get("/verification", headers={"Authorization": f"Bearer {worker_token}"})
+        self.assertEqual(verification.status_code, 200)
+        self.assertTrue(verification.get_json()["email_verified"])
+        self.assertIn("email_verified", {item["key"] for item in verification.get_json()["badges"]})
+
+        reputation = self.client.get("/reputation", headers={"Authorization": f"Bearer {worker_token}"})
+        self.assertEqual(reputation.status_code, 200)
+        self.assertIn("average_rating", reputation.get_json())
+        self.assertIn("success_rate", reputation.get_json())
+        self.assertIn("badges", reputation.get_json())
+
+        created = self.client.post(
+            "/job",
+            headers={"Authorization": f"Bearer {owner_token}"},
+            json={
+                "service_id": 1,
+                "title": "Dispute Center Regression Check",
+                "description": "Verify dispute authorization and lifecycle.",
+                "price": 150000,
+                "location": "Remote"
+            },
+        )
+        self.assertEqual(created.status_code, 200)
+        job_id = [item["id"] for item in self.client.get(
+            "/jobs", headers={"Authorization": f"Bearer {owner_token}"}
+        ).get_json() if item["title"] == "Dispute Center Regression Check"][0]
+
+        accepted = self.client.post(
+            "/accept_job",
+            headers={"Authorization": f"Bearer {worker_token}"},
+            json={"job_id": job_id},
+        )
+        self.assertEqual(accepted.status_code, 200)
+
+        eligible_before = self.client.get(
+            f"/disputes/eligible-jobs?job_id={job_id}",
+            headers={"Authorization": f"Bearer {owner_token}"},
+        )
+        self.assertEqual(eligible_before.status_code, 200)
+        self.assertIn(job_id, [item["id"] for item in eligible_before.get_json()["items"]])
+
+        opened = self.client.post(
+            "/disputes",
+            headers={"Authorization": f"Bearer {owner_token}"},
+            json={
+                "job_id": job_id,
+                "category": "quality",
+                "description": "Regression test dispute.",
+                "evidence": "Test evidence.",
+            },
+        )
+        self.assertEqual(opened.status_code, 201)
+        dispute_id = opened.get_json()["id"]
+
+        eligible_after = self.client.get(
+            "/disputes/eligible-jobs",
+            headers={"Authorization": f"Bearer {owner_token}"},
+        )
+        self.assertEqual(eligible_after.status_code, 200)
+        self.assertNotIn(job_id, [item["id"] for item in eligible_after.get_json()["items"]])
+
+        owner_view = self.client.get("/disputes", headers={"Authorization": f"Bearer {owner_token}"})
+        self.assertEqual(owner_view.status_code, 200)
+        self.assertTrue(any(item["id"] == dispute_id for item in owner_view.get_json()))
+
+        worker_view = self.client.get("/disputes", headers={"Authorization": f"Bearer {worker_token}"})
+        self.assertEqual(worker_view.status_code, 200)
+        self.assertTrue(any(item["id"] == dispute_id for item in worker_view.get_json()))
+
+        duplicate = self.client.post(
+            "/disputes",
+            headers={"Authorization": f"Bearer {owner_token}"},
+            json={
+                "job_id": job_id,
+                "category": "payment",
+                "description": "Second open dispute must be rejected.",
+            },
+        )
+        self.assertEqual(duplicate.status_code, 409)
+
+        admin_items = self.client.get("/admin/disputes", headers={"Authorization": f"Bearer {owner_token}"})
+        self.assertEqual(admin_items.status_code, 200)
+        self.assertTrue(any(item["id"] == dispute_id for item in admin_items.get_json()))
+
+        resolved = self.client.patch(
+            f"/admin/disputes/{dispute_id}",
+            headers={"Authorization": f"Bearer {owner_token}"},
+            json={
+                "status": "resolved",
+                "admin_response": "Regression test resolved.",
+                "decision": "favor_opener",
+                "payment_action": "none",
+                "job_action": "block",
+                "sanction_type": "none",
+            },
+        )
+        self.assertEqual(resolved.status_code, 200)
+        self.assertEqual(resolved.get_json()["status"], "resolved")
+        self.assertEqual(resolved.get_json()["decision"], "favor_opener")
+        self.assertEqual(resolved.get_json()["job_action"], "block")
+        blocked_job_status = main.db.q("SELECT status FROM jobs WHERE id=?", (job_id,)).fetchone()[0]
+        self.assertEqual(blocked_job_status, "blocked")
+
+        final_view = self.client.get("/disputes", headers={"Authorization": f"Bearer {owner_token}"})
+        self.assertEqual(final_view.status_code, 200)
+        self.assertFalse(any(item["id"] == dispute_id for item in final_view.get_json()))
+
+        worker_final_view = self.client.get("/disputes", headers={"Authorization": f"Bearer {worker_token}"})
+        self.assertEqual(worker_final_view.status_code, 200)
+        self.assertFalse(any(item["id"] == dispute_id for item in worker_final_view.get_json()))
+
+
+    def test_10g_profile_email_change_requires_reauthentication(self):
+        login = self.client.post("/login", json={"username": "tester_worker", "password": "Password123!"})
+        self.assertEqual(login.status_code, 200)
+        token = login.get_json()["token"]
+        current = self.client.get("/profile", headers={"Authorization": f"Bearer {token}"}).get_json()
+
+        response = self.client.put(
+            "/profile",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "first_name": current["first_name"],
+                "last_name": current["last_name"],
+                "birthday": current["birthday"],
+                "username": current["username"],
+                "email": "takeover@example.com",
+                "bio": current["bio"],
+                "skills": current["skills"],
+            },
+        )
+        self.assertEqual(response.status_code, 409)
+        self.assertTrue(response.get_json()["email_change_required"])
+        stored = self.client.get("/profile", headers={"Authorization": f"Bearer {token}"}).get_json()
+        self.assertEqual(stored["email"], current["email"])
 
 
 if __name__ == "__main__":

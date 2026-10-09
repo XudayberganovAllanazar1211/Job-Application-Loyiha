@@ -10,6 +10,7 @@ import Conversations from "./pages/Conversations"
 import Rating from "./pages/Rating"
 import Leaderboard from "./pages/Leaderboard"
 import Profile from "./pages/Profile"
+import Verification from "./pages/Verification"
 import PublicProfile from "./pages/PublicProfile"
 import PrivacyPolicy from "./pages/PrivacyPolicy"
 import Terms from "./pages/Terms"
@@ -17,9 +18,19 @@ import CommunityRules from "./pages/CommunityRules"
 import Admin from "./pages/Admin"
 import Appeals from "./pages/Appeals"
 import Payments from "./pages/Payments"
+import Disputes, { CreateDispute } from "./pages/Disputes"
+
+function getStoredUser() {
+    try {
+        return JSON.parse(localStorage.getItem("user") || "null")
+    } catch {
+        localStorage.removeItem("user")
+        return null
+    }
+}
 
 function AdminOnly({ children }) {
-    const user = JSON.parse(localStorage.getItem("user") || "null")
+    const user = getStoredUser()
     return user?.role === "admin" ? children : <Navigate to="/" replace />
 }
 
@@ -50,9 +61,12 @@ export default function App() {
             <Route path="/rating/:jobId" element={<Protected><Rating /></Protected>} />
             <Route path="/payments" element={<Protected><Payments /></Protected>} />
             <Route path="/payments/job/:jobId" element={<Protected><Payments /></Protected>} />
+            <Route path="/disputes/new" element={<Protected><CreateDispute /></Protected>} />
+            <Route path="/disputes" element={<Protected><Disputes /></Protected>} />
 
             <Route path="/leaderboard" element={<Protected><Leaderboard /></Protected>} />
             <Route path="/profile" element={<Protected><Profile /></Protected>} />
+            <Route path="/verification" element={<Protected><Verification /></Protected>} />
             <Route path="/appeals" element={<Protected><Appeals /></Protected>} />
             <Route path="/profile/:username" element={<Protected><PublicProfile /></Protected>} />
             <Route path="/profiles/:username" element={<Protected><PublicProfile /></Protected>} />

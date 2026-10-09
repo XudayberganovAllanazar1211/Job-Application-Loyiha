@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { useLocation, useNavigate, useParams } from "react-router-dom"
 import AppLayout from "../components/AppLayout"
 import { api } from "../api"
+import { formatTimeAgo, formatRelativeDay, getMessageDateKey } from "../utils/time"
 
 export default function Chat() {
     const { jobId } = useParams()
@@ -33,32 +34,12 @@ export default function Chat() {
     const typingTimerRef = useRef(null)
     const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/$/, "")
 
-    const formatLastSeen = (value) => {
-        const lastSeen = new Date(value)
-        if (Number.isNaN(lastSeen.getTime())) return ""
-
-        const diffMs = Math.max(0, Date.now() - lastSeen.getTime())
-        const diffMinutes = Math.floor(diffMs / 60000)
-
-        if (diffMinutes < 60) return `${diffMinutes} daqiqa oldin`
-
-        const diffHours = Math.floor(diffMinutes / 60)
-        if (diffHours < 24) return `${diffHours} soat oldin`
-
-        const diffDays = Math.floor(diffHours / 24)
-        if (diffDays < 30) return `${diffDays} kun oldin`
-
-        const diffMonths = Math.floor(diffDays / 30)
-        if (diffMonths < 12) return `${diffMonths} oy oldin`
-
-        const diffYears = Math.floor(diffDays / 365)
-        return `${diffYears} yil oldin`
-    }
+    const formatLastSeen = formatTimeAgo
 
     const loadXabarlar = async () => {
         if (document.hidden) return
         const result = await api(`/messages/${jobId}`, { token })
-        if (result?.ok === false && Number(result.status) === 403) {
+        if (result?.ok === false && Number(result.http_status) === 403) {
             navigate("/conversations", {
                 replace: true,
                 state: { notice: "Bu suhbat mavjud emas yoki siz uning ishtirokchisi emassiz." }
@@ -106,7 +87,7 @@ export default function Chat() {
 
     const loadJob = async () => {
         const jobData = await api(`/jobs/${jobId}`, { token })
-        if (jobData?.ok === false && Number(jobData.status) === 404) {
+        if (jobData?.ok === false && Number(jobData.http_status) === 404) {
             navigate("/conversations", {
                 replace: true,
                 state: { notice: "Bu ish yoki suhbat topilmadi." }
@@ -418,7 +399,7 @@ export default function Chat() {
                                                         disabled={reportingMessageId === message.id}
                                                         onClick={() => reportMessage(message)}
                                                     >
-                                                        {reportingMessageId === message.id ? "Yuborilmoqda..." : "Report"}
+                                                        {reportingMessageId === message.id ? "Yuborilmoqda..." : "Shikoyat qilish"}
                                                     </button>
                                                 )}
                                             </div>
@@ -439,7 +420,7 @@ export default function Chat() {
                     </div>
 
                     {file && <div className="notice" style={{ marginTop: 14 }}>Tanlangan fayl: {file.name}</div>}
-                    <form onSubmit={send} className="actions" style={{ marginTop: 14 }}>
+                    <form onSubmit={send} className="chat-compose">
                         <input
                             ref={fileInputRef}
                             type="file"
@@ -447,13 +428,18 @@ export default function Chat() {
                             accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
                             onChange={(e) => setFile(e.target.files?.[0] || null)}
                         />
-                        <button type="button" className="btn btn-secondary" onClick={() => fileInputRef.current?.click()}>
-                            Fayl
+                        <button
+                            type="button"
+                            className="btn btn-secondary chat-attach-button"
+                            onClick={() => fileInputRef.current?.click()}
+                            aria-label="Fayl biriktirish"
+                            title="Fayl biriktirish"
+                        >
+                            📎
                         </button>
                         <input
-                            className="input"
-                            style={{ flex: 1 }}
-                            placeholder="Xabar yozing..."
+                            className="input chat-compose-input"
+                            placeholder={file ? file.name : "Xabar yozing..."}
                             value={text}
                             onChange={(e) => {
                                 const value = e.target.value
@@ -465,7 +451,7 @@ export default function Chat() {
                                 }
                             }}
                         />
-                        <button className="btn btn-primary">Yuborish</button>
+                        <button className="btn btn-primary chat-send-button">Yuborish</button>
                     </form>
                 </section>
             </div>
@@ -473,31 +459,12 @@ export default function Chat() {
     )
 }
 
-function getMessageDateKey(value) {
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return ""
-    const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, "0")
-    const day = String(date.getDate()).padStart(2, "0")
-    return `${year}-${month}-${day}`
-}
-
 function formatMessageTime(value) {
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return "--:--"
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })
+    return formatTimeAgo(value)
 }
 
 function formatMessageDate(value) {
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return "Sana noma'lum"
-    const today = new Date()
-    const yesterday = new Date()
-    yesterday.setDate(today.getDate() - 1)
-
-    if (getMessageDateKey(date) === getMessageDateKey(today)) return "Bugun"
-    if (getMessageDateKey(date) === getMessageDateKey(yesterday)) return "Kecha"
-    return date.toLocaleDateString("uz-UZ", { day: "2-digit", month: "long", year: "numeric" })
+    return formatRelativeDay(value)
 }
 
 function getAvatarSrc(url, apiBase) {

@@ -2,34 +2,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import AppLayout from "../components/AppLayout"
 import { api } from "../api"
-
-function formatTimeAgo(dateString) {
-    if (!dateString) return "Vaqt noma'lum"
-
-    const created = new Date(String(dateString).replace(" ", "T"))
-    if (Number.isNaN(created.getTime())) return "Vaqt noma'lum"
-
-    const seconds = Math.max(0, Math.floor((Date.now() - created.getTime()) / 1000))
-    if (seconds < 60) return "Hozirgina"
-
-    const minutes = Math.floor(seconds / 60)
-    if (minutes < 60) return `${minutes} daqiqa oldin`
-
-    const hours = Math.floor(minutes / 60)
-    if (hours < 24) return `${hours} soat oldin`
-
-    const days = Math.floor(hours / 24)
-    if (days < 7) return `${days} kun oldin`
-
-    const weeks = Math.floor(days / 7)
-    if (days < 30) return `${weeks} hafta oldin`
-
-    const months = Math.floor(days / 30)
-    if (days < 365) return `${months} oy oldin`
-
-    const years = Math.floor(days / 365)
-    return `${years} yil oldin`
-}
+import { formatTimeAgo, formatRelativeDay, getMessageDateKey } from "../utils/time"
 
 export default function Dashboard() {
     const [jobs, setJobs] = useState([])
@@ -325,7 +298,7 @@ export default function Dashboard() {
                 </div>
                 <div className="stat-card">
                     <div className="stat-card-icon">03</div>
-                    <div className="stat-card-kicker">Platform</div>
+                    <div className="stat-card-kicker">FINJOB</div>
                     <div className="stat-label">Tizim rejimi</div>
                     <div className="stat-value" style={{ fontSize: 22, color: "#10b981" }}>
                         Ko‘p yo‘nalishli bitta profil
@@ -337,16 +310,16 @@ export default function Dashboard() {
                 <section className="card">
                     <div className="section-toolbar" style={{ marginBottom: 16 }}>
                         <div className="page-head">
-                            <h2 style={{ margin: 0 }}>Mening ish maydonim</h2>
+                            <h2 style={{ margin: 0 }}>Ishlarim va e’lonlarim</h2>
                             <p className="muted" style={{ margin: 0 }}>
-                                Faol e’lonlar hamda siz yaratgan yoki qabul qilgan ishlar shu yerda ko‘rinadi.
+                                Siz joylashtirgan e’lonlar, qabul qilgan ishlar va hozir bajarayotgan vazifalaringiz shu yerda ko‘rinadi.
                             </p>
                         </div>
                         <div className="actions">
                             <input
                                 className="input"
                                 style={{ minWidth: 220 }}
-                                placeholder="Qidirish..."
+                                placeholder="Ish nomi yoki xizmatni qidiring..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                             />
@@ -388,7 +361,7 @@ export default function Dashboard() {
                                         <span className="chip">📍 {job.location || "-"}</span>
                                         <span className="chip job-service-chip">🧩 {job.service_name || serviceMap[String(job.service_id)] || job.service_id || "Noma’lum"}</span>
                                         <span className={`chip status-chip status-${status}`}><span className="status-dot" />{statusLabel}</span>
-                                        <span className="chip">📅 {job.created_at || "Sana noma’lum"}</span>
+                                        <span className="chip">📅 {formatTimeAgo(job.created_at)}</span>
                                         <span className="chip job-worker-chip">👤 Bajaruvchi: {job.worker_id ? (
                                             <button type="button" className="profile-link-button" onClick={(e) => { e.stopPropagation(); navigate(`/profiles/${job.worker_username}`) }}>
                                                 {((job.worker_first || "") + " " + (job.worker_last || "")).trim() || job.worker_username}
@@ -585,7 +558,7 @@ export default function Dashboard() {
                                 <div><span>Narx</span><strong>{selectedJob.price ?? "-"} {selectedJob.currency || "UZS"}</strong></div>
                                 <div><span>Joylashuv</span><strong>{selectedJob.location || "—"}</strong></div>
                                 <div><span>Soha</span><strong>{selectedJob.service_name || serviceMap[String(selectedJob.service_id)] || "Noma’lum"}</strong></div>
-                                <div><span>Yaratilgan</span><strong>{selectedJob.created_at || "—"}</strong></div>
+                                <div><span>Yaratilgan</span><strong>{formatTimeAgo(selectedJob.created_at)}</strong></div>
                                 <div><span>Holat</span><strong>{({ active: "Faol", payment_pending: "To‘lov kutilmoqda", accepted: "Qabul qilingan", pending_finish: "Tasdiqlash kutilmoqda", finished: "Yakunlangan" }[String(selectedJob.status || "").toLowerCase()] || selectedJob.status || "—")}</strong></div>
                                 <div>
                                     <span>Yaratuvchi</span>
@@ -790,37 +763,12 @@ function getInitials(name) {
     return parts.slice(0, 2).map((part) => part[0].toUpperCase()).join("") || "?"
 }
 
-function getMessageDateKey(value) {
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return ""
-    const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, "0")
-    const day = String(date.getDate()).padStart(2, "0")
-    return `${year}-${month}-${day}`
-}
-
 function formatMessageTime(value) {
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return "--:--"
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })
+    return formatTimeAgo(value)
 }
 
 function formatMessageDate(value) {
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return "Sana noma'lum"
-
-    const today = new Date()
-    const yesterday = new Date()
-    yesterday.setDate(today.getDate() - 1)
-
-    if (getMessageDateKey(date) === getMessageDateKey(today)) return "Bugun"
-    if (getMessageDateKey(date) === getMessageDateKey(yesterday)) return "Kecha"
-
-    return date.toLocaleDateString("uz-UZ", {
-        day: "2-digit",
-        month: "long",
-        year: "numeric"
-    })
+    return formatRelativeDay(value)
 }
 
 function DashboardChatAttachment({ url, name, type, apiBase, token, onOpen }) {

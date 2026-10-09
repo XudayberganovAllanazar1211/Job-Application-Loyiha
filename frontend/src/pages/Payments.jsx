@@ -10,7 +10,7 @@ function statusLabel(status) {
         failed: "Xatolik",
         refunded: "Qaytarilgan",
         released: "Yakunlangan",
-        held: "Waiting — ish yakunlanishini kutmoqda"
+        held: "Mablag‘ vaqtincha ushlab turilgan"
     }[status] || status
 }
 
@@ -44,7 +44,7 @@ export default function Payments() {
             if (jobId) {
                 const access = await api("/payments/job/" + jobId, { token })
 
-                if (access?.ok === false && [403, 404].includes(Number(access.status))) {
+                if (access?.ok === false && [403, 404].includes(Number(access.http_status))) {
                     navigate("/payments", {
                         replace: true,
                         state: { notice: "Bu to‘lov mavjud emas yoki sizga tegishli emas." }
@@ -84,7 +84,7 @@ export default function Payments() {
 
         const check = async () => {
             const result = await api("/payments/" + paymentUuid, { token })
-            if (result?.ok === false && [403, 404].includes(Number(result.status))) {
+            if (result?.ok === false && [403, 404].includes(Number(result.http_status))) {
                 navigate("/payments", {
                     replace: true,
                     state: { notice: "Bu to‘lov mavjud emas yoki sizga tegishli emas." }
@@ -148,7 +148,7 @@ export default function Payments() {
 
     if (jobId) {
         return (
-            <AppLayout title="Ish uchun to‘lov" subtitle="Hozircha test balansidan foydalanib to‘lovni sinab ko‘ring.">
+            <AppLayout title="Ish uchun to‘lov" subtitle="Bu sahifada ish uchun to‘lovni ko‘rib chiqasiz. Sinov rejimida haqiqiy pul yechilmaydi.">
                 <div className="card" style={{ maxWidth: 760, margin: "0 auto" }}>
                     <div className="page-head">
                         <h2>To‘lovni tasdiqlash</h2>
@@ -180,7 +180,7 @@ export default function Payments() {
                             </div>
 
                             <div className="notice" style={{ marginBottom: 16 }}>
-                                Bu vaqtinchalik dummy/test to‘lov. To‘lov darhol ishchiga berilmaydi: mablag‘ FinJob escrowida waiting holatida turadi va ish ikki tomon tomonidan yakunlangachgina ishchiga o‘tadi. Ishchi almashtirilsa ham shu to‘lov saqlanadi.
+                                Bu — sinov to‘lovi. Hozircha haqiqiy pul yechilmaydi. To‘lov tasdiqlansa, summa ish yakunlanguncha vaqtincha ushlab turiladi; ish buyurtmachi va bajaruvchi tomonidan yakunlangach, mablag‘ bajaruvchiga o‘tkaziladi. Bajaruvchi almashtirilsa ham ushbu to‘lov yozuvi saqlanadi.
                             </div>
 
                             {payment?.status !== "held" && (
@@ -200,7 +200,7 @@ export default function Payments() {
 
                             {payment?.status === "held" ? (
                                 <div className="notice ok" style={{ marginBottom: 16 }}>
-                                    To‘lov qabul qilindi. {Number(payment.amount || 0).toLocaleString("uz-UZ")} UZS hozir waiting holatida turibdi. Ish ikki tomon tomonidan yakunlangach pul ishchiga o‘tadi.
+                                    To‘lov qabul qilindi. {Number(payment.amount || 0).toLocaleString("uz-UZ")} UZS ish yakunlanguncha vaqtincha ushlab turiladi. Har ikki tomon ish tugaganini tasdiqlagach, pul bajaruvchiga o‘tadi.
                                 </div>
                             ) : payment?.provider === "click" ? (
                                 <button className="btn btn-primary" disabled={creating || !payment?.payment_uuid} onClick={startPayment}>

@@ -89,6 +89,10 @@ _RATE_LIMIT_RULES = {
     "/payments/create/": (10, 60),
     "/payments/dummy/": (10, 60),
     "/reverse-geocode": (20, 60),
+    "/saved-searches/": (30, 600),
+    "/recently-viewed/": (60, 60),
+    "/disputes": (10, 600),
+    "/disputes/": (30, 600),
 }
 
 
@@ -266,6 +270,25 @@ class DB:
         conn = self.get_connection()
         cursor = conn.cursor()
 
+        def ensure_column(table, column_name, alter_sql):
+            existing = {
+                row[1] for row in cursor.execute(f"PRAGMA table_info({table})").fetchall()
+            }
+            if column_name not in existing:
+                try:
+                    cursor.execute(alter_sql)
+                except sqlite3.Error as exc:
+                    raise RuntimeError(
+                        f"{table} jadvali migratsiyasi bajarilmadi ({column_name}): {exc}"
+                    ) from exc
+            verified = {
+                row[1] for row in cursor.execute(f"PRAGMA table_info({table})").fetchall()
+            }
+            if column_name not in verified:
+                raise RuntimeError(
+                    f"{table} jadvalida {column_name} ustuni yo‘q; migratsiya bajarilmadi."
+                )
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -422,6 +445,28 @@ class DB:
         """)
 
         cursor.execute("""
+            CREATE TABLE IF NOT EXISTS saved_searches(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                filters TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(user_id, name)
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS recently_viewed(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                job_id INTEGER NOT NULL,
+                viewed_at TEXT NOT NULL,
+                UNIQUE(user_id, job_id)
+            )
+        """)
+
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS typing_states(
                 job_id INTEGER NOT NULL,
                 user_id INTEGER NOT NULL,
@@ -490,6 +535,44 @@ class DB:
         cursor.execute("INSERT OR IGNORE INTO platform_wallet(id,balance,escrow_balance) VALUES(1,0,0)")
 
         cursor.execute("""
+            CREATE TABLE IF NOT EXISTS disputes(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id INTEGER NOT NULL,
+                opened_by INTEGER NOT NULL,
+                against_user_id INTEGER NOT NULL,
+                category TEXT NOT NULL,
+                description TEXT NOT NULL,
+                evidence TEXT DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'open',
+                admin_response TEXT DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                resolved_at TEXT,
+                resolved_by INTEGER,
+                decision TEXT NOT NULL DEFAULT '',
+                decision_for_user_id INTEGER,
+                payment_action TEXT NOT NULL DEFAULT 'none',
+                job_action TEXT NOT NULL DEFAULT 'none',
+                sanction_user_id INTEGER,
+                sanction_type TEXT NOT NULL DEFAULT 'none',
+                sanction_duration_minutes INTEGER
+            )
+        """)
+        dispute_migrations = [
+            ("decision", "ALTER TABLE disputes ADD COLUMN decision TEXT NOT NULL DEFAULT ''"),
+            ("decision_for_user_id", "ALTER TABLE disputes ADD COLUMN decision_for_user_id INTEGER"),
+            ("payment_action", "ALTER TABLE disputes ADD COLUMN payment_action TEXT NOT NULL DEFAULT 'none'"),
+            ("job_action", "ALTER TABLE disputes ADD COLUMN job_action TEXT NOT NULL DEFAULT 'none'"),
+            ("sanction_user_id", "ALTER TABLE disputes ADD COLUMN sanction_user_id INTEGER"),
+            ("sanction_type", "ALTER TABLE disputes ADD COLUMN sanction_type TEXT NOT NULL DEFAULT 'none'"),
+            ("sanction_duration_minutes", "ALTER TABLE disputes ADD COLUMN sanction_duration_minutes INTEGER"),
+        ]
+        for col_name, sql in dispute_migrations:
+            ensure_column("disputes", col_name, sql)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_disputes_job_status ON disputes(job_id,status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_disputes_opened_by ON disputes(opened_by,created_at DESC)")
+
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS admin_audit_log(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 admin_id INTEGER NOT NULL,
@@ -534,8 +617,6 @@ class DB:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_appeals_status_created ON appeals(status,created_at)")
 
         # Dynamic migrations for any existing tables missing new columns
-        cursor.execute("PRAGMA table_info(users)")
-        existing_user_cols = [row[1] for row in cursor.fetchall()]
         migrations = [
             ("bio", "ALTER TABLE users ADD COLUMN bio TEXT DEFAULT ''"),
             ("skills", "ALTER TABLE users ADD COLUMN skills TEXT DEFAULT ''"),
@@ -546,107 +627,70 @@ class DB:
             ("token_version", "ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0"),
             ("balance", "ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0"),
             ("last_seen_at", "ALTER TABLE users ADD COLUMN last_seen_at TEXT DEFAULT ''"),
+            ("email_verified", "ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 1"),
+            ("phone_verified", "ALTER TABLE users ADD COLUMN phone_verified INTEGER NOT NULL DEFAULT 0"),
+            ("identity_verified", "ALTER TABLE users ADD COLUMN identity_verified INTEGER NOT NULL DEFAULT 0"),
+            ("verification_updated_at", "ALTER TABLE users ADD COLUMN verification_updated_at TEXT DEFAULT ''"),
             ("is_blocked", "ALTER TABLE users ADD COLUMN is_blocked INTEGER NOT NULL DEFAULT 0"),
             ("auth_provider", "ALTER TABLE users ADD COLUMN auth_provider TEXT DEFAULT 'password'"),
             ("google_sub", "ALTER TABLE users ADD COLUMN google_sub TEXT DEFAULT ''"),
         ]
         for col_name, sql in migrations:
-            if col_name not in existing_user_cols:
-                try:
-                    cursor.execute(sql)
-                except Exception:
-                    pass
+            ensure_column("users", col_name, sql)
 
-        cursor.execute("PRAGMA table_info(jobs)")
-        existing_job_cols = [row[1] for row in cursor.fetchall()]
-        if "currency" not in existing_job_cols:
-            try:
-                cursor.execute("ALTER TABLE jobs ADD COLUMN currency TEXT DEFAULT 'UZS'")
-            except Exception:
-                pass
-
-        if "custom_service" not in existing_job_cols:
-            try:
-                cursor.execute("ALTER TABLE jobs ADD COLUMN custom_service TEXT DEFAULT ''")
-            except Exception:
-                pass
-
-        if "agreed_price" not in existing_job_cols:
-            try:
-                cursor.execute("ALTER TABLE jobs ADD COLUMN agreed_price REAL")
-            except Exception:
-                pass
-
-        if "finished_at" not in existing_job_cols:
-            try:
-                cursor.execute("ALTER TABLE jobs ADD COLUMN finished_at TEXT")
-            except Exception:
-                pass
+        job_migrations = [
+            ("currency", "ALTER TABLE jobs ADD COLUMN currency TEXT DEFAULT 'UZS'"),
+            ("custom_service", "ALTER TABLE jobs ADD COLUMN custom_service TEXT DEFAULT ''"),
+            ("agreed_price", "ALTER TABLE jobs ADD COLUMN agreed_price REAL"),
+            ("finished_at", "ALTER TABLE jobs ADD COLUMN finished_at TEXT"),
+        ]
+        for col_name, sql in job_migrations:
+            ensure_column("jobs", col_name, sql)
 
         # Active ish hech qachon biriktirilgan bajaruvchiga ega bo‘lmasligi kerak.
         # Eski bazadagi active + worker_id holatini avtomatik tiklaymiz.
-        try:
-            cursor.execute(
-                "UPDATE jobs SET worker_id=NULL WHERE status='active' AND worker_id IS NOT NULL"
-            )
-        except Exception:
-            pass
+        cursor.execute(
+            "UPDATE jobs SET worker_id=NULL WHERE status='active' AND worker_id IS NOT NULL"
+        )
 
         cursor.execute("PRAGMA table_info(ratings)")
         existing_rating_cols = [row[1] for row in cursor.fetchall()]
-        cursor.execute("PRAGMA table_info(messages)")
-        existing_message_cols = [row[1] for row in cursor.fetchall()]
-        if "read_at" not in existing_message_cols:
-            try:
-                cursor.execute("ALTER TABLE messages ADD COLUMN read_at TEXT")
-            except Exception:
-                pass
-        if "attachment_url" not in existing_message_cols:
-            try:
-                cursor.execute("ALTER TABLE messages ADD COLUMN attachment_url TEXT DEFAULT ''")
-            except Exception:
-                pass
-        if "attachment_name" not in existing_message_cols:
-            try:
-                cursor.execute("ALTER TABLE messages ADD COLUMN attachment_name TEXT DEFAULT ''")
-            except Exception:
-                pass
-        if "attachment_type" not in existing_message_cols:
-            try:
-                cursor.execute("ALTER TABLE messages ADD COLUMN attachment_type TEXT DEFAULT ''")
-            except Exception:
-                pass
+        message_migrations = [
+            ("read_at", "ALTER TABLE messages ADD COLUMN read_at TEXT"),
+            ("attachment_url", "ALTER TABLE messages ADD COLUMN attachment_url TEXT DEFAULT ''"),
+            ("attachment_name", "ALTER TABLE messages ADD COLUMN attachment_name TEXT DEFAULT ''"),
+            ("attachment_type", "ALTER TABLE messages ADD COLUMN attachment_type TEXT DEFAULT ''"),
+        ]
+        for col_name, sql in message_migrations:
+            ensure_column("messages", col_name, sql)
 
-        cursor.execute("PRAGMA table_info(reports)")
-        existing_report_cols = [row[1] for row in cursor.fetchall()]
-        if "message_id" not in existing_report_cols:
-            try:
-                cursor.execute("ALTER TABLE reports ADD COLUMN message_id INTEGER")
-            except Exception:
-                pass
+        report_migrations = [
+            ("message_id", "ALTER TABLE reports ADD COLUMN message_id INTEGER"),
+            ("admin_response", "ALTER TABLE reports ADD COLUMN admin_response TEXT DEFAULT ''"),
+            ("decision", "ALTER TABLE reports ADD COLUMN decision TEXT DEFAULT ''"),
+            ("payment_action", "ALTER TABLE reports ADD COLUMN payment_action TEXT NOT NULL DEFAULT 'none'"),
+            ("job_action", "ALTER TABLE reports ADD COLUMN job_action TEXT NOT NULL DEFAULT 'none'"),
+            ("notify_target", "ALTER TABLE reports ADD COLUMN notify_target TEXT NOT NULL DEFAULT 'none'"),
+            ("sanction_user_id", "ALTER TABLE reports ADD COLUMN sanction_user_id INTEGER"),
+            ("sanction_type", "ALTER TABLE reports ADD COLUMN sanction_type TEXT NOT NULL DEFAULT 'none'"),
+            ("sanction_duration_minutes", "ALTER TABLE reports ADD COLUMN sanction_duration_minutes INTEGER"),
+        ]
+        for col_name, sql in report_migrations:
+            ensure_column("reports", col_name, sql)
 
-        if "created_at" not in existing_rating_cols:
-            try:
-                cursor.execute("ALTER TABLE ratings ADD COLUMN created_at TEXT")
-            except Exception:
-                pass
+        ensure_column("ratings", "created_at", "ALTER TABLE ratings ADD COLUMN created_at TEXT")
 
-        cursor.execute("PRAGMA table_info(portfolio_items)")
-        existing_portfolio_cols = [row[1] for row in cursor.fetchall()]
         portfolio_migrations = [
             ("file_url", "ALTER TABLE portfolio_items ADD COLUMN file_url TEXT DEFAULT ''"),
             ("file_name", "ALTER TABLE portfolio_items ADD COLUMN file_name TEXT DEFAULT ''"),
         ]
         for col_name, sql in portfolio_migrations:
-            if col_name not in existing_portfolio_cols:
-                try:
-                    cursor.execute(sql)
-                except Exception:
-                    pass
+            ensure_column("portfolio_items", col_name, sql)
 
         # Database Indexes
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_rating ON users(average_rating DESC);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_user_status ON jobs(user_id, status);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_worker_status ON jobs(worker_id, status);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_service ON jobs(service_id);")
@@ -687,6 +731,10 @@ class DB:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_ratings_job ON ratings(job_id);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read, created_at);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status, created_at);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_saved_searches_user_updated ON saved_searches(user_id, updated_at DESC, id DESC);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_recently_viewed_user_viewed ON recently_viewed(user_id, viewed_at DESC, id DESC);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_job_services_service_job ON job_services(service_id, job_id);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_location_status_created ON jobs(location, status, created_at DESC, id DESC);")
 
         conn.commit()
         conn.close()
@@ -1141,9 +1189,18 @@ def enforce_block(block_type):
     block = _active_block_row(request.uid, "full") or _active_block_row(request.uid, block_type)
     if not block:
         return None
-    expiry = "muddatsiz" if not block[6] else block[6]
+    expiry = "muddatsiz"
+    if block[6]:
+        try:
+            expiry_dt = datetime.datetime.fromisoformat(str(block[6]).replace("Z", "+00:00"))
+            if expiry_dt.tzinfo is None:
+                expiry_dt = expiry_dt.replace(tzinfo=datetime.timezone.utc)
+            expiry_dt = expiry_dt.astimezone(datetime.timezone(datetime.timedelta(hours=5)))
+            expiry = expiry_dt.strftime("%d.%m.%Y, %H:%M")
+        except (TypeError, ValueError):
+            expiry = "aniqlanmagan"
     return jsonify({
-        "msg": f"{BLOCK_TYPE_LABELS.get(block[2], block[2])} mavjud. Sabab: {block[3]}. Tugash vaqti: {expiry}.",
+        "msg": f"{BLOCK_TYPE_LABELS.get(block[2], block[2])} mavjud. Sabab: {block[3]}. Tugash vaqti: {expiry} (Toshkent vaqti).",
         "blocked": True,
         "block_type": block[2],
         "block_id": block[0],
@@ -1191,6 +1248,416 @@ def notify_matching_users(job_id, job_title, creator_id):
         if matched:
             create_notification(user_id, "matching_job", "Sizga mos yangi ish", f"Sizning sohalaringizga mos yangi ish yaratildi: {job_title}", "/jobs")
 
+
+def _verification_payload(user_id):
+    row = db.q(
+        """SELECT email_verified, phone_verified, identity_verified, auth_provider, verification_updated_at
+           FROM users WHERE id=?""",
+        (user_id,),
+    ).fetchone()
+    if not row:
+        return {
+            "email_verified": False,
+            "phone_verified": False,
+            "identity_verified": False,
+            "badges": [],
+            "updated_at": "",
+        }
+    email_verified = bool(row[0])
+    phone_verified = bool(row[1])
+    identity_verified = bool(row[2])
+    badges = []
+    if email_verified:
+        badges.append({"key": "email_verified", "label": "Email tasdiqlangan", "description": "Elektron pochta manzili tasdiqlangan."})
+    if phone_verified:
+        badges.append({"key": "phone_verified", "label": "Telefon tasdiqlangan", "description": "Telefon raqami administrator tomonidan tasdiqlangan."})
+    if identity_verified:
+        badges.append({"key": "identity_verified", "label": "Shaxs tasdiqlangan", "description": "Shaxsni tasdiqlash jarayoni administrator tomonidan yakunlangan."})
+    return {
+        "email_verified": email_verified,
+        "phone_verified": phone_verified,
+        "identity_verified": identity_verified,
+        "badges": badges,
+        "updated_at": row[4] or "",
+    }
+
+
+def _reputation_payload(user_id):
+    rating = db.q(
+        "SELECT AVG(score), COUNT(*) FROM ratings WHERE to_user=?",
+        (user_id,),
+    ).fetchone()
+    average_rating = round(float(rating[0]), 1) if rating and rating[0] is not None else 0.0
+    reviews_count = int(rating[1] or 0) if rating else 0
+    worker_jobs = int(db.q("SELECT COUNT(*) FROM jobs WHERE worker_id=?", (user_id,)).fetchone()[0] or 0)
+    completed_worker_jobs = int(db.q(
+        "SELECT COUNT(*) FROM jobs WHERE worker_id=? AND status='finished'", (user_id,)
+    ).fetchone()[0] or 0)
+    client_jobs = int(db.q("SELECT COUNT(*) FROM jobs WHERE user_id=?", (user_id,)).fetchone()[0] or 0)
+    completed_client_jobs = int(db.q(
+        "SELECT COUNT(*) FROM jobs WHERE user_id=? AND status='finished'", (user_id,)
+    ).fetchone()[0] or 0)
+    success_rate = round((completed_worker_jobs / worker_jobs) * 100, 1) if worker_jobs else 0.0
+    badges = []
+    if completed_worker_jobs >= 20:
+        badges.append({"key": "experienced", "label": "Tajribali", "description": "20 yoki undan ko‘p ishni muvaffaqiyatli yakunlagan."})
+    if completed_worker_jobs >= 10 and success_rate >= 90:
+        badges.append({"key": "top_provider", "label": "Top Provider", "description": "Kamida 10 ta ish va 90% yoki undan yuqori success rate."})
+    if reviews_count >= 5 and average_rating >= 4.5:
+        badges.append({"key": "trusted", "label": "Ishonchli", "description": "Kamida 5 ta sharh va 4.5+ o‘rtacha reyting."})
+    return {
+        "average_rating": average_rating,
+        "reviews_count": reviews_count,
+        "worker_jobs": worker_jobs,
+        "completed_worker_jobs": completed_worker_jobs,
+        "client_jobs": client_jobs,
+        "completed_client_jobs": completed_client_jobs,
+        "success_rate": success_rate,
+        "badges": badges,
+    }
+
+
+@app.route("/verification", methods=["GET"])
+@auth
+def get_verification():
+    return jsonify(_verification_payload(request.uid))
+
+
+@app.route("/admin/user/<int:user_id>/verification", methods=["PATCH"])
+@admin_required
+def update_user_verification(user_id):
+    data = request.json or {}
+    target = db.q("SELECT id FROM users WHERE id=?", (user_id,)).fetchone()
+    if not target:
+        return jsonify({"msg": "Foydalanuvchi topilmadi"}), 404
+    allowed = {"email_verified", "phone_verified", "identity_verified"}
+    supplied = [key for key in allowed if key in data]
+    if not supplied:
+        return jsonify({"msg": "Tasdiqlash maydoni kiritilmagan"}), 400
+    if any(type(data[key]) is not bool for key in supplied):
+        return jsonify({"msg": "Tasdiqlash holatlari true yoki false boolean bo‘lishi kerak"}), 400
+    updates = {key: data[key] for key in supplied}
+    assignments = ", ".join(f"{key}=?" for key in updates)
+    values = [int(value) for value in updates.values()]
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    values.extend([now, user_id])
+    db.q(
+        f"UPDATE users SET {assignments}, verification_updated_at=? WHERE id=?",
+        tuple(values),
+    ).close()
+    admin_audit("verification_update", "user", user_id, json.dumps(updates, ensure_ascii=False))
+    return jsonify({"msg": "Tasdiqlash holati yangilandi", **_verification_payload(user_id)})
+
+
+@app.route("/reputation", methods=["GET"])
+@auth
+def get_my_reputation():
+    return jsonify(_reputation_payload(request.uid))
+
+
+@app.route("/disputes/eligible-jobs", methods=["GET"])
+@auth
+def eligible_dispute_jobs():
+    requested_job_id = request.args.get("job_id", "").strip()
+    if requested_job_id and not requested_job_id.isdigit():
+        return jsonify({"msg": "Ish identifikatori noto‘g‘ri", "items": []}), 400
+
+    query = """SELECT j.id,j.title,j.status,j.user_id,j.worker_id
+               FROM jobs j
+               WHERE j.worker_id IS NOT NULL
+                 AND (j.user_id=? OR j.worker_id=?)
+                 AND j.status IN ('payment_pending','accepted','pending_finish','finished')
+                 AND NOT EXISTS (
+                     SELECT 1 FROM disputes d
+                     WHERE d.job_id=j.id AND d.status IN ('open','reviewing')
+                 )"""
+    params = [request.uid, request.uid]
+    if requested_job_id:
+        query += " AND j.id=?"
+        params.append(int(requested_job_id))
+    query += " ORDER BY j.id DESC"
+    if not requested_job_id:
+        query += " LIMIT 200"
+
+    rows = db.q(query, tuple(params)).fetchall()
+    return jsonify({"items": [{
+        "id": row[0], "title": row[1], "status": row[2],
+        "user_id": row[3], "worker_id": row[4],
+    } for row in rows]})
+
+
+@app.route("/disputes", methods=["GET", "POST"])
+@auth
+def disputes():
+    if request.method == "GET":
+        rows_data = db.q(
+            """SELECT d.id,d.job_id,d.opened_by,d.against_user_id,d.category,d.description,d.evidence,
+                      d.status,d.admin_response,d.created_at,d.updated_at,d.resolved_at,
+                      j.title,j.status,ou.username,au.username
+               FROM disputes d
+               JOIN jobs j ON j.id=d.job_id
+               LEFT JOIN users ou ON ou.id=d.opened_by
+               LEFT JOIN users au ON au.id=d.against_user_id
+               WHERE (d.opened_by=? OR d.against_user_id=?)
+                 AND d.status IN ('open','reviewing')
+               ORDER BY d.id DESC LIMIT 100""",
+            (request.uid, request.uid),
+        ).fetchall()
+        return jsonify([{
+            "id": row[0], "job_id": row[1], "opened_by": row[2], "against_user_id": row[3],
+            "category": row[4], "description": row[5], "evidence": row[6] or "",
+            "status": row[7], "admin_response": row[8] or "", "created_at": row[9],
+            "updated_at": row[10], "resolved_at": row[11], "job_title": row[12] or "",
+            "job_status": row[13] or "", "opened_by_username": row[14] or "",
+            "against_username": row[15] or "",
+        } for row in rows_data])
+
+    data = request.json or {}
+    try:
+        job_id = int(data.get("job_id"))
+    except (TypeError, ValueError):
+        return jsonify({"msg": "Ish identifikatori noto‘g‘ri"}), 400
+    category = str(data.get("category", "")).strip()
+    description = str(data.get("description", "")).strip()
+    evidence = str(data.get("evidence", "")).strip()
+    if category not in {"payment", "quality", "deadline", "communication", "other"}:
+        return jsonify({"msg": "Nizo kategoriyasi noto‘g‘ri"}), 400
+    if not description or len(description) > 3000:
+        return jsonify({"msg": "Nizo tavsifi 1–3000 belgidan iborat bo‘lishi kerak"}), 400
+    if len(evidence) > 3000:
+        return jsonify({"msg": "Dalillar 3000 belgidan oshmasligi kerak"}), 400
+
+    job = db.q("SELECT user_id,worker_id,status,title FROM jobs WHERE id=?", (job_id,)).fetchone()
+    if not job:
+        return jsonify({"msg": "Ish topilmadi"}), 404
+    owner_id, worker_id, job_status, job_title = job
+    if not worker_id or request.uid not in (owner_id, worker_id):
+        return jsonify({"msg": "Faqat ish ishtirokchilari nizo ochishi mumkin"}), 403
+    if job_status not in ("payment_pending", "accepted", "pending_finish", "finished"):
+        return jsonify({"msg": "Bu ish holatida nizo ochish mumkin emas"}), 400
+    existing = db.q(
+        "SELECT id FROM disputes WHERE job_id=? AND status IN ('open','reviewing')",
+        (job_id,),
+    ).fetchone()
+    if existing:
+        return jsonify({"msg": "Bu ish bo‘yicha allaqachon ochiq nizo mavjud", "dispute_id": existing[0]}), 409
+
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    against_user = worker_id if request.uid == owner_id else owner_id
+    result = db.q(
+        """INSERT INTO disputes(job_id,opened_by,against_user_id,category,description,evidence,status,created_at,updated_at)
+           VALUES(?,?,?,?,?,?, 'open', ?, ?)""",
+        (job_id, request.uid, against_user, category, description, evidence, now, now),
+    )
+    dispute_id = result.lastrowid
+    result.close()
+    for admin in db.q("SELECT id FROM users WHERE role='admin'").fetchall():
+        create_notification(
+            admin[0],
+            "dispute",
+            "Yangi nizo",
+            f"{job_title}: yangi nizo ochildi.",
+            "/disputes",
+        )
+    return jsonify({"msg": "Nizo muvaffaqiyatli ochildi", "id": dispute_id}), 201
+
+
+@app.route("/admin/disputes")
+@admin_required
+def admin_disputes():
+    rows_data = db.q(
+        """SELECT d.id,d.job_id,d.opened_by,d.against_user_id,d.category,d.description,d.evidence,
+                  d.status,d.admin_response,d.created_at,d.updated_at,d.resolved_at,
+                  j.title,ou.username,au.username,d.decision,d.decision_for_user_id,
+                  d.payment_action,d.job_action,d.sanction_user_id,d.sanction_type,d.sanction_duration_minutes
+           FROM disputes d
+           JOIN jobs j ON j.id=d.job_id
+           LEFT JOIN users ou ON ou.id=d.opened_by
+           LEFT JOIN users au ON au.id=d.against_user_id
+           ORDER BY CASE d.status WHEN 'open' THEN 0 WHEN 'reviewing' THEN 1 ELSE 2 END, d.id DESC
+           LIMIT 200"""
+    ).fetchall()
+    return jsonify([{
+        "id": r[0], "job_id": r[1], "opened_by": r[2], "against_user_id": r[3],
+        "category": r[4], "description": r[5], "evidence": r[6] or "",
+        "status": r[7], "admin_response": r[8] or "", "created_at": r[9],
+        "updated_at": r[10], "resolved_at": r[11], "job_title": r[12] or "",
+        "opened_by_username": r[13] or "", "against_username": r[14] or "",
+        "decision": r[15] or "", "decision_for_user_id": r[16],
+        "payment_action": r[17] or "none", "job_action": r[18] or "none",
+        "sanction_user_id": r[19], "sanction_type": r[20] or "none",
+        "sanction_duration_minutes": r[21],
+    } for r in rows_data])
+
+
+@app.route("/admin/disputes/<int:dispute_id>", methods=["PATCH"])
+@admin_required
+def update_dispute(dispute_id):
+    data = request.json or {}
+    status = str(data.get("status", "")).strip()
+    response = str(data.get("admin_response", "")).strip()
+    decision = str(data.get("decision", "")).strip().lower()
+    payment_action = str(data.get("payment_action", "none")).strip().lower()
+    job_action = str(data.get("job_action", "none")).strip().lower()
+    sanction_type = str(data.get("sanction_type", "none")).strip().lower()
+    sanction_target = str(data.get("sanction_target", "opponent")).strip().lower()
+    duration_raw = data.get("sanction_duration_minutes", "1440")
+
+    decisions = {
+        "favor_opener": "Nizo ochgan tomon foydasiga",
+        "favor_opponent": "Qarshi tomon foydasiga",
+        "mutual_agreement": "Tomonlar kelishuvi bilan",
+        "insufficient_evidence": "Dalillar yetarli emas",
+        "policy_violation": "Qoidabuzarlik aniqlandi",
+        "no_violation": "Qoidabuzarlik aniqlanmadi",
+    }
+    if status not in {"open", "reviewing", "resolved", "rejected"}:
+        return jsonify({"msg": "Nizo holati noto‘g‘ri"}), 400
+    if decision and decision not in decisions:
+        return jsonify({"msg": "Hukm turi noto‘g‘ri"}), 400
+    if payment_action not in {"none", "refund_payer", "release_to_worker"}:
+        return jsonify({"msg": "To‘lov chorasi noto‘g‘ri"}), 400
+    if job_action not in {"none", "block"}:
+        return jsonify({"msg": "Ish bo‘yicha chora noto‘g‘ri"}), 400
+    if sanction_type not in {"none", *BLOCK_TYPE_LABELS.keys()}:
+        return jsonify({"msg": "Foydalanuvchi uchun chora noto‘g‘ri"}), 400
+    if len(response) > 3000:
+        return jsonify({"msg": "Admin javobi juda uzun"}), 400
+
+    is_final = status in {"resolved", "rejected"}
+    if not is_final and (payment_action != "none" or job_action != "none" or sanction_type != "none"):
+        return jsonify({"msg": "Pul, ish yoki akkaunt bo‘yicha choralar faqat yakuniy hukmda qo‘llanadi"}), 400
+    if payment_action == "release_to_worker" and job_action == "block":
+        return jsonify({"msg": "Ishni bloklash va to‘lovni ijrochiga o‘tkazishni bir hukmda tanlab bo‘lmaydi"}), 400
+    if sanction_type != "none" and sanction_target not in {"opener", "opponent"}:
+        return jsonify({"msg": "Cheklov qo‘yiladigan tomon noto‘g‘ri"}), 400
+
+    dispute = db.q(
+        """SELECT opened_by,against_user_id,job_id,status,sanction_user_id,sanction_type
+           FROM disputes WHERE id=?""",
+        (dispute_id,),
+    ).fetchone()
+    if not dispute:
+        return jsonify({"msg": "Nizo topilmadi"}), 404
+
+    opener_id, opponent_id, job_id, old_status, previous_sanction_user_id, previous_sanction_type = dispute
+    decision_for_user_id = (
+        opener_id if decision == "favor_opener" else
+        opponent_id if decision == "favor_opponent" else None
+    )
+
+    sanction_user_id = None
+    sanction_duration = None
+    prior_sanction_exists = False
+    if sanction_type != "none":
+        sanction_user_id = opener_id if sanction_target == "opener" else opponent_id
+        if sanction_user_id == int(request.uid):
+            return jsonify({"msg": "O‘zingizga cheklov qo‘ya olmaysiz"}), 400
+        target = db.q("SELECT role FROM users WHERE id=?", (sanction_user_id,)).fetchone()
+        if not target:
+            return jsonify({"msg": "Cheklov qo‘yiladigan foydalanuvchi topilmadi"}), 404
+        if target[0] == "admin":
+            return jsonify({"msg": "Administrator hisobini nizo orqali bloklab bo‘lmaydi"}), 400
+        if duration_raw not in (None, "", "null", "0", 0):
+            try:
+                sanction_duration = int(duration_raw)
+            except (TypeError, ValueError):
+                return jsonify({"msg": "Cheklov muddati noto‘g‘ri"}), 400
+            if sanction_duration < 1 or sanction_duration > 525600:
+                return jsonify({"msg": "Cheklov muddati 1 daqiqadan 365 kungacha bo‘lishi kerak"}), 400
+
+        existing_block = _active_block_row(sanction_user_id, sanction_type)
+        if existing_block:
+            prior_sanction_exists = (
+                previous_sanction_user_id == sanction_user_id and
+                previous_sanction_type == sanction_type
+            )
+            if not prior_sanction_exists:
+                return jsonify({"msg": "Bu foydalanuvchida ushbu turdagi faol cheklov allaqachon mavjud"}), 409
+
+    # Apply a requested escrow decision first, so a failed payment action never records a false ruling.
+    if payment_action != "none":
+        payment_handler = (
+            app.config.get("FINJOB_REFUND_PAYMENT") if payment_action == "refund_payer"
+            else app.config.get("FINJOB_RELEASE_PAYMENT")
+        )
+        if not payment_handler:
+            return jsonify({"msg": "To‘lov amali hozir mavjud emas"}), 503
+        payment_ok, payment_message, payment_data = payment_handler(job_id)
+        if not payment_ok:
+            return jsonify({"msg": payment_message or "To‘lov bo‘yicha chora bajarilmadi"}), 400
+
+    if job_action == "block":
+        db.q(
+            "UPDATE jobs SET status='blocked', finished_at=NULL, owner_finished=0, worker_finished=0 WHERE id=?",
+            (job_id,),
+        ).close()
+
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    expires_at = None
+    if sanction_type != "none" and sanction_user_id and not prior_sanction_exists:
+        expires_at = (
+            datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=sanction_duration)
+        ).isoformat() if sanction_duration else None
+        block_result = db.q(
+            """INSERT INTO user_blocks(user_id,block_type,reason,duration_minutes,created_at,expires_at,active,created_by)
+               VALUES(?,?,?,?,?,?,1,?)""",
+            (sanction_user_id, sanction_type, f"Nizo #{dispute_id}: {response}"[:2000],
+             sanction_duration, now, expires_at, request.uid),
+        )
+        block_id = block_result.lastrowid
+        block_result.close()
+        if sanction_type == "full":
+            db.q("UPDATE users SET is_blocked=1 WHERE id=?", (sanction_user_id,)).close()
+        deadline = "muddatsiz" if not expires_at else expires_at
+        create_notification(
+            sanction_user_id, "account_moderation", "Hisobingizga cheklov qo‘yildi",
+            f"Nizo #{dispute_id} bo‘yicha {BLOCK_TYPE_LABELS[sanction_type]} qo‘yildi. Sabab: {response}. Muddati: {deadline}.",
+            "/appeals",
+        )
+
+    db.q(
+        """UPDATE disputes SET status=?,admin_response=?,updated_at=?,resolved_at=?,resolved_by=?,
+                  decision=?,decision_for_user_id=?,payment_action=?,job_action=?,
+                  sanction_user_id=?,sanction_type=?,sanction_duration_minutes=?
+           WHERE id=?""",
+        (
+            status, response, now, now if is_final else None, request.uid if is_final else None,
+            decision, decision_for_user_id, payment_action, job_action,
+            sanction_user_id, sanction_type, sanction_duration, dispute_id,
+        ),
+    ).close()
+
+    if is_final:
+        title = "Nizo bo‘yicha yakuniy qaror"
+        parts = []
+        if decision:
+            parts.append(f"Hukm: {decisions[decision]}.")
+        if response:
+            parts.append(response)
+        if payment_action == "refund_payer":
+            parts.append("To‘lov buyurtmachiga qaytarildi.")
+        elif payment_action == "release_to_worker":
+            parts.append("To‘lov ijrochiga o‘tkazildi.")
+        if job_action == "block":
+            parts.append("Ish bloklandi.")
+        if sanction_type != "none":
+            parts.append(f"{BLOCK_TYPE_LABELS[sanction_type]} qo‘llandi.")
+        notice_message = " ".join(parts) or "Administrator nizo bo‘yicha qaror chiqardi."
+        for uid in {opener_id, opponent_id}:
+            create_notification(uid, "dispute_update", title, notice_message, "/disputes")
+
+    audit_parts = [f"status={status}", f"decision={decision or 'not_set'}",
+                   f"payment={payment_action}", f"job={job_action}"]
+    if sanction_type != "none":
+        audit_parts.append(f"sanction={sanction_type}; target={sanction_user_id}; minutes={sanction_duration}")
+    admin_audit("dispute_decision", "dispute", dispute_id, "; ".join(audit_parts))
+    return jsonify({
+        "msg": "Nizo bo‘yicha hukm va tanlangan choralar saqlandi.",
+        "status": status, "decision": decision, "payment_action": payment_action,
+        "job_action": job_action, "sanction_type": sanction_type,
+        "sanction_user_id": sanction_user_id,
+    })
 
 register_payment_routes(app, db, auth, admin_required, create_notification, admin_audit, enforce_block)
 
@@ -1288,71 +1755,250 @@ def create_report():
 @app.route("/admin/report/<int:report_id>", methods=["PATCH"])
 @admin_required
 def update_report(report_id):
-    status=(request.json or {}).get("status")
-    if status not in ("open","reviewing","resolved","rejected"):
-        return jsonify({"msg":"Report holati noto‘g‘ri"}),400
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"msg": "Shikoyat ma’lumoti JSON obyektida yuborilishi kerak"}), 400
+    status = str(data.get("status", "")).strip().lower()
+    response = str(data.get("admin_response", "")).strip()
+    decision = str(data.get("decision", "")).strip().lower()
+    payment_action = str(data.get("payment_action", "none")).strip().lower()
+    job_action = str(data.get("job_action", "none")).strip().lower()
+    notify_target = str(data.get("notify_target", "none")).strip().lower()
+    sanction_target = str(data.get("sanction_target", "reported")).strip().lower()
+    sanction_type = str(data.get("sanction_type", "none")).strip().lower()
+    duration_raw = data.get("sanction_duration_minutes", 1440)
+    rich_review = any(key in data for key in (
+        "admin_response", "decision", "payment_action", "job_action",
+        "notify_target", "sanction_target", "sanction_type", "sanction_duration_minutes"
+    ))
 
-    report=db.q(
-        "SELECT reporter_id, reported_user_id, job_id, message_id, status FROM reports WHERE id=?",
+    if status not in ("open", "reviewing", "resolved", "rejected"):
+        return jsonify({"msg": "Shikoyat holati noto‘g‘ri"}), 400
+
+    report = db.q(
+        """SELECT reporter_id,reported_user_id,job_id,message_id,status,
+                  payment_action,job_action,notify_target,sanction_user_id,sanction_type,sanction_duration_minutes
+           FROM reports WHERE id=?""",
         (report_id,)
     ).fetchone()
     if not report:
-        return jsonify({"msg":"Shikoyat topilmadi"}),404
+        return jsonify({"msg": "Shikoyat topilmadi"}), 404
 
-    reporter_id, reported_user_id, job_id, message_id, old_status = report
-    result=db.q("UPDATE reports SET status=? WHERE id=?",(status,report_id))
-    if result.rowcount!=1:
+    (reporter_id, reported_user_id, job_id, message_id, old_status,
+     old_payment_action, old_job_action, old_notify_target, old_sanction_user_id,
+     old_sanction_type, old_sanction_duration) = report
+    old_payment_action = str(old_payment_action or "none")
+    old_job_action = str(old_job_action or "none")
+    old_notify_target = str(old_notify_target or "none")
+    old_sanction_type = str(old_sanction_type or "none")
+    old_is_final = old_status in ("resolved", "rejected")
+    old_has_recorded_actions = (
+        old_payment_action != "none"
+        or old_job_action != "none"
+        or old_notify_target != "none"
+        or old_sanction_type != "none"
+    )
+    if old_is_final and status != old_status and old_has_recorded_actions:
+        return jsonify({
+            "msg": "Yakuniy shikoyatda bajarilgan to‘lov yoki moderatsiya choralarini oddiy tahrir bilan almashtirib bo‘lmaydi. Amaldagi chora alohida bo‘limda boshqariladi."
+        }), 409
+    editing_final = old_is_final and status == old_status
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+    # Legacy clients that only send status keep the former reviewed/refund/block behavior.
+    if not rich_review:
+        result = db.q("UPDATE reports SET status=? WHERE id=?", (status, report_id))
+        if result.rowcount != 1:
+            result.close()
+            return jsonify({"msg": "Shikoyat topilmadi"}), 404
         result.close()
-        return jsonify({"msg":"Shikoyat topilmadi"}),404
-    result.close()
-
-    if status in ("resolved", "rejected") and old_status != status:
-        if status == "resolved":
-            if job_id and not message_id:
-                refund_payment = app.config.get("FINJOB_REFUND_PAYMENT")
-                if refund_payment:
-                    refund_ok, refund_message, refund_data = refund_payment(job_id)
-                    if not refund_ok and refund_message not in ("Faqat waiting holatidagi to‘lovni refund qilish mumkin",):
-                        db.q("UPDATE reports SET status=? WHERE id=?", (old_status, report_id)).close()
-                        return jsonify({"msg": refund_message}), 400
-                db.q(
-                    "UPDATE jobs SET status='blocked', finished_at=NULL, owner_finished=0, worker_finished=0 WHERE id=?",
-                    (job_id,)
-                ).close()
-
-            create_notification(
-                reporter_id,
-                "report_resolved",
-                "Shikoyat hal qilindi",
-                "Siz yuborgan shikoyat admin tomonidan ko‘rib chiqildi va ish bloklandi.",
-                "/jobs"
+        if status in ("resolved", "rejected") and old_status != status:
+            if status == "resolved":
+                if job_id and not message_id:
+                    refund_payment = app.config.get("FINJOB_REFUND_PAYMENT")
+                    if refund_payment:
+                        refund_ok, refund_message, _ = refund_payment(job_id)
+                        if not refund_ok and refund_message not in ("Faqat waiting holatidagi to‘lovni refund qilish mumkin",):
+                            db.q("UPDATE reports SET status=? WHERE id=?", (old_status, report_id)).close()
+                            return jsonify({"msg": refund_message}), 400
+                    db.q(
+                        "UPDATE jobs SET status='blocked', finished_at=NULL, owner_finished=0, worker_finished=0 WHERE id=?",
+                        (job_id,)
+                    ).close()
+            title = "Shikoyat hal qilindi" if status == "resolved" else "Shikoyat rad etildi"
+            message = (
+                "Administrator shikoyatni ko‘rib chiqdi. Ish bo‘yicha chora ko‘rildi."
+                if status == "resolved" else "Administrator shikoyatni ko‘rib chiqdi va rad etdi."
             )
-            create_notification(
-                reported_user_id,
-                "report_resolved",
-                "Shikoyat bo‘yicha qaror",
-                "Siz qatnashgan ish bo‘yicha shikoyat admin tomonidan ko‘rib chiqildi va ish bloklandi.",
-                "/jobs"
-            )
-        else:
-            create_notification(
-                reporter_id,
-                "report_rejected",
-                "Shikoyat rad etildi",
-                "Siz yuborgan shikoyat admin tomonidan ko‘rib chiqildi va rad etildi.",
-                "/jobs"
-            )
-            create_notification(
-                reported_user_id,
-                "report_rejected",
-                "Shikoyat rad etildi",
-                "Siz qatnashgan ish bo‘yicha berilgan shikoyat admin tomonidan rad etildi.",
-                "/jobs"
-            )
+            for uid in {reporter_id, reported_user_id} - {None}:
+                create_notification(uid, "report_update", title, message, "/jobs")
+        admin_audit("report_status_update", "report", report_id, f"status={status}; legacy")
+        return jsonify({"msg": "Shikoyat holati yangilandi", "status": status})
 
-    admin_audit("report_status_update","report",report_id,f"status={status}")
-    return jsonify({"msg":"Shikoyat holati yangilandi","status":status})
+    decisions = {
+        "violation", "no_violation", "insufficient_evidence", "duplicate", "mistake", "other"
+    }
+    if decision and decision not in decisions:
+        return jsonify({"msg": "Shikoyat hukmi noto‘g‘ri"}), 400
+    if payment_action not in {"none", "refund_payer", "release_to_worker"}:
+        return jsonify({"msg": "To‘lov chorasi noto‘g‘ri"}), 400
+    if job_action not in {"none", "block"}:
+        return jsonify({"msg": "Ish chorasi noto‘g‘ri"}), 400
+    if notify_target not in {"none", "reporter", "reported", "both"}:
+        return jsonify({"msg": "Ogohlantirish oluvchisi noto‘g‘ri"}), 400
+    if sanction_type not in {"none", *BLOCK_TYPE_LABELS.keys()}:
+        return jsonify({"msg": "Foydalanuvchi chorasi noto‘g‘ri"}), 400
+    if len(response) > 3000:
+        return jsonify({"msg": "Admin izohi 3000 belgidan oshmasligi kerak"}), 400
 
+    is_final = status in ("resolved", "rejected")
+    has_actions = payment_action != "none" or job_action != "none" or sanction_type != "none" or notify_target != "none"
+    if is_final and (not decision or not response):
+        return jsonify({"msg": "Yakuniy shikoyat qarori uchun hukm va asoslangan admin izohi majburiy"}), 400
+    if not is_final and has_actions:
+        return jsonify({"msg": "Shikoyat choralarini yakuniy qaror bilan birga qo‘llang"}), 400
+    if job_action == "block" and not job_id:
+        return jsonify({"msg": "Bu shikoyatga bog‘langan ish yo‘q"}), 400
+    if job_action == "block" and payment_action == "release_to_worker":
+        return jsonify({"msg": "Ishni bloklash va pulni ijrochiga o‘tkazish bir vaqtda mumkin emas"}), 400
+    if payment_action != "none" and (not job_id or message_id):
+        return jsonify({"msg": "To‘lov amali faqat ish bo‘yicha shikoyatlarda mumkin"}), 400
+    if notify_target in {"reporter", "both"} and not reporter_id:
+        return jsonify({"msg": "Shikoyat yuboruvchisi topilmadi"}), 404
+    if notify_target in {"reported", "both"} and not reported_user_id:
+        return jsonify({"msg": "Shikoyat qilingan foydalanuvchi topilmadi"}), 404
+    if sanction_type != "none" and sanction_target not in {"reporter", "reported"}:
+        return jsonify({"msg": "Cheklov oluvchisi noto‘g‘ri"}), 400
+
+    sanction_user_id = None
+    sanction_duration = None
+    existing_sanction = None
+    if sanction_type != "none":
+        sanction_user_id = reporter_id if sanction_target == "reporter" else reported_user_id
+        if not sanction_user_id:
+            return jsonify({"msg": "Cheklov oluvchisi topilmadi"}), 404
+        if int(sanction_user_id) == int(request.uid):
+            return jsonify({"msg": "O‘zingizga cheklov qo‘ya olmaysiz"}), 400
+        target = db.q("SELECT role FROM users WHERE id=?", (sanction_user_id,)).fetchone()
+        if not target:
+            return jsonify({"msg": "Cheklov oluvchisi topilmadi"}), 404
+        if target[0] == "admin":
+            return jsonify({"msg": "Administrator hisobiga cheklov qo‘yib bo‘lmaydi"}), 400
+        if duration_raw not in (None, "", "null", "0", 0):
+            try:
+                sanction_duration = int(duration_raw)
+            except (TypeError, ValueError):
+                return jsonify({"msg": "Cheklov muddati noto‘g‘ri"}), 400
+            if sanction_duration < 1 or sanction_duration > 525600:
+                return jsonify({"msg": "Cheklov muddati 1 daqiqadan 365 kungacha bo‘lishi kerak"}), 400
+        existing_sanction = _active_block_row(sanction_user_id, sanction_type)
+        if existing_sanction and not editing_final:
+            return jsonify({"msg": "Bu turdagi faol cheklov allaqachon mavjud"}), 409
+
+    if editing_final:
+        same_actions = (
+            payment_action == old_payment_action
+            and job_action == old_job_action
+            and notify_target == old_notify_target
+            and sanction_type == old_sanction_type
+        )
+        same_sanction = (
+            sanction_type == "none"
+            or (
+                int(sanction_user_id or 0) == int(old_sanction_user_id or 0)
+                and sanction_duration == old_sanction_duration
+            )
+        )
+        if not same_actions or not same_sanction:
+            return jsonify({
+                "msg": "Bu shikoyat uchun yakuniy choralar allaqachon bajarilgan. Izoh va hukm matnini tahrirlashingiz mumkin, lekin bajarilgan to‘lov/cheklov amallarini bu oynadan qayta almashtirib bo‘lmaydi."
+            }), 409
+
+    if payment_action != "none" and not editing_final:
+        payment_handler = (
+            app.config.get("FINJOB_REFUND_PAYMENT") if payment_action == "refund_payer"
+            else app.config.get("FINJOB_RELEASE_PAYMENT")
+        )
+        if not payment_handler:
+            return jsonify({"msg": "To‘lov amali hozir mavjud emas"}), 503
+        payment_ok, payment_message, _ = payment_handler(job_id)
+        if not payment_ok:
+            return jsonify({"msg": payment_message or "To‘lov chorasi bajarilmadi"}), 400
+
+    if job_action == "block" and not editing_final:
+        held = db.q("SELECT id FROM payments WHERE job_id=? AND status='held' LIMIT 1", (job_id,)).fetchone()
+        if held:
+            return jsonify({"msg": "Ishda escrow to‘lovi bor. Avval pulni qaytarish yoki to‘lovni alohida hal qilish kerak."}), 409
+        db.q(
+            "UPDATE jobs SET status='blocked',finished_at=NULL,owner_finished=0,worker_finished=0 WHERE id=?",
+            (job_id,)
+        ).close()
+
+    if sanction_type != "none" and not editing_final:
+        block_now = datetime.datetime.now(datetime.timezone.utc)
+        expires_at = (block_now + datetime.timedelta(minutes=sanction_duration)).isoformat() if sanction_duration else None
+        block_result = db.q(
+            """INSERT INTO user_blocks(user_id,block_type,reason,duration_minutes,created_at,expires_at,active,created_by)
+               VALUES(?,?,?,?,?,?,1,?)""",
+            (sanction_user_id, sanction_type, f"Shikoyat #{report_id}: {response}"[:2000],
+             sanction_duration, block_now.isoformat(), expires_at, request.uid)
+        )
+        block_result.close()
+        if sanction_type == "full":
+            db.q("UPDATE users SET is_blocked=1 WHERE id=?", (sanction_user_id,)).close()
+        create_notification(
+            sanction_user_id, "account_moderation", "Hisobingizga cheklov qo‘yildi",
+            f"Shikoyat #{report_id} bo‘yicha {BLOCK_TYPE_LABELS[sanction_type]} qo‘llandi. Sabab: {response}.",
+            "/appeals"
+        )
+
+    db.q(
+        """UPDATE reports SET status=?,admin_response=?,decision=?,payment_action=?,job_action=?,
+                  notify_target=?,sanction_user_id=?,sanction_type=?,sanction_duration_minutes=?
+           WHERE id=?""",
+        (status, response, decision, payment_action, job_action, notify_target,
+         sanction_user_id, sanction_type, sanction_duration, report_id)
+    ).close()
+
+    if is_final and not editing_final:
+        effects = []
+        if payment_action == "refund_payer":
+            effects.append("Escrowdagi to‘lov buyurtmachiga qaytarildi.")
+        elif payment_action == "release_to_worker":
+            effects.append("Escrowdagi to‘lov ijrochiga o‘tkazildi.")
+        if job_action == "block":
+            effects.append("Ish bloklandi.")
+        if sanction_type != "none":
+            effects.append(f"{BLOCK_TYPE_LABELS[sanction_type]} qo‘llandi.")
+        summary = f"Shikoyat #{report_id} bo‘yicha qaror: {decision}. {response} " + " ".join(effects)
+        title = "Shikoyat bo‘yicha yakuniy qaror"
+        for uid in {reporter_id, reported_user_id} - {None}:
+            create_notification(uid, "report_update", title, summary.strip(), "/jobs")
+    if notify_target != "none" and not editing_final:
+        target_ids = []
+        if notify_target in {"reporter", "both"} and reporter_id:
+            target_ids.append(reporter_id)
+        if notify_target in {"reported", "both"} and reported_user_id:
+            target_ids.append(reported_user_id)
+        for uid in set(target_ids):
+            create_notification(uid, "report_warning", "Shikoyat bo‘yicha ogohlantirish",
+                                response, "/jobs")
+
+    admin_audit(
+        "report_decision_amended" if editing_final else "report_decision",
+        "report", report_id,
+        f"status={status}; decision={decision}; payment={payment_action}; job={job_action}; "
+        f"notify={notify_target}; sanction={sanction_type}:{sanction_user_id}"
+    )
+    return jsonify({
+        "msg": (
+            "Shikoyat matni va hukmi yangilandi; avval bajarilgan choralar takrorlanmadi."
+            if editing_final else "Shikoyat bo‘yicha qaror va tanlangan choralar saqlandi."
+        ),
+        "status": status, "decision": decision, "payment_action": payment_action,
+        "job_action": job_action, "notify_target": notify_target,
+        "sanction_type": sanction_type, "sanction_user_id": sanction_user_id
+    })
 
 @app.route("/admin/user/<int:user_id>/blocks")
 @admin_required
@@ -1386,7 +2032,7 @@ def admin_blocks():
         where.append("b.active=0")
     clause=" WHERE "+" AND ".join(where) if where else ""
     items=db.q(
-        f"""SELECT b.id,b.user_id,u.username,b.block_type,b.reason,b.created_at,b.expires_at,b.active,
+        f"""SELECT b.id,b.user_id,u.username,b.block_type,b.reason,b.duration_minutes,b.created_at,b.expires_at,b.active,
                    a.username
             FROM user_blocks b
             JOIN users u ON u.id=b.user_id
@@ -1396,7 +2042,7 @@ def admin_blocks():
     ).fetchall()
     return jsonify({"items":[
         {"id":x[0],"user_id":x[1],"username":x[2],"block_type":x[3],"block_label":BLOCK_TYPE_LABELS.get(x[3],x[3]),
-         "reason":x[4],"created_at":x[5],"expires_at":x[6],"active":bool(x[7]),"admin_username":x[8] or "—"}
+         "reason":x[4],"duration_minutes":x[5],"created_at":x[6],"expires_at":x[7],"active":bool(x[8]),"admin_username":x[9] or "—"}
         for x in items
     ]})
 
@@ -1453,18 +2099,40 @@ def admin_update_block(block_id):
     block=db.q("SELECT id,user_id,block_type,active FROM user_blocks WHERE id=?",(block_id,)).fetchone()
     if not block:
         return jsonify({"msg":"Block topilmadi"}),404
-    action=str((request.json or {}).get("action","")).strip().lower()
-    if action!="lift":
-        return jsonify({"msg":"Faqat lift amali qo‘llab-quvvatlanadi"}),400
+    data = request.json or {}
+    action = str(data.get("action", "")).strip().lower()
     if not block[3]:
-        return jsonify({"msg":"Block allaqachon olib tashlangan"}),409
-    now=datetime.datetime.now(datetime.timezone.utc).isoformat()
+        return jsonify({"msg": "Block allaqachon olib tashlangan"}), 409
+    now_dt = datetime.datetime.now(datetime.timezone.utc)
+    now = now_dt.isoformat()
+    if action == "modify":
+        try:
+            duration = int(data.get("duration_minutes"))
+        except (TypeError, ValueError):
+            return jsonify({"msg": "Muddatni daqiqalarda kiriting"}), 400
+        if duration < 1 or duration > 525600:
+            return jsonify({"msg": "Yangi muddat 1 daqiqadan 365 kungacha bo‘lishi kerak"}), 400
+        reason = str(data.get("reason", "")).strip()
+        if not reason or len(reason) > 2000:
+            return jsonify({"msg": "Yangi sabab 1–2000 belgidan iborat bo‘lishi kerak"}), 400
+        expires_at = (now_dt + datetime.timedelta(minutes=duration)).isoformat()
+        db.q("UPDATE user_blocks SET duration_minutes=?,expires_at=?,reason=? WHERE id=?",
+             (duration, expires_at, reason, block_id)).close()
+        admin_audit("user_block_modified", "user", block[1], f"block={block_id}; duration={duration}; {reason}")
+        create_notification(block[1], "account_moderation", "Cheklov muddati yangilandi",
+                            f"Cheklov muddati {duration} daqiqaga yangilandi. Sabab: {reason}", "/appeals")
+        return jsonify({"msg": "Cheklov muddati va sababi yangilandi", "expires_at": expires_at})
+    if action != "lift":
+        return jsonify({"msg": "Lift yoki modify amalini tanlang"}), 400
+    reason = str(data.get("reason", "")).strip()
+    if len(reason) > 1000:
+        return jsonify({"msg": "Sabab 1000 belgidan oshmasligi kerak"}), 400
     db.q("UPDATE user_blocks SET active=0,lifted_at=?,lifted_by=? WHERE id=?",(now,request.uid,block_id)).close()
     if block[2] == "full" and not _active_block_row(block[1], "full"):
         db.q("UPDATE users SET is_blocked=0 WHERE id=?", (block[1],)).close()
-    admin_audit("user_block_lifted","user",block[1],f"block={block_id}:{block[2]}")
+    admin_audit("user_block_lifted","user",block[1],f"block={block_id}:{block[2]}; {reason}")
     create_notification(block[1],"account_moderation","Cheklov olib tashlandi",
-                        f"{BLOCK_TYPE_LABELS.get(block[2],block[2])} administrator tomonidan olib tashlandi.","/appeals")
+                        f"{BLOCK_TYPE_LABELS.get(block[2],block[2])} administrator tomonidan olib tashlandi." + (f" Sabab: {reason}" if reason else ""),"/appeals")
     return jsonify({"msg":"Block olib tashlandi"})
 
 
@@ -1525,7 +2193,7 @@ def admin_appeals():
     search=str(request.args.get("q","")).strip()[:100]
     where=[]; params=[]
     if status!="all":
-        if status not in ("open","reviewing","approved","rejected"): return jsonify({"msg":"Appeal status noto‘g‘ri"}),400
+        if status not in ("open","reviewing","approved","rejected","modified"): return jsonify({"msg":"Appeal status noto‘g‘ri"}),400
         where.append("a.status=?"); params.append(status)
     if search:
         like=f"%{search}%"
@@ -1554,32 +2222,84 @@ def admin_appeals():
 @app.route("/admin/appeal/<int:appeal_id>", methods=["PATCH"])
 @admin_required
 def admin_review_appeal(appeal_id):
-    data=request.json or {}
-    status=str(data.get("status","")).strip().lower()
-    response=str(data.get("admin_response","")).strip()
-    if status not in ("reviewing","approved","rejected"): return jsonify({"msg":"Appeal status noto‘g‘ri"}),400
-    if len(response)>3000: return jsonify({"msg":"Admin javobi 3000 belgidan oshmasligi kerak"}),400
-    row=db.q("SELECT id,user_id,block_id,status FROM appeals WHERE id=?",(appeal_id,)).fetchone()
-    if not row: return jsonify({"msg":"Appeal topilmadi"}),404
-    if row[3] in ("approved","rejected") and status!=row[3]: return jsonify({"msg":"Yakunlangan appealni qayta o‘zgartirib bo‘lmaydi"}),409
-    now=datetime.datetime.now(datetime.timezone.utc).isoformat()
-    db.q("UPDATE appeals SET status=?,admin_response=?,reviewed_at=?,reviewed_by=? WHERE id=?",
-         (status,response if status!="reviewing" else "",now,request.uid,appeal_id)).close()
-    if status=="approved":
-        db.q("UPDATE user_blocks SET active=0,lifted_at=?,lifted_by=? WHERE id=?",(now,request.uid,row[2])).close()
+    data = request.json or {}
+    status = str(data.get("status", "")).strip().lower()
+    response = str(data.get("admin_response", "")).strip()
+    block_action = str(data.get("block_action", "")).strip().lower()
+    duration_raw = data.get("duration_minutes", 1440)
+    new_block_type = str(data.get("new_block_type", "")).strip().lower()
+
+    if status not in ("reviewing", "approved", "rejected", "modified"):
+        return jsonify({"msg": "Appeal status noto‘g‘ri"}), 400
+    if len(response) > 3000:
+        return jsonify({"msg": "Admin javobi 3000 belgidan oshmasligi kerak"}), 400
+
+    row = db.q("SELECT id,user_id,block_id,status FROM appeals WHERE id=?", (appeal_id,)).fetchone()
+    if not row:
+        return jsonify({"msg": "Appeal topilmadi"}), 404
+    if row[3] in ("approved", "rejected", "modified") and status != row[3]:
+        return jsonify({"msg": "Yakunlangan appealni qayta o‘zgartirib bo‘lmaydi"}), 409
+
+    now_dt = datetime.datetime.now(datetime.timezone.utc)
+    now = now_dt.isoformat()
+    if status == "modified":
+        if block_action not in ("reduce_duration", "change_type"):
+            return jsonify({"msg": "Cheklovni qisqartirish yoki yengilroq turga almashtirishni tanlang"}), 400
+        block = db.q(
+            "SELECT id,user_id,block_type,reason,active,expires_at,duration_minutes FROM user_blocks WHERE id=?",
+            (row[2],)
+        ).fetchone()
+        if not block or not block[4] or (block[5] and block[5] <= now):
+            return jsonify({"msg": "Faol cheklov topilmadi; uni o‘zgartirib bo‘lmaydi"}), 409
+        try:
+            duration = int(duration_raw)
+        except (TypeError, ValueError):
+            return jsonify({"msg": "Yangi cheklov muddati noto‘g‘ri"}), 400
+        if duration < 1 or duration > 525600:
+            return jsonify({"msg": "Yangi muddat 1 daqiqadan 365 kungacha bo‘lishi kerak"}), 400
+        updated_type = block[2]
+        if block_action == "change_type":
+            lighter_types = {"chat", "job_creation", "job_accept", "proposal", "rating", "withdrawal"}
+            if block[2] != "full":
+                return jsonify({"msg": "Cheklov turini faqat to‘liq blokdan yengilroq cheklovga almashtirish mumkin"}), 400
+            if new_block_type not in lighter_types:
+                return jsonify({"msg": "Yengilroq cheklov turini tanlang"}), 400
+            updated_type = new_block_type
+        expires_at = (now_dt + datetime.timedelta(minutes=duration)).isoformat()
+        if block[5] and expires_at >= block[5]:
+            return jsonify({"msg": "Yangi muddat mavjud cheklovning qolgan muddatidan qisqaroq bo‘lishi kerak"}), 400
+        new_reason = block[3]
+        if response:
+            new_reason = (str(block[3] or "") + f" [Appeal #{appeal_id}: {response}]")[:2000]
+        db.q(
+            "UPDATE user_blocks SET block_type=?,reason=?,duration_minutes=?,expires_at=? WHERE id=?",
+            (updated_type, new_reason, duration, expires_at, row[2])
+        ).close()
+        if block[2] == "full" and updated_type != "full" and not _active_block_row(block[1], "full"):
+            db.q("UPDATE users SET is_blocked=0 WHERE id=?", (block[1],)).close()
+        message = f"Cheklov yengillashtirildi: {BLOCK_TYPE_LABELS.get(updated_type, updated_type)}, {duration} daqiqa."
+    elif status == "approved":
+        db.q("UPDATE user_blocks SET active=0,lifted_at=?,lifted_by=? WHERE id=?", (now, request.uid, row[2])).close()
         block_row = db.q("SELECT user_id,block_type FROM user_blocks WHERE id=?", (row[2],)).fetchone()
         if block_row and block_row[1] == "full" and not _active_block_row(block_row[0], "full"):
             db.q("UPDATE users SET is_blocked=0 WHERE id=?", (block_row[0],)).close()
-        message="Appealingiz tasdiqlandi va ushbu cheklov olib tashlandi."
-    elif status=="rejected":
-        message="Appealingiz rad etildi."
+        message = "Appealingiz tasdiqlandi va ushbu cheklov olib tashlandi."
+    elif status == "rejected":
+        message = "Appealingiz rad etildi; cheklov saqlanadi."
     else:
-        message="Appealingiz administrator tomonidan ko‘rib chiqilmoqda."
-    admin_audit("appeal_reviewed","appeal",appeal_id,f"status={status}; {response}")
-    create_notification(row[1],"appeal","Appeal bo‘yicha qaror",
-                        message+(f" Admin izohi: {response}" if response else "" ),"/appeals")
-    return jsonify({"msg":"Appeal yangilandi","status":status})
+        message = "Appealingiz administrator tomonidan ko‘rib chiqilmoqda."
 
+    db.q("UPDATE appeals SET status=?,admin_response=?,reviewed_at=?,reviewed_by=? WHERE id=?",
+         (status, response, now, request.uid, appeal_id)).close()
+    admin_audit(
+        "appeal_reviewed", "appeal", appeal_id,
+        f"status={status}; block_action={block_action or 'none'}; new_type={new_block_type or 'same'}; duration={duration_raw}; {response}"
+    )
+    create_notification(
+        row[1], "appeal", "Appeal bo‘yicha qaror",
+        message + (f" Admin izohi: {response}" if response else ""), "/appeals"
+    )
+    return jsonify({"msg": "Appeal bo‘yicha qaror saqlandi", "status": status, "block_action": block_action})
 
 @app.route("/admin/overview")
 @admin_required
@@ -1592,7 +2312,8 @@ def admin_overview():
                       WHERE ub.user_id=users.id AND ub.active=1
                         AND (ub.expires_at IS NULL OR ub.expires_at>?)
                         AND ub.block_type='full'
-                  ) THEN 1 ELSE 0 END
+                  ) THEN 1 ELSE 0 END,
+                  COALESCE(email_verified,0),COALESCE(phone_verified,0),COALESCE(identity_verified,0)
            FROM users ORDER BY id DESC""",
         (datetime.datetime.now(datetime.timezone.utc).isoformat(),)
     ).fetchall()
@@ -1621,7 +2342,9 @@ def admin_overview():
     reports = db.q(
         """SELECT r.id,r.job_id,r.message_id,r.reason,r.details,r.status,r.created_at,
                   f.username AS reporter_username,t.username AS reported_username,
-                  m.attachment_url,m.attachment_name,m.attachment_type
+                  m.attachment_url,m.attachment_name,m.attachment_type,r.admin_response,r.decision,
+                  r.payment_action,r.job_action,r.notify_target,r.sanction_user_id,r.sanction_type,r.sanction_duration_minutes,
+                  r.reporter_id,r.reported_user_id
            FROM reports r
            LEFT JOIN users f ON f.id=r.reporter_id
            LEFT JOIN users t ON t.id=r.reported_user_id
@@ -1642,11 +2365,11 @@ def admin_overview():
             "admins":sum(1 for u in users if str(u[8]).lower()=="admin"),
             "blocked_users":sum(1 for u in users if int(u[12] or 0)==1),
         },
-        "users":rows(users,["id","username","first_name","last_name","email","birthday","bio","skills","role","created_at","average_rating","balance","is_blocked"]),
+        "users":rows(users,["id","username","first_name","last_name","email","birthday","bio","skills","role","created_at","average_rating","balance","is_blocked","email_verified","phone_verified","identity_verified"]),
         "jobs":rows(jobs,["id","title","price","currency","location","status","created_at","creator_username","worker_username"]),
         "services":rows(services,["id","name","parent_id","parent_name","created_by"]),
         "ratings":rows(ratings,["id","job_id","score","comment","created_at","from_username","to_username"]),
-        "reports":rows(reports,["id","job_id","message_id","reason","details","status","created_at","reporter_username","reported_username","attachment_url","attachment_name","attachment_type"]),
+        "reports":rows(reports,["id","job_id","message_id","reason","details","status","created_at","reporter_username","reported_username","attachment_url","attachment_name","attachment_type","admin_response","decision","payment_action","job_action","notify_target","sanction_user_id","sanction_type","sanction_duration_minutes","reporter_id","reported_user_id"]),
     })
 
 
@@ -1692,10 +2415,11 @@ def admin_finance():
     ).fetchall()
     payments = db.q(
         """SELECT p.id,p.job_id,p.amount,p.currency,p.status,p.provider,p.created_at,p.paid_at,p.released_at,p.refunded_at,
-                  payer.username,payee.username
+                  payer.username,payee.username,j.status
            FROM payments p
            LEFT JOIN users payer ON payer.id=p.payer_id
            LEFT JOIN users payee ON payee.id=p.payee_id
+           LEFT JOIN jobs j ON j.id=p.job_id
            ORDER BY p.id DESC LIMIT 100"""
     ).fetchall()
     wallet=db.q("SELECT COALESCE(balance,0),COALESCE(escrow_balance,0) FROM platform_wallet WHERE id=1").fetchone()
@@ -1709,10 +2433,53 @@ def admin_finance():
         "payments":[
             {"id":x[0],"job_id":x[1],"amount":float(x[2] or 0),"currency":x[3],"status":x[4],"provider":x[5],
              "created_at":x[6],"paid_at":x[7],"released_at":x[8],"refunded_at":x[9],
-             "payer_username":x[10] or "—","payee_username":x[11] or "—"}
+             "payer_username":x[10] or "—","payee_username":x[11] or "—","job_status":x[12] or ""}
             for x in payments
         ],
     })
+
+
+@app.route("/admin/payment/<int:job_id>", methods=["PATCH"])
+@admin_required
+def admin_payment_action(job_id):
+    data = request.json or {}
+    action = str(data.get("action", "")).strip().lower()
+    reason = str(data.get("reason", "")).strip()
+    if action not in {"refund", "release"}:
+        return jsonify({"msg": "Qaytarish yoki ijrochiga o‘tkazishni tanlang"}), 400
+    if len(reason) < 5 or len(reason) > 2000:
+        return jsonify({"msg": "Moliyaviy qaror sababi 5–2000 belgidan iborat bo‘lishi kerak"}), 400
+    payment = db.q(
+        """SELECT p.status,j.status,j.user_id,j.worker_id,j.title
+           FROM payments p JOIN jobs j ON j.id=p.job_id WHERE p.job_id=?""",
+        (job_id,)
+    ).fetchone()
+    if not payment:
+        return jsonify({"msg": "Ish yoki to‘lov topilmadi"}), 404
+    payment_status, job_status, owner_id, worker_id, title = payment
+    if payment_status != "held":
+        return jsonify({"msg": "Faqat escrowda ushlab turilgan to‘lovga amal bajarish mumkin"}), 409
+    if action == "release" and job_status not in {"pending_finish", "finished"}:
+        return jsonify({"msg": "To‘lovni chiqarish uchun ish yakunlash bosqichida bo‘lishi kerak"}), 409
+
+    handler = app.config.get("FINJOB_REFUND_PAYMENT" if action == "refund" else "FINJOB_RELEASE_PAYMENT")
+    if not handler:
+        return jsonify({"msg": "To‘lov amali hozir mavjud emas"}), 503
+    ok, message, _ = handler(job_id)
+    if not ok:
+        return jsonify({"msg": message or "To‘lov bo‘yicha amal bajarilmadi"}), 400
+
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    if action == "refund":
+        db.q("UPDATE jobs SET status='blocked',finished_at=NULL,owner_finished=0,worker_finished=0 WHERE id=?", (job_id,)).close()
+        summary = f"«{title}» bo‘yicha escrowdagi to‘lov buyurtmachiga qaytarildi. Sabab: {reason}"
+    else:
+        db.q("UPDATE jobs SET status='finished',finished_at=COALESCE(finished_at,?) WHERE id=?", (now, job_id)).close()
+        summary = f"«{title}» bo‘yicha to‘lov ijrochiga o‘tkazildi. Sabab: {reason}"
+    for uid in {owner_id, worker_id} - {None}:
+        create_notification(uid, "admin_payment_decision", "To‘lov bo‘yicha admin qarori", summary, "/payments")
+    admin_audit("admin_payment_action", "job", job_id, f"action={action}; reason={reason}")
+    return jsonify({"msg": "To‘lov bo‘yicha qaror bajarildi", "action": action})
 
 
 @app.route("/admin/audit-log")
@@ -1943,6 +2710,9 @@ def admin_update_user(user_id):
 @app.route("/admin/user/<int:user_id>", methods=["DELETE"])
 @admin_required
 def admin_delete_user(user_id):
+    deletion_reason = str((request.get_json(silent=True) or {}).get("reason", "")).strip()
+    if len(deletion_reason) > 1000:
+        return jsonify({"msg": "O‘chirish sababi 1000 belgidan oshmasligi kerak"}), 400
     if user_id == int(request.uid):
         return jsonify({"msg": "O'zingizni o'chira olmaysiz."}), 400
 
@@ -2011,7 +2781,7 @@ def admin_delete_user(user_id):
         _remove_stored_upload(stored_url, "/uploads/portfolio/", PORTFOLIO_UPLOAD_DIR)
         _remove_stored_upload(stored_url, "/uploads/chat/", CHAT_UPLOAD_DIR)
 
-    admin_audit("user_delete","user",user_id,"Admin foydalanuvchini o‘chirdi.")
+    admin_audit("user_delete","user",user_id,("Sabab: " + deletion_reason) if deletion_reason else "Admin foydalanuvchini o‘chirdi.")
     return jsonify({"msg": "Foydalanuvchi va unga bog'liq ma'lumotlar o'chirildi."})
 
 
@@ -2020,6 +2790,9 @@ def admin_delete_user(user_id):
 def admin_update_job(job_id):
     d = request.json or {}
     status = str(d.get("status", "")).strip().lower()
+    reason = str(d.get("reason", "")).strip()
+    if len(reason) > 2000:
+        return jsonify({"msg": "Sabab 2000 belgidan oshmasligi kerak."}), 400
     allowed = {"active", "payment_pending", "accepted", "pending_finish", "finished", "blocked"}
 
     if status not in allowed:
@@ -2029,8 +2802,8 @@ def admin_update_job(job_id):
     if not job:
         return jsonify({"msg": "Ish topilmadi."}), 404
 
-    job_state = db.q("SELECT worker_id FROM jobs WHERE id=?", (job_id,)).fetchone()
-    worker_id = job_state[0] if job_state else None
+    job_state = db.q("SELECT user_id,worker_id,title,status FROM jobs WHERE id=?", (job_id,)).fetchone()
+    owner_id, worker_id, job_title, old_status = job_state if job_state else (None, None, "", "")
     held_payment = db.q(
         "SELECT id FROM payments WHERE job_id=? AND status='held' LIMIT 1",
         (job_id,),
@@ -2069,13 +2842,22 @@ def admin_update_job(job_id):
                 db.q("UPDATE jobs SET status='accepted', finished_at=NULL WHERE id=?", (job_id,)).close()
                 return jsonify({"msg": message}), 400
 
-    admin_audit("job_status_update","job",job_id,f"status={status}")
-    return jsonify({"msg": "Ish holati yangilandi."})
+    admin_audit("job_status_update","job",job_id,f"from={old_status}; status={status}; reason={reason}")
+    if status != old_status:
+        message = f"Administrator «{job_title}» ishining holatini «{status}» ga o‘zgartirdi."
+        if reason:
+            message += f" Sabab: {reason}"
+        for uid in {owner_id, worker_id} - {None}:
+            create_notification(uid, "admin_job_update", "Ish holati o‘zgartirildi", message, "/jobs")
+    return jsonify({"msg": "Ish holati o‘zgartirildi."})
 
 
 @app.route("/admin/job/<int:job_id>", methods=["DELETE"])
 @admin_required
 def admin_delete_job(job_id):
+    deletion_reason = str((request.get_json(silent=True) or {}).get("reason", "")).strip()
+    if len(deletion_reason) > 1000:
+        return jsonify({"msg": "O‘chirish sababi 1000 belgidan oshmasligi kerak."}), 400
     job = db.q("SELECT id FROM jobs WHERE id=?", (job_id,)).fetchone()
     if not job:
         return jsonify({"msg": "Ish topilmadi."}), 404
@@ -2110,7 +2892,7 @@ def admin_delete_job(job_id):
     for attachment_url in attachment_urls_to_remove:
         _remove_stored_upload(attachment_url, "/uploads/chat/", CHAT_UPLOAD_DIR)
 
-    admin_audit("job_delete","job",job_id,"Admin jobni o‘chirdi.")
+    admin_audit("job_delete","job",job_id,("Sabab: " + deletion_reason) if deletion_reason else "Admin jobni o‘chirdi.")
     return jsonify({"msg": "Ish o‘chirildi."})
 
 
@@ -2154,9 +2936,55 @@ def admin_create_service():
     return jsonify({"msg": "Xizmat qo‘shildi.", "id": new_id}), 201
 
 
+@app.route("/admin/service/<int:service_id>", methods=["PATCH"])
+@admin_required
+def admin_update_service(service_id):
+    data = request.json or {}
+    name = str(data.get("name", "")).strip()
+    parent_raw = data.get("parent_id")
+    if not name or len(name) > 120:
+        return jsonify({"msg": "Xizmat nomi 1–120 belgidan iborat bo‘lishi kerak"}), 400
+    service = db.q("SELECT id,name,parent_id FROM services WHERE id=?", (service_id,)).fetchone()
+    if not service:
+        return jsonify({"msg": "Xizmat topilmadi"}), 404
+    if parent_raw in ("", None, "null"):
+        parent_id = None
+    else:
+        try:
+            parent_id = int(parent_raw)
+        except (TypeError, ValueError):
+            return jsonify({"msg": "Ota kategoriya noto‘g‘ri"}), 400
+        if parent_id == service_id:
+            return jsonify({"msg": "Xizmat o‘ziga ota kategoriya bo‘la olmaydi"}), 400
+        parent = db.q("SELECT id FROM services WHERE id=?", (parent_id,)).fetchone()
+        if not parent:
+            return jsonify({"msg": "Ota kategoriya topilmadi"}), 404
+        descendant = db.q(
+            """WITH RECURSIVE descendants(id) AS (
+                   SELECT id FROM services WHERE parent_id=?
+                   UNION ALL
+                   SELECT s.id FROM services s JOIN descendants d ON s.parent_id=d.id
+               ) SELECT id FROM descendants WHERE id=? LIMIT 1""",
+            (service_id, parent_id)
+        ).fetchone()
+        if descendant:
+            return jsonify({"msg": "Xizmatni o‘zining ichidagi kategoriyaga ko‘chira olmaysiz"}), 400
+    duplicate = db.q("SELECT id FROM services WHERE name=? AND parent_id IS ? AND id!=?",
+                     (name, parent_id, service_id)).fetchone()
+    if duplicate:
+        return jsonify({"msg": "Bu ota kategoriya ichida bunday xizmat bor"}), 409
+    db.q("UPDATE services SET name=?,parent_id=? WHERE id=?", (name, parent_id, service_id)).close()
+    admin_audit("service_update", "service", service_id,
+                f"name={name}; parent_id={parent_id}")
+    return jsonify({"msg": "Xizmat yangilandi", "id": service_id, "name": name, "parent_id": parent_id})
+
+
 @app.route("/admin/service/<int:service_id>", methods=["DELETE"])
 @admin_required
 def admin_delete_service(service_id):
+    deletion_reason = str((request.get_json(silent=True) or {}).get("reason", "")).strip()
+    if len(deletion_reason) > 1000:
+        return jsonify({"msg": "O‘chirish sababi 1000 belgidan oshmasligi kerak."}), 400
     service = db.q("SELECT id FROM services WHERE id=?", (service_id,)).fetchone()
     if not service:
         return jsonify({"msg": "Xizmat topilmadi."}), 404
@@ -2173,13 +3001,17 @@ def admin_delete_service(service_id):
         return jsonify({"msg": "Bu xizmat mavjud joblarda ishlatilgan, o'chirib bo'lmaydi."}), 409
 
     db.q("DELETE FROM services WHERE id=?", (service_id,)).close()
-    admin_audit("service_delete","service",service_id,"Admin xizmatni o‘chirdi.")
+    admin_audit("service_delete","service",service_id,("Sabab: " + deletion_reason) if deletion_reason else "Admin xizmatni o‘chirdi.")
     return jsonify({"msg": "Xizmat o‘chirildi."})
 
 
 @app.route("/admin/rating/<int:rating_id>", methods=["DELETE"])
 @admin_required
 def admin_delete_rating(rating_id):
+    data = request.get_json(silent=True) or {}
+    reason = str(data.get("reason", "")).strip()
+    if len(reason) > 1000:
+        return jsonify({"msg": "O‘chirish sababi 1000 belgidan oshmasligi kerak"}), 400
     rating = db.q("SELECT id FROM ratings WHERE id=?", (rating_id,)).fetchone()
     if not rating:
         return jsonify({"msg": "Baho topilmadi."}), 404
@@ -2194,7 +3026,7 @@ def admin_delete_rating(rating_id):
         ).fetchone()[0]
         db.q("UPDATE users SET average_rating=? WHERE id=?", (round(float(average), 2), target[0])).close()
 
-    admin_audit("rating_delete","rating",rating_id,"Admin bahoni o‘chirdi.")
+    admin_audit("rating_delete","rating",rating_id,("Sabab: " + reason) if reason else "Admin bahoni o‘chirdi.")
     return jsonify({"msg": "Baho o‘chirildi."})
 
 
@@ -2540,6 +3372,90 @@ def get_services():
     return jsonify(rows(r, ["id", "name", "parent_id"]))
 
 
+@app.route("/saved-searches", methods=["GET", "POST"])
+@auth
+def saved_searches():
+    if request.method == "GET":
+        items = db.q(
+            "SELECT id,name,filters,created_at,updated_at FROM saved_searches WHERE user_id=? ORDER BY updated_at DESC,id DESC LIMIT 50",
+            (request.uid,),
+        ).fetchall()
+        result = []
+        for item in items:
+            try:
+                filters = json.loads(item[2] or "{}")
+            except (TypeError, ValueError):
+                filters = {}
+            result.append({"id": item[0], "name": item[1], "filters": filters, "created_at": item[3], "updated_at": item[4]})
+        return jsonify(result)
+
+    data = request.json or {}
+    name = str(data.get("name", "")).strip()
+    filters = data.get("filters") if isinstance(data.get("filters"), dict) else {}
+    if not name or len(name) > 80:
+        return jsonify({"msg": "Saqlangan qidiruv nomi 1–80 belgidan iborat bo‘lishi kerak"}), 400
+    allowed = {"search", "service_ids", "min_price", "max_price", "time_filter", "location"}
+    filters = {key: filters.get(key) for key in allowed if filters.get(key) not in ("", None, [], "all")}
+    if "service_ids" in filters and not isinstance(filters["service_ids"], list):
+        return jsonify({"msg": "Xizmat filtri noto‘g‘ri"}), 400
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    serialized = json.dumps(filters, ensure_ascii=False, separators=(",", ":"))
+    existing = db.q("SELECT id FROM saved_searches WHERE user_id=? AND name=?", (request.uid, name)).fetchone()
+    if existing:
+        db.q("UPDATE saved_searches SET filters=?,updated_at=? WHERE id=? AND user_id=?", (serialized, now, existing[0], request.uid)).close()
+        return jsonify({"msg": "ok", "id": existing[0], "updated": True})
+    count = db.q("SELECT COUNT(*) FROM saved_searches WHERE user_id=?", (request.uid,)).fetchone()[0]
+    if int(count) >= 20:
+        return jsonify({"msg": "Ko‘pi bilan 20 ta saqlangan qidiruv bo‘lishi mumkin"}), 400
+    result = db.q("INSERT INTO saved_searches(user_id,name,filters,created_at,updated_at) VALUES(?,?,?,?,?)", (request.uid, name, serialized, now, now))
+    saved_id = result.lastrowid
+    result.close()
+    return jsonify({"msg": "ok", "id": saved_id, "created": True}), 201
+
+
+@app.route("/saved-searches/<int:search_id>", methods=["DELETE"])
+@auth
+def delete_saved_search(search_id):
+    result = db.q("DELETE FROM saved_searches WHERE id=? AND user_id=?", (search_id, request.uid))
+    deleted = result.rowcount
+    result.close()
+    if deleted != 1:
+        return jsonify({"msg": "Saqlangan qidiruv topilmadi"}), 404
+    return jsonify({"msg": "ok"})
+
+
+@app.route("/recently-viewed", methods=["GET"])
+@auth
+def get_recently_viewed():
+    items = db.q(
+        """SELECT rv.job_id,rv.viewed_at,j.title,COALESCE(j.agreed_price,j.price),j.currency,j.location,j.status,
+                  j.user_id,j.worker_id,j.created_at
+           FROM recently_viewed rv
+           JOIN jobs j ON j.id=rv.job_id
+           WHERE rv.user_id=? AND j.status!='blocked'
+             AND (j.status='active' OR j.user_id=? OR j.worker_id=?)
+           ORDER BY rv.viewed_at DESC,rv.id DESC LIMIT 20""",
+        (request.uid, request.uid, request.uid),
+    ).fetchall()
+    return jsonify([
+        {"job_id": x[0], "viewed_at": x[1], "title": x[2], "price": x[3], "currency": x[4], "location": x[5],
+         "status": x[6], "user_id": x[7], "worker_id": x[8], "created_at": x[9]}
+        for x in items
+    ])
+
+
+@app.route("/recently-viewed/<int:job_id>", methods=["POST"])
+@auth
+def add_recently_viewed(job_id):
+    job = db.q("SELECT id FROM jobs WHERE id=? AND status!='blocked' AND (status='active' OR user_id=? OR worker_id=?)", (job_id, request.uid, request.uid)).fetchone()
+    if not job:
+        return jsonify({"msg": "Ish topilmadi"}), 404
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    db.q("DELETE FROM recently_viewed WHERE user_id=? AND job_id=?", (request.uid, job_id)).close()
+    db.q("INSERT INTO recently_viewed(user_id,job_id,viewed_at) VALUES(?,?,?)", (request.uid, job_id, now)).close()
+    return jsonify({"msg": "ok"})
+
+
 # -------- REVERSE GEOCODING --------
 @app.route("/reverse-geocode")
 @auth
@@ -2726,12 +3642,143 @@ def add_job():
 @app.route("/jobs")
 @auth
 def get_jobs():
-    block_response=enforce_block("full")
-    if block_response: return block_response
+    block_response = enforce_block("full")
+    if block_response:
+        return block_response
 
-    
-    r = db.q(
-        """
+    def parse_positive_int(value, default, maximum):
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            return default
+        return max(1, min(maximum, parsed))
+
+    def parse_service_ids(raw):
+        values = []
+        for item in str(raw or "").split(","):
+            try:
+                value = int(item)
+            except (TypeError, ValueError):
+                continue
+            if value > 0 and value not in values:
+                values.append(value)
+        return values[:20]
+
+    search = str(request.args.get("search", request.args.get("q", ""))).strip()
+    location = str(request.args.get("location", "")).strip()
+    time_filter = str(request.args.get("time", request.args.get("time_filter", "all"))).strip().lower()
+    service_ids = parse_service_ids(request.args.get("service_ids", request.args.get("service_id", "")))
+    saved_only = str(request.args.get("saved_only", "0")).strip().lower() in {"1", "true", "yes", "on"}
+
+    min_price = None
+    max_price = None
+    try:
+        if str(request.args.get("min_price", "")).strip() != "":
+            min_price = float(request.args.get("min_price"))
+        if str(request.args.get("max_price", "")).strip() != "":
+            max_price = float(request.args.get("max_price"))
+    except (TypeError, ValueError):
+        return jsonify({"msg": "Narx filtri noto‘g‘ri kiritilgan"}), 400
+
+    if min_price is not None and (not math.isfinite(min_price) or min_price < 0):
+        return jsonify({"msg": "Minimal narx noto‘g‘ri"}), 400
+    if max_price is not None and (not math.isfinite(max_price) or max_price < 0):
+        return jsonify({"msg": "Maksimal narx noto‘g‘ri"}), 400
+    if min_price is not None and max_price is not None and min_price > max_price:
+        return jsonify({"msg": "Minimal narx maksimal narxdan katta bo‘lishi mumkin emas"}), 400
+
+    time_days = {"all": None, "today": 1, "three_days": 3, "week": 7, "month": 30}.get(time_filter)
+    if time_days is None and time_filter != "all":
+        return jsonify({"msg": "Vaqt filtri noto‘g‘ri"}), 400
+
+    conditions = [
+        """(
+            j.status = 'active'
+            OR (
+                j.status IN ('payment_pending', 'accepted', 'pending_finish', 'finished')
+                AND (j.user_id = ? OR j.worker_id = ?)
+            )
+        )"""
+    ]
+    args = [request.uid, request.uid]
+
+    if search:
+        like = f"%{search}%"
+        conditions.append(
+            """(
+                j.title LIKE ? COLLATE NOCASE
+                OR j.description LIKE ? COLLATE NOCASE
+                OR j.location LIKE ? COLLATE NOCASE
+                OR j.custom_service LIKE ? COLLATE NOCASE
+                OR EXISTS (
+                    SELECT 1
+                    FROM job_services js_search
+                    JOIN services s_search ON s_search.id = js_search.service_id
+                    WHERE js_search.job_id = j.id AND s_search.name LIKE ? COLLATE NOCASE
+                )
+            )"""
+        )
+        args.extend([like, like, like, like, like])
+
+    if location:
+        conditions.append("j.location LIKE ? COLLATE NOCASE")
+        args.append(f"%{location}%")
+
+    if min_price is not None:
+        conditions.append("COALESCE(j.agreed_price, j.price) >= ?")
+        args.append(min_price)
+
+    if max_price is not None:
+        conditions.append("COALESCE(j.agreed_price, j.price) <= ?")
+        args.append(max_price)
+
+    if time_days is not None:
+        cutoff = (datetime.datetime.now() - datetime.timedelta(days=time_days)).strftime("%Y-%m-%d %H:%M:%S")
+        conditions.append("j.created_at >= ?")
+        args.append(cutoff)
+
+    if service_ids:
+        placeholders = ",".join("?" for _ in service_ids)
+        conditions.append(
+            f"""(
+                j.service_id IN (
+                    WITH RECURSIVE service_tree(id) AS (
+                        SELECT id FROM services WHERE id IN ({placeholders})
+                        UNION ALL
+                        SELECT s_child.id
+                        FROM services s_child
+                        JOIN service_tree st ON s_child.parent_id = st.id
+                    )
+                    SELECT id FROM service_tree
+                )
+                OR EXISTS (
+                    SELECT 1
+                    FROM job_services js_filter
+                    WHERE js_filter.job_id = j.id
+                      AND js_filter.service_id IN (
+                          WITH RECURSIVE service_tree2(id) AS (
+                              SELECT id FROM services WHERE id IN ({placeholders})
+                              UNION ALL
+                              SELECT s_child2.id
+                              FROM services s_child2
+                              JOIN service_tree2 st2 ON s_child2.parent_id = st2.id
+                          )
+                          SELECT id FROM service_tree2
+                      )
+                )
+            )"""
+        )
+        args.extend(service_ids)
+        args.extend(service_ids)
+
+    if saved_only:
+        conditions.append(
+            "EXISTS (SELECT 1 FROM favorites f_saved WHERE f_saved.user_id=? AND f_saved.target_type='job' AND f_saved.target_id=j.id)"
+        )
+        args.append(request.uid)
+
+    where_sql = " AND ".join(conditions)
+    select_sql = f"""
         SELECT j.id, j.title, COALESCE(j.agreed_price, j.price) as price, j.currency, j.location, j.status, j.user_id, j.worker_id,
                w.first_name, w.last_name, w.username,
                j.description, j.service_id,
@@ -2752,44 +3799,48 @@ def get_jobs():
         LEFT JOIN users w ON j.worker_id = w.id
         LEFT JOIN users c ON j.user_id = c.id
         LEFT JOIN services s ON j.service_id = s.id
-        WHERE j.status = 'active'
-           OR (
-               j.status IN ('payment_pending', 'accepted', 'pending_finish', 'finished')
-               AND (j.user_id = ? OR j.worker_id = ?)
-           )
+        WHERE {where_sql}
         ORDER BY j.id DESC
-    """,
-        (request.uid, request.uid),
-    ).fetchall()
+    """
 
-    return jsonify(
-        rows(
-            r,
-            [
-                "id",
-                "title",
-                "price",
-                "currency",
-                "location",
-                "status",
-                "user_id",
-                "worker_id",
-                "worker_first",
-                "worker_last",
-                "worker_username",
-                "description",
-                "service_id",
-                "proposal_count",
-                "service_name",
-                "created_at",
-                "owner_finished",
-                "worker_finished",
-                "creator_first",
-                "creator_last",
-                "creator_username",
-            ],
-        )
+    wants_pagination = any(
+        key in request.args for key in
+        ("page", "page_size", "search", "q", "location", "min_price", "max_price", "time", "time_filter", "service_ids", "service_id", "saved_only")
     )
+    if not wants_pagination:
+        r = db.q(select_sql, tuple(args)).fetchall()
+        return jsonify(rows(r, [
+            "id", "title", "price", "currency", "location", "status", "user_id", "worker_id",
+            "worker_first", "worker_last", "worker_username", "description", "service_id",
+            "proposal_count", "service_name", "created_at", "owner_finished", "worker_finished",
+            "creator_first", "creator_last", "creator_username"
+        ]))
+
+    page = parse_positive_int(request.args.get("page"), 1, 1000000)
+    page_size = parse_positive_int(request.args.get("page_size"), 10, 50)
+    count = db.q(f"SELECT COUNT(*) FROM jobs j WHERE {where_sql}", tuple(args)).fetchone()[0]
+    total_pages = max(1, math.ceil(int(count) / page_size))
+    if page > total_pages:
+        page = total_pages
+
+    r = db.q(select_sql + " LIMIT ? OFFSET ?", tuple(args + [page_size, (page - 1) * page_size])).fetchall()
+    items = rows(r, [
+        "id", "title", "price", "currency", "location", "status", "user_id", "worker_id",
+        "worker_first", "worker_last", "worker_username", "description", "service_id",
+        "proposal_count", "service_name", "created_at", "owner_finished", "worker_finished",
+        "creator_first", "creator_last", "creator_username"
+    ])
+    return jsonify({
+        "items": items,
+        "pagination": {
+            "page": page,
+            "page_size": page_size,
+            "total": int(count),
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_previous": page > 1
+        }
+    })
 
 @app.route("/jobs/<int:job_id>")
 @auth
@@ -3797,39 +4848,39 @@ def unread_message_count():
 @app.route("/conversations")
 @auth
 def conversations():
-    block_response=enforce_block("chat")
-    if block_response: return block_response
+    block_response = enforce_block("chat")
+    if block_response:
+        return block_response
 
-    
     items = db.q(
         """SELECT m.id,m.job_id,m.sender_id,m.receiver_id,m.message,m.sent_at,m.read_at,j.title,
-                  CASE WHEN m.sender_id=? THEN r.username ELSE s.username END as other_username
+                  CASE WHEN m.sender_id=? THEN r.username ELSE s.username END as other_username,
+                  (SELECT COUNT(*) FROM messages unread
+                   WHERE unread.job_id=m.job_id AND unread.receiver_id=? AND unread.read_at IS NULL) as unread_count
            FROM messages m
            JOIN jobs j ON j.id=m.job_id
            LEFT JOIN users s ON s.id=m.sender_id
            LEFT JOIN users r ON r.id=m.receiver_id
            WHERE j.worker_id IS NOT NULL
              AND j.status NOT IN ('active', 'blocked')
+             AND (m.sender_id=? OR m.receiver_id=?)
              AND m.id IN (
                SELECT MAX(m2.id) FROM messages m2
                WHERE m2.sender_id=? OR m2.receiver_id=?
                GROUP BY m2.job_id
            )
            ORDER BY m.id DESC LIMIT 100""",
-        (request.uid,request.uid,request.uid),
+        (request.uid,request.uid,request.uid,request.uid,request.uid,request.uid),
     ).fetchall()
-    result=[]
-    for x in items:
-        unread = db.q(
-            "SELECT COUNT(*) FROM messages WHERE job_id=? AND receiver_id=? AND read_at IS NULL",
-            (x[1],request.uid),
-        ).fetchone()[0]
-        result.append({
-            "job_id":x[1],"sender_id":x[2],"receiver_id":x[3],"message":x[4],
-            "sent_at":x[5],"read_at":x[6],"title":x[7],"other_username":x[8] or "",
-            "unread":int(unread)
-        })
-    return jsonify(result)
+
+    return jsonify([
+        {
+            "job_id": x[1], "sender_id": x[2], "receiver_id": x[3], "message": x[4],
+            "sent_at": x[5], "read_at": x[6], "title": x[7], "other_username": x[8] or "",
+            "unread": int(x[9] or 0)
+        }
+        for x in items
+    ])
 
 
 @app.route("/presence", methods=["POST"])
@@ -4141,6 +5192,8 @@ def public_profile(username):
         "avg_rating": avg_rating,
         "role": u[10] or "user",
         "avatar_url": u[11] or "",
+        "verification": _verification_payload(u[0]),
+        "reputation": _reputation_payload(u[0]),
         "created_jobs_count": created_jobs_count,
         "completed_jobs_count": completed_jobs_count,
         "reviews_count": reviews_count,
@@ -4198,6 +5251,8 @@ def profile():
             "avg_rating": avg_rating,
             "avatar_url": avatar_url,
             "balance": balance,
+            "verification": _verification_payload(request.uid),
+            "reputation": _reputation_payload(request.uid),
             "active_blocks": [_block_payload(x) for x in _active_block_row(request.uid)],
             "portfolio": [
                 {"id": x[0], "title": x[1], "description": x[2], "url": x[3], "image_url": x[4],
@@ -4229,6 +5284,14 @@ def profile():
         exists_u = db.q("SELECT id FROM users WHERE username=? AND id!=?", (username, request.uid)).fetchone()
         if exists_u:
             return jsonify({"msg": "Ushbu foydalanuvchi nomi allaqachon band!"}), 400
+
+        current_email_row = db.q("SELECT email FROM users WHERE id=?", (request.uid,)).fetchone()
+        current_email = str(current_email_row[0] or "").strip().lower() if current_email_row else ""
+        if email != current_email:
+            return jsonify({
+                "msg": "Elektron pochta manzilini oddiy profil tahriridan o‘zgartirib bo‘lmaydi. Avval qayta autentifikatsiya va email tasdiqlash jarayoni kerak.",
+                "email_change_required": True
+            }), 409
 
         exists_e = db.q("SELECT id FROM users WHERE email=? AND id!=?", (email, request.uid)).fetchone()
         if exists_e:
