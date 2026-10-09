@@ -18,7 +18,8 @@ const statusLabel = {
     open: "Ochiq",
     reviewing: "Ko‘rib chiqilmoqda",
     resolved: "Hal qilindi",
-    rejected: "Rad etildi"
+    rejected: "Rad etildi",
+    modified: "Qisman tasdiqlandi"
 }
 const blockLabels = {
     full: "To‘liq blok",
@@ -98,7 +99,20 @@ export default function Admin() {
     const [userBlocks, setUserBlocks] = useState([])
     const [blockForm, setBlockForm] = useState({ block_type: "chat", duration_minutes: "1440", reason: "" })
     const [reviewingAppeal, setReviewingAppeal] = useState(null)
-    const [appealReviewForm, setAppealReviewForm] = useState({ status: "reviewing", admin_response: "" })
+    const [appealReviewForm, setAppealReviewForm] = useState({
+        status: "reviewing", admin_response: "", block_action: "reduce_duration",
+        duration_minutes: "1440", new_block_type: "chat"
+    })
+    const [reviewingReport, setReviewingReport] = useState(null)
+    const [reportReviewForm, setReportReviewForm] = useState({
+        status: "reviewing", admin_response: "", decision: "", payment_action: "none",
+        job_action: "none", notify_target: "none", sanction_target: "reported",
+        sanction_type: "none", sanction_duration_minutes: "1440"
+    })
+    const [editingService, setEditingService] = useState(null)
+    const [serviceEditForm, setServiceEditForm] = useState({ name: "", parent_id: "" })
+    const [verifyingUser, setVerifyingUser] = useState(null)
+    const [verificationForm, setVerificationForm] = useState({ email_verified: false, phone_verified: false, identity_verified: false })
     const [reviewingDispute, setReviewingDispute] = useState(null)
     const [disputeReviewForm, setDisputeReviewForm] = useState({
         status: "reviewing", admin_response: "", decision: "", payment_action: "none",
@@ -273,17 +287,122 @@ export default function Admin() {
 
     const openAppealReview = (item) => {
         setReviewingAppeal(item)
-        setAppealReviewForm({ status: item.status === "open" ? "reviewing" : item.status, admin_response: item.admin_response || "" })
+        setAppealReviewForm({
+            status: item.status === "open" ? "reviewing" : item.status,
+            admin_response: item.admin_response || "",
+            block_action: "reduce_duration",
+            duration_minutes: "1440",
+            new_block_type: item.block_type === "full" ? "chat" : (item.block_type || "chat")
+        })
     }
 
     const submitAppealReview = async (event) => {
         event.preventDefault()
         if (!reviewingAppeal) return
+        if (appealReviewForm.status === "modified" && !appealReviewForm.admin_response.trim()) {
+            setNoticeType("warn")
+            setNotice("Cheklovni yengillashtirish uchun sabab yozing.")
+            return
+        }
         const ok = await action("/admin/appeal/" + reviewingAppeal.id, {
             method: "PATCH",
             body: appealReviewForm
-        }, "Appeal yangilandi.")
+        }, "Appeal bo‘yicha qaror saqlandi.")
         if (ok) setReviewingAppeal(null)
+    }
+
+    const openReportReview = (item) => {
+        setReviewingReport(item)
+        setReportReviewForm({
+            status: item.status === "open" ? "reviewing" : item.status,
+            admin_response: item.admin_response || "",
+            decision: item.decision || "",
+            payment_action: item.payment_action || "none",
+            job_action: item.job_action || "none",
+            notify_target: item.notify_target || "none",
+            sanction_target: Number(item.sanction_user_id) === Number(item.reporter_id) ? "reporter" : "reported",
+            sanction_type: item.sanction_type || "none",
+            sanction_duration_minutes: item.sanction_duration_minutes == null ? "1440" : String(item.sanction_duration_minutes)
+        })
+    }
+
+    const submitReportReview = async (event) => {
+        event.preventDefault()
+        if (!reviewingReport) return
+        if (["resolved", "rejected"].includes(reportReviewForm.status) && (!reportReviewForm.decision || !reportReviewForm.admin_response.trim())) {
+            setNoticeType("warn")
+            setNotice("Yakuniy qaror uchun hukm va uning sababini yozing.")
+            return
+        }
+        const ok = await action("/admin/report/" + reviewingReport.id, {
+            method: "PATCH",
+            body: reportReviewForm
+        }, "Shikoyat bo‘yicha qaror saqlandi.")
+        if (ok) setReviewingReport(null)
+    }
+
+    const openVerification = (item) => {
+        setVerifyingUser(item)
+        setVerificationForm({
+            email_verified: Boolean(item.email_verified),
+            phone_verified: Boolean(item.phone_verified),
+            identity_verified: Boolean(item.identity_verified)
+        })
+    }
+
+    const saveVerification = async (event) => {
+        event.preventDefault()
+        if (!verifyingUser) return
+        const ok = await action("/admin/user/" + verifyingUser.id + "/verification", {
+            method: "PATCH", body: verificationForm
+        }, "Verifikatsiya holati yangilandi.")
+        if (ok) setVerifyingUser(null)
+    }
+
+    const editService = (item) => {
+        setEditingService(item)
+        setServiceEditForm({ name: item.name || "", parent_id: item.parent_id == null ? "" : String(item.parent_id) })
+    }
+
+    const saveServiceEdit = async (event) => {
+        event.preventDefault()
+        if (!editingService) return
+        const ok = await action("/admin/service/" + editingService.id, {
+            method: "PATCH",
+            body: { name: serviceEditForm.name.trim(), parent_id: serviceEditForm.parent_id || null }
+        }, "Xizmat yangilandi.")
+        if (ok) setEditingService(null)
+    }
+
+    const reviseBlock = async (item) => {
+        const duration = window.prompt("Yangi muddatni daqiqalarda kiriting (masalan, 1440 = 1 kun):", String(item.duration_minutes || 1440))
+        if (duration === null) return
+        const minutes = Number(duration)
+        if (!Number.isInteger(minutes) || minutes < 1 || minutes > 525600) {
+            setNoticeType("warn")
+            setNotice("Muddat 1 dan 525600 daqiqagacha bo‘lishi kerak.")
+            return
+        }
+        const reason = window.prompt("Yangilangan cheklov sababi:", item.reason || "")
+        if (reason === null || !reason.trim()) return
+        const ok = await action("/admin/block/" + item.id, {
+            method: "PATCH",
+            body: { action: "modify", duration_minutes: minutes, reason: reason.trim() }
+        }, "Cheklov yangilandi.")
+        if (ok) {
+            const refreshed = await api("/admin/user/" + item.user_id + "/blocks", { token })
+            if (refreshed?.ok && moderatingUser?.id === item.user_id) setUserBlocks(refreshed.blocks || [])
+        }
+    }
+
+    const actOnPayment = async (item, paymentAction) => {
+        const label = paymentAction === "refund" ? "pulni buyurtmachiga qaytarish" : "pulni ijrochiga o‘tkazish"
+        if (!window.confirm(`Ish #${item.job_id} uchun ${money(item.amount)} UZS to‘lovi bo‘yicha "${label}" amalini bajarasizmi?`)) return
+        const reason = window.prompt("Moliyaviy qaror sababi (majburiy):")
+        if (reason === null || !reason.trim()) return
+        await action("/admin/payment/" + item.job_id, {
+            method: "PATCH", body: { action: paymentAction, reason: reason.trim() }
+        }, "To‘lov bo‘yicha amal bajarildi.")
     }
 
     const openDisputeReview = (item) => {
@@ -393,13 +512,10 @@ export default function Admin() {
     }
 
     const deleteRating = async (item) => {
-        if (!window.confirm("#" + item.id + " ratingni o‘chirishni tasdiqlaysizmi?")) return
-        await action("/admin/rating/" + item.id, { method: "DELETE" }, "Baho o‘chirildi.")
-    }
-
-    const updateReport = async (item, status) => {
-        if (status === item.status) return
-        await action("/admin/report/" + item.id, { method: "PATCH", body: { status } }, "Shikoyat holati yangilandi.")
+        const reason = window.prompt("#" + item.id + " bahoni o‘chirish sababi:")
+        if (reason === null) return
+        if (!window.confirm("#" + item.id + " bahoni o‘chirishni tasdiqlaysizmi?")) return
+        await action("/admin/rating/" + item.id, { method: "DELETE", body: { reason: reason.trim() } }, "Baho o‘chirildi.")
     }
 
     const openReportAttachment = async (report) => {
@@ -674,6 +790,7 @@ export default function Admin() {
                                             <td><div className="admin-row-actions">
                                                 <button className="btn btn-secondary admin-small-btn" onClick={() => editUser(item)}>Tahrirlash</button>
                                                 <button className="btn btn-secondary admin-small-btn" onClick={() => openModeration(item)}>Moderatsiya</button>
+                                                <button className="btn btn-secondary admin-small-btn" onClick={() => openVerification(item)}>Verifikatsiya</button>
                                                 <button className="btn btn-secondary admin-small-btn" onClick={() => addTestBalance(item)}>+ Pul</button>
                                                 <button className="btn btn-danger admin-small-btn" disabled={item.id === user.id || item.role === "admin"} onClick={() => deleteUser(item)}>O‘chirish</button>
                                             </div></td>
@@ -735,7 +852,7 @@ export default function Admin() {
                                 <thead><tr><th>ID</th><th>Xizmat</th><th>Ota kategoriya</th><th>Yaratgan</th><th>Amal</th></tr></thead>
                                 <tbody>
                                     {services.page.map((item) => (
-                                        <tr key={item.id}><td>#{item.id}</td><td><strong>{item.name}</strong></td><td>{item.parent_name || "Asosiy kategoriya"}</td><td>{item.created_by || "Tizim"}</td><td><button className="btn btn-danger admin-small-btn" onClick={() => deleteService(item)}>O‘chirish</button></td></tr>
+                                        <tr key={item.id}><td>#{item.id}</td><td><strong>{item.name}</strong></td><td>{item.parent_name || "Asosiy kategoriya"}</td><td>{item.created_by || "Tizim"}</td><td><div className="admin-row-actions"><button className="btn btn-secondary admin-small-btn" onClick={() => editService(item)}>Tahrirlash</button><button className="btn btn-danger admin-small-btn" onClick={() => deleteService(item)}>O‘chirish</button></div></td></tr>
                                     ))}
                                 </tbody>
                             </table>
@@ -755,7 +872,7 @@ export default function Admin() {
                         </div>
                         <div className="admin-table-wrap">
                             <table className="admin-table">
-                                <thead><tr><th>ID</th><th>Yuboruvchi</th><th>Foydalanuvchi</th><th>Manba</th><th>Sabab</th><th>Tafsilot</th><th>Fayl</th><th>Sana</th><th>Holat</th></tr></thead>
+                                <thead><tr><th>ID</th><th>Yuboruvchi</th><th>Foydalanuvchi</th><th>Manba</th><th>Sabab</th><th>Tafsilot</th><th>Fayl</th><th>Sana</th><th>Holat / Amal</th></tr></thead>
                                 <tbody>
                                     {reports.page.map((item) => (
                                         <tr key={item.id}>
@@ -764,7 +881,7 @@ export default function Admin() {
                                             <td><strong>{item.reason}</strong></td><td>{item.details || "—"}</td>
                                             <td>{item.attachment_url ? <button className="btn btn-secondary admin-small-btn" onClick={() => openReportAttachment(item)}>Fayl</button> : "—"}</td>
                                             <td>{formatTimeAgo(item.created_at)}</td>
-                                            <td><select className="admin-action-select" value={item.status} onChange={(e) => updateReport(item, e.target.value)}>{["open","reviewing","resolved","rejected"].map((key) => <option key={key} value={key}>{statusLabel[key]}</option>)}</select></td>
+                                            <td><span className={"admin-badge " + (item.status === "resolved" ? "success" : item.status === "rejected" ? "danger" : "neutral")}>{statusLabel[item.status] || item.status}</span><button className="btn btn-primary admin-small-btn" type="button" onClick={() => openReportReview(item)}>Ko‘rib chiqish</button></td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -788,7 +905,7 @@ export default function Admin() {
                                     <td>#{item.id}</td><td><strong>@{item.username}</strong><small>User ID: #{item.user_id}</small></td>
                                     <td><span className={"admin-badge " + (item.active ? "danger" : "neutral")}>{item.block_label || blockLabels[item.block_type] || item.block_type}</span></td>
                                     <td>{item.reason}</td><td>{formatTimeAgo(item.created_at)}</td><td>{item.expires_at ? formatTimeAgo(item.expires_at) : "Muddatsiz"}</td><td>@{item.admin_username || "—"}</td>
-                                    <td>{item.active ? <button className="btn btn-secondary admin-small-btn" onClick={() => liftBlock(item)}>Lift</button> : "—"}</td>
+                                    <td>{item.active ? <div className="admin-row-actions"><button className="btn btn-secondary admin-small-btn" onClick={() => reviseBlock(item)}>Muddat/sabab</button><button className="btn btn-secondary admin-small-btn" onClick={() => liftBlock(item)}>Olib tashlash</button></div> : "—"}</td>
                                 </tr>)}</tbody>
                             </table>
                         </div>
@@ -971,6 +1088,21 @@ export default function Admin() {
                             </div>
                             {!finance?.transactions?.length && <div className="empty-state">Tranzaksiyalar yo‘q.</div>}
                         </div>
+                        <div className="admin-subsection">
+                            <div className="admin-section-head"><div><span>PAYMENT ACTIONS</span><h2>Eskroudagi to‘lovlar</h2><p className="muted">Faqat ushlab turilgan to‘lovlar bo‘yicha sabab bilan qaror chiqaring.</p></div></div>
+                            <div className="admin-table-wrap">
+                                <table className="admin-table">
+                                    <thead><tr><th>ID</th><th>Ish</th><th>To‘lovchi</th><th>Ijrochi</th><th>Summa</th><th>Holat</th><th>Amallar</th></tr></thead>
+                                    <tbody>{(finance?.payments || []).map((item) => <tr key={item.id}>
+                                        <td>#{item.id}</td><td>#{item.job_id}<small>{statusLabel[item.job_status] || item.job_status || "—"}</small></td>
+                                        <td>@{item.payer_username}</td><td>@{item.payee_username}</td><td><strong>{money(item.amount)} {item.currency || "UZS"}</strong></td>
+                                        <td><span className={"admin-badge " + (item.status === "held" ? "danger" : "neutral")}>{statusLabel[item.status] || item.status}</span></td>
+                                        <td>{item.status === "held" ? <div className="admin-row-actions"><button className="btn btn-secondary admin-small-btn" onClick={() => actOnPayment(item, "refund")}>Qaytarish</button><button className="btn btn-primary admin-small-btn" disabled={!["pending_finish", "finished"].includes(item.job_status)} title={!["pending_finish", "finished"].includes(item.job_status) ? "To‘lovni faqat yakunlash bosqichidagi ishda chiqarish mumkin" : ""} onClick={() => actOnPayment(item, "release")}>Ijrochiga o‘tkazish</button></div> : "—"}</td>
+                                    </tr>)}</tbody>
+                                </table>
+                            </div>
+                            {!finance?.payments?.length && <div className="empty-state">To‘lov topilmadi.</div>}
+                        </div>
                     </div>
                 )}
 
@@ -1053,6 +1185,65 @@ export default function Admin() {
                 </div>
             )}
 
+            {reviewingReport && (
+                <div className="admin-modal-backdrop" onClick={() => setReviewingReport(null)}>
+                    <div className="card admin-modal report-review-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="admin-modal-head"><div><span className="admin-search-eyebrow">REPORT #{reviewingReport.id}</span><h3>Shikoyat bo‘yicha qaror</h3><p>@{reviewingReport.reporter_username || "—"} → @{reviewingReport.reported_username || "—"}</p></div><button className="admin-modal-close" onClick={() => setReviewingReport(null)}>×</button></div>
+                        <div className="admin-appeal-detail">
+                            <div><span>SABAB</span><p>{reviewingReport.reason}</p></div>
+                            <div><span>TAFSILOT</span><p>{reviewingReport.details || "Tafsilot berilmagan."}</p></div>
+                            <div><span>MANBA</span><p>{reviewingReport.message_id ? "Xabar #" + reviewingReport.message_id : "Ish #" + (reviewingReport.job_id || "—")}</p></div>
+                        </div>
+                        <form className="admin-user-form" onSubmit={submitReportReview}>
+                            <label>Holat<select className="select" value={reportReviewForm.status} onChange={(e) => setReportReviewForm({ ...reportReviewForm, status: e.target.value })}><option value="reviewing">Ko‘rib chiqilmoqda</option><option value="resolved">Hal qilindi</option><option value="rejected">Rad etildi</option><option value="open">Ochiq qoldirish</option></select></label>
+                            <label>Hukm turi<select className="select" value={reportReviewForm.decision} onChange={(e) => setReportReviewForm({ ...reportReviewForm, decision: e.target.value })}><option value="">Hukmni tanlang...</option><option value="violation">Qoidabuzarlik aniqlandi</option><option value="no_violation">Qoidabuzarlik aniqlanmadi</option><option value="insufficient_evidence">Dalil yetarli emas</option><option value="duplicate">Takroriy shikoyat</option><option value="mistake">Xato shikoyat</option><option value="other">Boshqa holat</option></select></label>
+                            <div className="form-row">
+                                <label className="field"><span>To‘lov chorasi</span><select className="select" value={reportReviewForm.payment_action} onChange={(e) => setReportReviewForm({ ...reportReviewForm, payment_action: e.target.value })}><option value="none">To‘lovga tegmaslik</option><option value="refund_payer" disabled={!reviewingReport.job_id || Boolean(reviewingReport.message_id)}>Buyurtmachiga qaytarish</option><option value="release_to_worker" disabled={!reviewingReport.job_id || Boolean(reviewingReport.message_id)}>Ijrochiga o‘tkazish</option></select></label>
+                                <label className="field"><span>Ish chorasi</span><select className="select" value={reportReviewForm.job_action} onChange={(e) => setReportReviewForm({ ...reportReviewForm, job_action: e.target.value })}><option value="none">O‘zgarishsiz qoldirish</option><option value="block" disabled={!reviewingReport.job_id}>Ishni bloklash</option></select></label>
+                            </div>
+                            <label>Ogohlantirish kimga yuborilsin?<select className="select" value={reportReviewForm.notify_target} onChange={(e) => setReportReviewForm({ ...reportReviewForm, notify_target: e.target.value })}><option value="none">Ogohlantirish yubormaslik</option><option value="reporter">Shikoyat yuboruvchiga</option><option value="reported" disabled={!reviewingReport.reported_username}>Shikoyat qilingan foydalanuvchiga</option><option value="both" disabled={!reviewingReport.reported_username}>Ikkalasiga</option></select></label>
+                            <div className="form-row">
+                                <label className="field"><span>Cheklov kimga qo‘yiladi?</span><select className="select" value={reportReviewForm.sanction_target} onChange={(e) => setReportReviewForm({ ...reportReviewForm, sanction_target: e.target.value })}><option value="reported" disabled={!reviewingReport.reported_username}>@{reviewingReport.reported_username || "foydalanuvchi"}</option><option value="reporter">@{reviewingReport.reporter_username || "yuboruvchi"}</option></select></label>
+                                <label className="field"><span>Foydalanuvchi chorasi</span><select className="select" value={reportReviewForm.sanction_type} onChange={(e) => setReportReviewForm({ ...reportReviewForm, sanction_type: e.target.value })}><option value="none">Cheklov qo‘llamaslik</option><option value="chat">Chat</option><option value="job_creation">Ish yaratish</option><option value="job_accept">Ish qabul qilish</option><option value="proposal">Taklif yuborish</option><option value="rating">Baholash</option><option value="withdrawal">Pul yechish</option><option value="full">To‘liq blok</option></select></label>
+                            </div>
+                            <label>Cheklov muddati<select className="select" disabled={reportReviewForm.sanction_type === "none"} value={reportReviewForm.sanction_duration_minutes} onChange={(e) => setReportReviewForm({ ...reportReviewForm, sanction_duration_minutes: e.target.value })}><option value="60">1 soat</option><option value="1440">1 kun</option><option value="10080">7 kun</option><option value="43200">30 kun</option><option value="525600">365 kun</option><option value="0">Muddatsiz</option></select></label>
+                            <label>Qaror asosi va izoh<textarea className="input admin-textarea" maxLength="3000" required={["resolved", "rejected"].includes(reportReviewForm.status)} value={reportReviewForm.admin_response} onChange={(e) => setReportReviewForm({ ...reportReviewForm, admin_response: e.target.value })} placeholder="Dalillar va qoida bandi asosida tushuntiring..." /></label>
+                            <p className="muted">To‘lov amallari faqat escrowda ushlangan to‘lovda ishlaydi. Qaytarish yoki bloklash qarorini berishdan oldin dalillarni tekshiring.</p>
+                            <div className="admin-modal-actions"><button type="button" className="btn btn-secondary" onClick={() => setReviewingReport(null)}>Yopish</button><button type="submit" className="btn btn-primary">Qarorni saqlash</button></div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {verifyingUser && (
+                <div className="admin-modal-backdrop" onClick={() => setVerifyingUser(null)}>
+                    <div className="card admin-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="admin-modal-head"><div><span className="admin-search-eyebrow">USER VERIFICATION</span><h3>@{verifyingUser.username}</h3><p>Verifikatsiya belgilarini tasdiqlash yoki bekor qilish</p></div><button className="admin-modal-close" onClick={() => setVerifyingUser(null)}>×</button></div>
+                        <form className="admin-user-form" onSubmit={saveVerification}>
+                            <label><input type="checkbox" checked={verificationForm.email_verified} onChange={(e) => setVerificationForm({ ...verificationForm, email_verified: e.target.checked })} /> Email tasdiqlangan</label>
+                            <label><input type="checkbox" checked={verificationForm.phone_verified} onChange={(e) => setVerificationForm({ ...verificationForm, phone_verified: e.target.checked })} /> Telefon tasdiqlangan</label>
+                            <label><input type="checkbox" checked={verificationForm.identity_verified} onChange={(e) => setVerificationForm({ ...verificationForm, identity_verified: e.target.checked })} /> Shaxs tasdiqlangan</label>
+                            <p className="muted">Belgini faqat tegishli dalilni tekshirgandan keyin yoqing.</p>
+                            <div className="admin-modal-actions"><button type="button" className="btn btn-secondary" onClick={() => setVerifyingUser(null)}>Bekor qilish</button><button type="submit" className="btn btn-primary">Saqlash</button></div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {editingService && (
+                <div className="admin-modal-backdrop" onClick={() => setEditingService(null)}>
+                    <div className="card admin-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="admin-modal-head"><div><span className="admin-search-eyebrow">SERVICE MANAGEMENT</span><h3>Xizmatni tahrirlash</h3><p>#{editingService.id} · {editingService.name}</p></div><button className="admin-modal-close" onClick={() => setEditingService(null)}>×</button></div>
+                        <form className="admin-user-form" onSubmit={saveServiceEdit}>
+                            <label>Xizmat nomi<input className="input" maxLength="120" value={serviceEditForm.name} onChange={(e) => setServiceEditForm({ ...serviceEditForm, name: e.target.value })} required /></label>
+                            <label>Ota kategoriya<select className="select" value={serviceEditForm.parent_id} onChange={(e) => setServiceEditForm({ ...serviceEditForm, parent_id: e.target.value })}><option value="">Asosiy kategoriya</option>{serviceTree.filter((item) => Number(item.id) !== Number(editingService.id)).map((item) => <option key={item.id} value={item.id}>{"— ".repeat(item.depth)}{item.name}</option>)}</select></label>
+                            <p className="muted">O‘z ichidagi kategoriyalardan birini ota kategoriya qilib tanlab bo‘lmaydi. Backend tekshiruvi buni to‘sadi.</p>
+                            <div className="admin-modal-actions"><button type="button" className="btn btn-secondary" onClick={() => setEditingService(null)}>Bekor qilish</button><button type="submit" className="btn btn-primary">O‘zgarishni saqlash</button></div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
             {reviewingAppeal && (
                 <div className="admin-modal-backdrop" onClick={() => setReviewingAppeal(null)}>
                     <div className="card admin-modal appeal-review-modal" onClick={(e) => e.stopPropagation()}>
@@ -1063,9 +1254,10 @@ export default function Admin() {
                             <div className="admin-appeal-meta"><span>Berilgan: {formatTimeAgo(reviewingAppeal.created_at)}</span><span>Block tugashi: {reviewingAppeal.expires_at ? formatTimeAgo(reviewingAppeal.expires_at) : "Muddatsiz"}</span></div>
                         </div>
                         <form className="admin-user-form" onSubmit={submitAppealReview}>
-                            <label>Qaror<select className="select" value={appealReviewForm.status} disabled={reviewingAppeal.status === "approved" || reviewingAppeal.status === "rejected"} onChange={(e) => setAppealReviewForm({ ...appealReviewForm, status: e.target.value })}><option value="reviewing">Ko‘rib chiqilmoqda</option><option value="approved">Tasdiqlash — block olib tashlanadi</option><option value="rejected">Rad etish</option></select></label>
+                            <label>Qaror<select className="select" value={appealReviewForm.status} disabled={["approved", "rejected", "modified"].includes(reviewingAppeal.status)} onChange={(e) => setAppealReviewForm({ ...appealReviewForm, status: e.target.value })}><option value="reviewing">Ko‘rib chiqilmoqda</option><option value="approved">To‘liq tasdiqlash — cheklovni olib tashlash</option><option value="rejected">Rad etish — cheklov qoladi</option><option value="modified">Qisman tasdiqlash — cheklovni yengillashtirish</option></select></label>
+                            {appealReviewForm.status === "modified" && <><label>Qanday yengillashtiriladi?<select className="select" value={appealReviewForm.block_action} onChange={(e) => setAppealReviewForm({ ...appealReviewForm, block_action: e.target.value })}><option value="reduce_duration">Faqat muddatini qisqartirish</option><option value="change_type">Cheklov turini yengillashtirish</option></select></label>{appealReviewForm.block_action === "change_type" && <label>Yangi cheklov turi<select className="select" value={appealReviewForm.new_block_type} onChange={(e) => setAppealReviewForm({ ...appealReviewForm, new_block_type: e.target.value })}><option value="chat">Chat cheklovi</option><option value="job_creation">Ish yaratish cheklovi</option><option value="job_accept">Ish qabul qilish cheklovi</option><option value="proposal">Taklif yuborish cheklovi</option><option value="rating">Baholash cheklovi</option><option value="withdrawal">Pul yechish cheklovi</option></select></label>}<label>Yangi muddat<select className="select" value={appealReviewForm.duration_minutes} onChange={(e) => setAppealReviewForm({ ...appealReviewForm, duration_minutes: e.target.value })}><option value="60">1 soat</option><option value="1440">1 kun</option><option value="10080">7 kun</option><option value="43200">30 kun</option><option value="525600">365 kun</option></select></label></>}
                             <label>Admin izohi<textarea className="input admin-textarea" maxLength="3000" value={appealReviewForm.admin_response} onChange={(e) => setAppealReviewForm({ ...appealReviewForm, admin_response: e.target.value })} placeholder="Qaroringiz sababini foydalanuvchiga tushuntiring..." /></label>
-                            <div className="admin-modal-actions"><button type="button" className="btn btn-secondary" onClick={() => setReviewingAppeal(null)}>Yopish</button><button type="submit" className="btn btn-primary" disabled={reviewingAppeal.status === "approved" || reviewingAppeal.status === "rejected"}>Qarorni saqlash</button></div>
+                            <div className="admin-modal-actions"><button type="button" className="btn btn-secondary" onClick={() => setReviewingAppeal(null)}>Yopish</button><button type="submit" className="btn btn-primary" disabled={["approved", "rejected", "modified"].includes(reviewingAppeal.status)}>Qarorni saqlash</button></div>
                         </form>
                     </div>
                 </div>
