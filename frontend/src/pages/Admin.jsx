@@ -66,7 +66,14 @@ const actionLabel = {
     user_block_created: "Block qo‘yildi",
     user_block_lifted: "Block olib tashlandi",
     appeal_created: "Yangi appeal",
-    appeal_reviewed: "Appeal ko‘rib chiqildi"
+    appeal_reviewed: "Appeal ko‘rib chiqildi",
+    appeal_reviewed: "Appeal ko‘rib chiqildi",
+    dispute_decision: "Nizo bo‘yicha hukm",
+    report_decision: "Shikoyat bo‘yicha hukm",
+    user_block_modified: "Cheklov o‘zgartirildi",
+    verification_update: "Verifikatsiya o‘zgardi",
+    service_update: "Xizmat tahrirlandi",
+    admin_payment_action: "To‘lov bo‘yicha admin amali"
 }
 
 function Pager({ page, pages, total, onChange }) {
@@ -409,6 +416,27 @@ export default function Admin() {
         await action("/admin/payment/" + item.job_id, {
             method: "PATCH", body: { action: paymentAction, reason: reason.trim() }
         }, "To‘lov bo‘yicha amal bajarildi.")
+    }
+
+    const exportAuditCsv = () => {
+        const items = audit?.items || []
+        if (!items.length) {
+            setNoticeType("warn")
+            setNotice("Eksport qilish uchun audit yozuvlari yo‘q.")
+            return
+        }
+        const columns = ["id", "created_at", "admin_username", "action", "target_type", "target_id", "details"]
+        const quote = (value) => '"' + String(value ?? "").replaceAll('"', '""') + '"'
+        const csv = [columns.join(","), ...items.map((item) => columns.map((key) => quote(item[key])).join(","))].join("\r\n")
+        const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8;" })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement("a")
+        link.href = url
+        link.download = `finjob-audit-${auditPage}.csv`
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+        URL.revokeObjectURL(url)
     }
 
     const openDisputeReview = (item) => {
@@ -938,7 +966,7 @@ export default function Admin() {
                     <div className="admin-section">
                         <div className="admin-filters">
                             <input className="input" placeholder="User, appeal matni, sabab, block ID..." value={appealQuery} onChange={(e) => { setAppealPage(1); setAppealQuery(e.target.value) }} />
-                            <select className="select" value={appealStatus} onChange={(e) => { setAppealPage(1); setAppealStatus(e.target.value) }}><option value="all">Barcha statuslar</option><option value="open">Ochiq</option><option value="reviewing">Ko‘rib chiqilmoqda</option><option value="approved">Tasdiqlangan</option><option value="rejected">Rad etilgan</option></select>
+                            <select className="select" value={appealStatus} onChange={(e) => { setAppealPage(1); setAppealStatus(e.target.value) }}><option value="all">Barcha statuslar</option><option value="open">Ochiq</option><option value="reviewing">Ko‘rib chiqilmoqda</option><option value="approved">Tasdiqlangan</option><option value="modified">Qisman tasdiqlangan</option><option value="rejected">Rad etilgan</option></select>
                         </div>
                         <div className="admin-table-wrap">
                             <table className="admin-table admin-appeal-table">
@@ -1142,7 +1170,7 @@ export default function Admin() {
 
                 {data && tab === "audit" && (
                     <div className="admin-section">
-                        <div className="admin-filters"><input className="input" placeholder="Action, target, admin yoki tafsilot..." onChange={(e) => { setAuditPage(1); loadAudit(1, e.target.value) }} /></div>
+                        <div className="admin-filters"><input className="input" placeholder="Action, target, admin yoki tafsilot..." onChange={(e) => { setAuditPage(1); loadAudit(1, e.target.value) }} /><button className="btn btn-secondary admin-small-btn" type="button" onClick={exportAuditCsv}>Joriy sahifani CSV</button></div>
                         <div className="admin-table-wrap">
                             <table className="admin-table">
                                 <thead><tr><th>ID</th><th>Admin</th><th>Amal</th><th>Target</th><th>Tafsilot</th><th>Sana</th></tr></thead>
