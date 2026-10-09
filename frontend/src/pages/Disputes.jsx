@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import AppLayout from "../components/AppLayout"
 import { api } from "../api"
+import { formatTimeAgo } from "../utils/time"
 
 const categories = {
     payment: "To‘lov",
@@ -73,7 +74,7 @@ function ActiveDisputeList({ items, loading, userId }) {
                                         {item.evidence && <div><strong>Dalillar:</strong> {item.evidence}</div>}
                                         {item.admin_response && <div><strong>Admin javobi:</strong> {item.admin_response}</div>}
                                         <div><strong>Holat:</strong> {statusLabels[item.status] || item.status}</div>
-                                        <div><strong>Oxirgi yangilanish:</strong> {item.updated_at || item.created_at || "—"}</div>
+                                        <div><strong>Oxirgi yangilanish:</strong> {formatTimeAgo(item.updated_at || item.created_at)}</div>
                                     </div>
                                 )}
                             </article>
