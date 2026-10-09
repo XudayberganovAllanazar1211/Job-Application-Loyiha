@@ -120,6 +120,7 @@ export default function Admin() {
         job_action: "none", notify_target: "none", sanction_target: "reported",
         sanction_type: "none", sanction_duration_minutes: "1440"
     })
+    const [reportReviewError, setReportReviewError] = useState("")
     const [editingService, setEditingService] = useState(null)
     const [serviceEditForm, setServiceEditForm] = useState({ name: "", parent_id: "" })
     const [verifyingUser, setVerifyingUser] = useState(null)
@@ -224,18 +225,20 @@ export default function Admin() {
         return () => clearTimeout(timer)
     }, [globalSearch, token, user?.role])
 
-    const action = async (path, options = {}, successMessage = "O‘zgarish saqlandi.") => {
+    const action = async (path, options = {}, successMessage = "O‘zgarish saqlandi.", onError = null) => {
         setNotice("")
         setNoticeType("ok")
         const result = await api(path, { token, ...options })
         if (!result?.ok) {
+            const message = result?.msg || "Amal bajarilmadi."
             setNoticeType("warn")
-            setNotice(result?.msg || "Amal bajarilmadi.")
+            setNotice(message)
+            if (onError) onError(message)
             return false
         }
-        setNotice(result?.msg || successMessage)
         await load()
         await loadAudit(1)
+        setNotice(result?.msg || successMessage)
         return true
     }
 
@@ -340,8 +343,11 @@ export default function Admin() {
 
     const openReportReview = (item) => {
         setReviewingReport(item)
+        setReportReviewError("")
+        const legacyFinalReport = ["resolved", "rejected"].includes(item.status) &&
+            (!item.decision || !String(item.admin_response || "").trim())
         setReportReviewForm({
-            status: item.status === "open" ? "reviewing" : item.status,
+            status: item.status === "open" || legacyFinalReport ? "reviewing" : item.status,
             admin_response: item.admin_response || "",
             decision: item.decision || "",
             payment_action: item.payment_action || "none",
@@ -349,22 +355,24 @@ export default function Admin() {
             notify_target: item.notify_target || "none",
             sanction_target: Number(item.sanction_user_id) === Number(item.reporter_id) ? "reporter" : "reported",
             sanction_type: item.sanction_type || "none",
-            sanction_duration_minutes: item.sanction_duration_minutes == null ? "1440" : String(item.sanction_duration_minutes)
+            sanction_duration_minutes: item.sanction_duration_minutes == null
+                ? (item.sanction_type && item.sanction_type !== "none" ? "0" : "1440")
+                : String(item.sanction_duration_minutes)
         })
     }
 
     const submitReportReview = async (event) => {
         event.preventDefault()
         if (!reviewingReport) return
+        setReportReviewError("")
         if (["resolved", "rejected"].includes(reportReviewForm.status) && (!reportReviewForm.decision || !reportReviewForm.admin_response.trim())) {
-            setNoticeType("warn")
-            setNotice("Yakuniy qaror uchun hukm va uning sababini yozing.")
+            setReportReviewError("Yakuniy qaror uchun hukm turini tanlang va sababini yozing.")
             return
         }
         const ok = await action("/admin/report/" + reviewingReport.id, {
             method: "PATCH",
             body: reportReviewForm
-        }, "Shikoyat bo‘yicha qaror saqlandi.")
+        }, "Shikoyat bo‘yicha qaror saqlandi.", (message) => setReportReviewError(message))
         if (ok) setReviewingReport(null)
     }
 
@@ -1256,6 +1264,10 @@ export default function Admin() {
                             <div><span>TAFSILOT</span><p>{reviewingReport.details || "Tafsilot berilmagan."}</p></div>
                             <div><span>MANBA</span><p>{reviewingReport.message_id ? "Xabar #" + reviewingReport.message_id : "Ish #" + (reviewingReport.job_id || "—")}</p></div>
                         </div>
+                        {["resolved", "rejected"].includes(reviewingReport.status) && reportReviewForm.status === "reviewing" &&
+                            (!reviewingReport.decision || !String(reviewingReport.admin_response || "").trim()) &&
+                            <p className="muted" role="status">Bu shikoyat eski versiyada yakunlangan, lekin hukm tafsilotlari saqlanmagan. Uni qayta ko‘rib chiqish uchun holat vaqtincha “Ko‘rib chiqilmoqda”ga o‘rnatildi.</p>}
+                        {reportReviewError && <div className="notice warn" role="alert" style={{ marginBottom: 12 }}>{reportReviewError}</div>}
                         <form className="admin-user-form" onSubmit={submitReportReview}>
                             <label>Holat<select className="select" value={reportReviewForm.status} onChange={(e) => setReportReviewForm({ ...reportReviewForm, status: e.target.value })}><option value="reviewing">Ko‘rib chiqilmoqda</option><option value="resolved">Hal qilindi</option><option value="rejected">Rad etildi</option><option value="open">Ochiq qoldirish</option></select></label>
                             <label>Hukm turi<select className="select" value={reportReviewForm.decision} onChange={(e) => setReportReviewForm({ ...reportReviewForm, decision: e.target.value })}><option value="">Hukmni tanlang...</option><option value="violation">Qoidabuzarlik aniqlandi</option><option value="no_violation">Qoidabuzarlik aniqlanmadi</option><option value="insufficient_evidence">Dalil yetarli emas</option><option value="duplicate">Takroriy shikoyat</option><option value="mistake">Xato shikoyat</option><option value="other">Boshqa holat</option></select></label>
