@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react"
 import { Navigate } from "react-router-dom"
 import AppLayout from "../components/AppLayout"
 import { api } from "../api"
+import { formatTimeAgo } from "../utils/time"
 
 const PAGE_SIZE = 10
 
@@ -602,7 +603,7 @@ export default function Admin() {
                         <div className="card admin-overview-card">
                             <div className="admin-section-head"><div><span>RECENT ADMIN ACTIONS</span><h2>Oxirgi o‘zgarishlar</h2></div><button className="link" onClick={() => setTab("audit")}>Audit log</button></div>
                             <div className="admin-audit-feed">
-                                {(audit?.items || []).slice(0, 8).map((item) => <div key={item.id}><span className="admin-audit-dot"></span><div><strong>{actionLabel[item.action] || item.action}</strong><p>{item.details || "—"} · {item.admin_username || "admin"}</p></div><time>{item.created_at || "—"}</time></div>)}
+                                {(audit?.items || []).slice(0, 8).map((item) => <div key={item.id}><span className="admin-audit-dot"></span><div><strong>{actionLabel[item.action] || item.action}</strong><p>{item.details || "—"} · {item.admin_username || "admin"}</p></div><time>{formatTimeAgo(item.created_at)}</time></div>)}
                                 {!audit?.items?.length && <span className="muted">Admin harakatlari hali yozilmagan.</span>}
                             </div>
                         </div>
@@ -669,7 +670,7 @@ export default function Admin() {
                                 <tbody>
                                     {jobs.page.map((item) => (
                                         <tr key={item.id}>
-                                            <td>#{item.id}</td><td><strong>{item.title}</strong><small>{item.created_at || "—"}</small></td>
+                                            <td>#{item.id}</td><td><strong>{item.title}</strong><small>{formatTimeAgo(item.created_at)}</small></td>
                                             <td>@{item.creator_username || "—"}</td><td>@{item.worker_username || "—"}</td>
                                             <td><strong>{money(item.price)} {item.currency || "UZS"}</strong></td>
                                             <td><select className="admin-action-select" value={item.status || "active"} onChange={(e) => updateJobStatus(item, e.target.value)}>{["active","payment_pending","accepted","pending_finish","finished","blocked"].map((key) => <option key={key} value={key}>{statusLabel[key]}</option>)}</select></td>
@@ -729,7 +730,7 @@ export default function Admin() {
                                             <td>{item.message_id ? "Xabar #" + item.message_id : "Ish #" + (item.job_id || "—")}</td>
                                             <td><strong>{item.reason}</strong></td><td>{item.details || "—"}</td>
                                             <td>{item.attachment_url ? <button className="btn btn-secondary admin-small-btn" onClick={() => openReportAttachment(item)}>Fayl</button> : "—"}</td>
-                                            <td>{item.created_at || "—"}</td>
+                                            <td>{formatTimeAgo(item.created_at)}</td>
                                             <td><select className="admin-action-select" value={item.status} onChange={(e) => updateReport(item, e.target.value)}>{["open","reviewing","resolved","rejected"].map((key) => <option key={key} value={key}>{statusLabel[key]}</option>)}</select></td>
                                         </tr>
                                     ))}
@@ -753,7 +754,7 @@ export default function Admin() {
                                 <tbody>{filteredBlocks.page.map((item) => <tr key={item.id}>
                                     <td>#{item.id}</td><td><strong>@{item.username}</strong><small>User ID: #{item.user_id}</small></td>
                                     <td><span className={"admin-badge " + (item.active ? "danger" : "neutral")}>{item.block_label || blockLabels[item.block_type] || item.block_type}</span></td>
-                                    <td>{item.reason}</td><td>{item.created_at || "—"}</td><td>{item.expires_at || "Muddatsiz"}</td><td>@{item.admin_username || "—"}</td>
+                                    <td>{item.reason}</td><td>{formatTimeAgo(item.created_at)}</td><td>{item.expires_at ? formatTimeAgo(item.expires_at) : "Muddatsiz"}</td><td>@{item.admin_username || "—"}</td>
                                     <td>{item.active ? <button className="btn btn-secondary admin-small-btn" onClick={() => liftBlock(item)}>Lift</button> : "—"}</td>
                                 </tr>)}</tbody>
                             </table>
@@ -775,10 +776,10 @@ export default function Admin() {
                                 <tbody>{filteredAppeals.page.map((item) => <tr key={item.id}>
                                     <td><strong>#{item.id}</strong><small>Block #{item.block_id}</small></td>
                                     <td><strong>@{item.username}</strong><small>User ID: #{item.user_id}</small></td>
-                                    <td><span className="admin-badge danger">{item.block_label || blockLabels[item.block_type] || item.block_type}</span><small>{item.expires_at ? "Tugaydi: " + item.expires_at : "Muddatsiz"}</small></td>
+                                    <td><span className="admin-badge danger">{item.block_label || blockLabels[item.block_type] || item.block_type}</span><small>{item.expires_at ? "Tugaydi: " + formatTimeAgo(item.expires_at) : "Muddatsiz"}</small></td>
                                     <td>{item.block_reason}</td>
                                     <td className="admin-long-cell">{item.appeal_text}</td>
-                                    <td>{item.created_at || "—"}</td>
+                                    <td>{formatTimeAgo(item.created_at)}</td>
                                     <td><span className={"admin-badge " + (item.status === "approved" ? "success" : item.status === "rejected" ? "danger" : "neutral")}>{statusLabel[item.status] || item.status}</span></td>
                                     <td><button className="btn btn-primary admin-small-btn" onClick={() => openAppealReview(item)}>Ko‘rib chiqish</button></td>
                                 </tr>)}</tbody>
@@ -815,7 +816,7 @@ export default function Admin() {
                                         <span>Ochildi: @{item.opened_by_username || "—"} · Qarshi tomon: @{item.against_username || "—"} · Ish ID: #{item.job_id}</span>
                                         {item.evidence && <p><strong>Dalillar:</strong> {item.evidence}</p>}
                                         {item.admin_response && <p><strong>Admin javobi:</strong> {item.admin_response}</p>}
-                                        <small>{item.created_at || "Sana noma’lum"}</small>
+                                        <small>{formatTimeAgo(item.created_at)}</small>
                                     </div>
                                     <button className="btn btn-primary admin-dispute-review-btn" type="button" onClick={() => openDisputeReview(item)}>
                                         {reviewingDispute?.id === item.id ? "Yopish" : "Ko‘rib chiqish"}
@@ -863,7 +864,7 @@ export default function Admin() {
                             <div className="admin-table-wrap">
                                 <table className="admin-table">
                                     <thead><tr><th>ID</th><th>User</th><th>Tur</th><th>Summa</th><th>Balansdan keyin</th><th>Tavsif</th><th>Sana</th></tr></thead>
-                                    <tbody>{(finance?.transactions || []).slice(0, 40).map((item) => <tr key={item.id}><td>#{item.id}</td><td>@{item.username}</td><td><span className="admin-badge neutral">{item.type}</span></td><td className={Number(item.amount) >= 0 ? "admin-amount-positive" : "admin-amount-negative"}>{Number(item.amount) >= 0 ? "+" : ""}{money(item.amount)} UZS</td><td>{money(item.balance_after)} UZS</td><td>{item.description}</td><td>{item.created_at || "—"}</td></tr>)}</tbody>
+                                    <tbody>{(finance?.transactions || []).slice(0, 40).map((item) => <tr key={item.id}><td>#{item.id}</td><td>@{item.username}</td><td><span className="admin-badge neutral">{item.type}</span></td><td className={Number(item.amount) >= 0 ? "admin-amount-positive" : "admin-amount-negative"}>{Number(item.amount) >= 0 ? "+" : ""}{money(item.amount)} UZS</td><td>{money(item.balance_after)} UZS</td><td>{item.description}</td><td>{formatTimeAgo(item.created_at)}</td></tr>)}</tbody>
                                 </table>
                             </div>
                             {!finance?.transactions?.length && <div className="empty-state">Tranzaksiyalar yo‘q.</div>}
@@ -891,7 +892,7 @@ export default function Admin() {
                         <div className="admin-table-wrap">
                             <table className="admin-table">
                                 <thead><tr><th>ID</th><th>Admin</th><th>Amal</th><th>Target</th><th>Tafsilot</th><th>Sana</th></tr></thead>
-                                <tbody>{(audit?.items || []).map((item) => <tr key={item.id}><td>#{item.id}</td><td>@{item.admin_username || "—"}</td><td><strong>{actionLabel[item.action] || item.action}</strong><small>{item.action}</small></td><td>{item.target_type || "—"}{item.target_id ? " #" + item.target_id : ""}</td><td>{item.details || "—"}</td><td>{item.created_at || "—"}</td></tr>)}</tbody>
+                                <tbody>{(audit?.items || []).map((item) => <tr key={item.id}><td>#{item.id}</td><td>@{item.admin_username || "—"}</td><td><strong>{actionLabel[item.action] || item.action}</strong><small>{item.action}</small></td><td>{item.target_type || "—"}{item.target_id ? " #" + item.target_id : ""}</td><td>{item.details || "—"}</td><td>{formatTimeAgo(item.created_at)}</td></tr>)}</tbody>
                             </table>
                         </div>
                         {!audit?.items?.length && <div className="empty-state">Audit yozuvlari topilmadi.</div>}
@@ -932,7 +933,7 @@ export default function Admin() {
                                     {userBlocks.map((block) => <div className="admin-user-block" key={block.id}>
                                         <div><span className={"admin-badge " + (block.active ? "danger" : "neutral")}>{blockLabels[block.block_type] || block.block_type}</span><strong>#{block.id}</strong></div>
                                         <p>{block.reason}</p>
-                                        <small>{block.created_at || "—"} · {block.expires_at ? "Tugashi: " + block.expires_at : "Muddatsiz"} · @{block.created_by_username || "admin"}</small>
+                                        <small>{formatTimeAgo(block.created_at)} · {block.expires_at ? "Tugashi: " + formatTimeAgo(block.expires_at) : "Muddatsiz"} · @{block.created_by_username || "admin"}</small>
                                         {block.active && <button className="btn btn-secondary admin-small-btn" onClick={() => liftBlock(block)}>Blockni olib tashlash</button>}
                                     </div>)}
                                     {!userBlocks.length && <div className="empty-state">Bu userda block tarixi yo‘q.</div>}
@@ -957,7 +958,7 @@ export default function Admin() {
                         <div className="admin-appeal-detail">
                             <div><span>BLOCK SABABI</span><p>{reviewingAppeal.block_reason}</p></div>
                             <div><span>APPEAL MATNI</span><p>{reviewingAppeal.appeal_text}</p></div>
-                            <div className="admin-appeal-meta"><span>Berilgan: {reviewingAppeal.created_at || "—"}</span><span>Block tugashi: {reviewingAppeal.expires_at || "Muddatsiz"}</span></div>
+                            <div className="admin-appeal-meta"><span>Berilgan: {formatTimeAgo(reviewingAppeal.created_at)}</span><span>Block tugashi: {reviewingAppeal.expires_at ? formatTimeAgo(reviewingAppeal.expires_at) : "Muddatsiz"}</span></div>
                         </div>
                         <form className="admin-user-form" onSubmit={submitAppealReview}>
                             <label>Qaror<select className="select" value={appealReviewForm.status} disabled={reviewingAppeal.status === "approved" || reviewingAppeal.status === "rejected"} onChange={(e) => setAppealReviewForm({ ...appealReviewForm, status: e.target.value })}><option value="reviewing">Ko‘rib chiqilmoqda</option><option value="approved">Tasdiqlash — block olib tashlanadi</option><option value="rejected">Rad etish</option></select></label>
