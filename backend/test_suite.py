@@ -1746,10 +1746,21 @@ class JobPlatformTestCase(unittest.TestCase):
         resolved = self.client.patch(
             f"/admin/disputes/{dispute_id}",
             headers={"Authorization": f"Bearer {owner_token}"},
-            json={"status": "resolved", "admin_response": "Regression test resolved."},
+            json={
+                "status": "resolved",
+                "admin_response": "Regression test resolved.",
+                "decision": "favor_opener",
+                "payment_action": "none",
+                "job_action": "block",
+                "sanction_type": "none",
+            },
         )
         self.assertEqual(resolved.status_code, 200)
         self.assertEqual(resolved.get_json()["status"], "resolved")
+        self.assertEqual(resolved.get_json()["decision"], "favor_opener")
+        self.assertEqual(resolved.get_json()["job_action"], "block")
+        blocked_job_status = main.db.q("SELECT status FROM jobs WHERE id=?", (job_id,)).fetchone()[0]
+        self.assertEqual(blocked_job_status, "blocked")
 
         final_view = self.client.get("/disputes", headers={"Authorization": f"Bearer {owner_token}"})
         self.assertEqual(final_view.status_code, 200)
