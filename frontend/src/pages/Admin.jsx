@@ -19,7 +19,12 @@ const statusLabel = {
     reviewing: "Ko‘rib chiqilmoqda",
     resolved: "Hal qilindi",
     rejected: "Rad etildi",
-    modified: "Qisman tasdiqlandi"
+    modified: "Qisman tasdiqlandi",
+    held: "Escrowda ushlab turilgan",
+    refunded: "Qaytarilgan",
+    released: "O‘tkazilgan",
+    paid: "To‘langan",
+    pending: "Kutilmoqda"
 }
 const blockLabels = {
     full: "To‘liq blok",
@@ -66,7 +71,6 @@ const actionLabel = {
     user_block_created: "Block qo‘yildi",
     user_block_lifted: "Block olib tashlandi",
     appeal_created: "Yangi appeal",
-    appeal_reviewed: "Appeal ko‘rib chiqildi",
     appeal_reviewed: "Appeal ko‘rib chiqildi",
     dispute_decision: "Nizo bo‘yicha hukm",
     report_decision: "Shikoyat bo‘yicha hukm",
