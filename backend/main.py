@@ -270,6 +270,25 @@ class DB:
         conn = self.get_connection()
         cursor = conn.cursor()
 
+        def ensure_column(table, column_name, alter_sql):
+            existing = {
+                row[1] for row in cursor.execute(f"PRAGMA table_info({table})").fetchall()
+            }
+            if column_name not in existing:
+                try:
+                    cursor.execute(alter_sql)
+                except sqlite3.Error as exc:
+                    raise RuntimeError(
+                        f"{table} jadvali migratsiyasi bajarilmadi ({column_name}): {exc}"
+                    ) from exc
+            verified = {
+                row[1] for row in cursor.execute(f"PRAGMA table_info({table})").fetchall()
+            }
+            if column_name not in verified:
+                raise RuntimeError(
+                    f"{table} jadvalida {column_name} ustuni yo‘q; migratsiya bajarilmadi."
+                )
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -539,8 +558,6 @@ class DB:
                 sanction_duration_minutes INTEGER
             )
         """)
-        cursor.execute("PRAGMA table_info(disputes)")
-        existing_dispute_cols = [row[1] for row in cursor.fetchall()]
         dispute_migrations = [
             ("decision", "ALTER TABLE disputes ADD COLUMN decision TEXT NOT NULL DEFAULT ''"),
             ("decision_for_user_id", "ALTER TABLE disputes ADD COLUMN decision_for_user_id INTEGER"),
@@ -551,11 +568,7 @@ class DB:
             ("sanction_duration_minutes", "ALTER TABLE disputes ADD COLUMN sanction_duration_minutes INTEGER"),
         ]
         for col_name, sql in dispute_migrations:
-            if col_name not in existing_dispute_cols:
-                try:
-                    cursor.execute(sql)
-                except Exception:
-                    pass
+            ensure_column("disputes", col_name, sql)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_disputes_job_status ON disputes(job_id,status)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_disputes_opened_by ON disputes(opened_by,created_at DESC)")
 
@@ -604,8 +617,6 @@ class DB:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_appeals_status_created ON appeals(status,created_at)")
 
         # Dynamic migrations for any existing tables missing new columns
-        cursor.execute("PRAGMA table_info(users)")
-        existing_user_cols = [row[1] for row in cursor.fetchall()]
         migrations = [
             ("bio", "ALTER TABLE users ADD COLUMN bio TEXT DEFAULT ''"),
             ("skills", "ALTER TABLE users ADD COLUMN skills TEXT DEFAULT ''"),
@@ -625,71 +636,33 @@ class DB:
             ("google_sub", "ALTER TABLE users ADD COLUMN google_sub TEXT DEFAULT ''"),
         ]
         for col_name, sql in migrations:
-            if col_name not in existing_user_cols:
-                try:
-                    cursor.execute(sql)
-                except Exception:
-                    pass
+            ensure_column("users", col_name, sql)
 
-        cursor.execute("PRAGMA table_info(jobs)")
-        existing_job_cols = [row[1] for row in cursor.fetchall()]
-        if "currency" not in existing_job_cols:
-            try:
-                cursor.execute("ALTER TABLE jobs ADD COLUMN currency TEXT DEFAULT 'UZS'")
-            except Exception:
-                pass
-
-        if "custom_service" not in existing_job_cols:
-            try:
-                cursor.execute("ALTER TABLE jobs ADD COLUMN custom_service TEXT DEFAULT ''")
-            except Exception:
-                pass
-
-        if "agreed_price" not in existing_job_cols:
-            try:
-                cursor.execute("ALTER TABLE jobs ADD COLUMN agreed_price REAL")
-            except Exception:
-                pass
-
-        if "finished_at" not in existing_job_cols:
-            try:
-                cursor.execute("ALTER TABLE jobs ADD COLUMN finished_at TEXT")
-            except Exception:
-                pass
+        job_migrations = [
+            ("currency", "ALTER TABLE jobs ADD COLUMN currency TEXT DEFAULT 'UZS'"),
+            ("custom_service", "ALTER TABLE jobs ADD COLUMN custom_service TEXT DEFAULT ''"),
+            ("agreed_price", "ALTER TABLE jobs ADD COLUMN agreed_price REAL"),
+            ("finished_at", "ALTER TABLE jobs ADD COLUMN finished_at TEXT"),
+        ]
+        for col_name, sql in job_migrations:
+            ensure_column("jobs", col_name, sql)
 
         # Active ish hech qachon biriktirilgan bajaruvchiga ega bo‘lmasligi kerak.
         # Eski bazadagi active + worker_id holatini avtomatik tiklaymiz.
-        try:
-            cursor.execute(
-                "UPDATE jobs SET worker_id=NULL WHERE status='active' AND worker_id IS NOT NULL"
-            )
-        except Exception:
-            pass
+        cursor.execute(
+            "UPDATE jobs SET worker_id=NULL WHERE status='active' AND worker_id IS NOT NULL"
+        )
 
         cursor.execute("PRAGMA table_info(ratings)")
         existing_rating_cols = [row[1] for row in cursor.fetchall()]
-        cursor.execute("PRAGMA table_info(messages)")
-        existing_message_cols = [row[1] for row in cursor.fetchall()]
-        if "read_at" not in existing_message_cols:
-            try:
-                cursor.execute("ALTER TABLE messages ADD COLUMN read_at TEXT")
-            except Exception:
-                pass
-        if "attachment_url" not in existing_message_cols:
-            try:
-                cursor.execute("ALTER TABLE messages ADD COLUMN attachment_url TEXT DEFAULT ''")
-            except Exception:
-                pass
-        if "attachment_name" not in existing_message_cols:
-            try:
-                cursor.execute("ALTER TABLE messages ADD COLUMN attachment_name TEXT DEFAULT ''")
-            except Exception:
-                pass
-        if "attachment_type" not in existing_message_cols:
-            try:
-                cursor.execute("ALTER TABLE messages ADD COLUMN attachment_type TEXT DEFAULT ''")
-            except Exception:
-                pass
+        message_migrations = [
+            ("read_at", "ALTER TABLE messages ADD COLUMN read_at TEXT"),
+            ("attachment_url", "ALTER TABLE messages ADD COLUMN attachment_url TEXT DEFAULT ''"),
+            ("attachment_name", "ALTER TABLE messages ADD COLUMN attachment_name TEXT DEFAULT ''"),
+            ("attachment_type", "ALTER TABLE messages ADD COLUMN attachment_type TEXT DEFAULT ''"),
+        ]
+        for col_name, sql in message_migrations:
+            ensure_column("messages", col_name, sql)
 
         report_migrations = [
             ("message_id", "ALTER TABLE reports ADD COLUMN message_id INTEGER"),
@@ -703,40 +676,16 @@ class DB:
             ("sanction_duration_minutes", "ALTER TABLE reports ADD COLUMN sanction_duration_minutes INTEGER"),
         ]
         for col_name, sql in report_migrations:
-            existing_report_cols = {
-                row[1] for row in cursor.execute("PRAGMA table_info(reports)").fetchall()
-            }
-            if col_name not in existing_report_cols:
-                try:
-                    cursor.execute(sql)
-                except sqlite3.Error as exc:
-                    raise RuntimeError(
-                        f"reports jadvali migratsiyasi bajarilmadi ({col_name}): {exc}"
-                    ) from exc
-            verified_report_cols = {
-                row[1] for row in cursor.execute("PRAGMA table_info(reports)").fetchall()
-            }
-            if col_name not in verified_report_cols:
-                raise RuntimeError(f"reports jadvalida {col_name} ustuni yo‘q; migratsiya bajarilmadi.")
+            ensure_column("reports", col_name, sql)
 
-        if "created_at" not in existing_rating_cols:
-            try:
-                cursor.execute("ALTER TABLE ratings ADD COLUMN created_at TEXT")
-            except Exception:
-                pass
+        ensure_column("ratings", "created_at", "ALTER TABLE ratings ADD COLUMN created_at TEXT")
 
-        cursor.execute("PRAGMA table_info(portfolio_items)")
-        existing_portfolio_cols = [row[1] for row in cursor.fetchall()]
         portfolio_migrations = [
             ("file_url", "ALTER TABLE portfolio_items ADD COLUMN file_url TEXT DEFAULT ''"),
             ("file_name", "ALTER TABLE portfolio_items ADD COLUMN file_name TEXT DEFAULT ''"),
         ]
         for col_name, sql in portfolio_migrations:
-            if col_name not in existing_portfolio_cols:
-                try:
-                    cursor.execute(sql)
-                except Exception:
-                    pass
+            ensure_column("portfolio_items", col_name, sql)
 
         # Database Indexes
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);")
