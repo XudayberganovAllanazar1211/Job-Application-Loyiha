@@ -2022,7 +2022,7 @@ def admin_blocks():
         where.append("b.active=0")
     clause=" WHERE "+" AND ".join(where) if where else ""
     items=db.q(
-        f"""SELECT b.id,b.user_id,u.username,b.block_type,b.reason,b.created_at,b.expires_at,b.active,
+        f"""SELECT b.id,b.user_id,u.username,b.block_type,b.reason,b.duration_minutes,b.created_at,b.expires_at,b.active,
                    a.username
             FROM user_blocks b
             JOIN users u ON u.id=b.user_id
@@ -2032,7 +2032,7 @@ def admin_blocks():
     ).fetchall()
     return jsonify({"items":[
         {"id":x[0],"user_id":x[1],"username":x[2],"block_type":x[3],"block_label":BLOCK_TYPE_LABELS.get(x[3],x[3]),
-         "reason":x[4],"created_at":x[5],"expires_at":x[6],"active":bool(x[7]),"admin_username":x[8] or "—"}
+         "reason":x[4],"duration_minutes":x[5],"created_at":x[6],"expires_at":x[7],"active":bool(x[8]),"admin_username":x[9] or "—"}
         for x in items
     ]})
 
@@ -2236,7 +2236,7 @@ def admin_review_appeal(appeal_id):
         if block_action not in ("reduce_duration", "change_type"):
             return jsonify({"msg": "Cheklovni qisqartirish yoki yengilroq turga almashtirishni tanlang"}), 400
         block = db.q(
-            "SELECT id,user_id,block_type,reason,active,expires_at FROM user_blocks WHERE id=?",
+            "SELECT id,user_id,block_type,reason,active,expires_at,duration_minutes FROM user_blocks WHERE id=?",
             (row[2],)
         ).fetchone()
         if not block or not block[4] or (block[5] and block[5] <= now):
@@ -2250,10 +2250,14 @@ def admin_review_appeal(appeal_id):
         updated_type = block[2]
         if block_action == "change_type":
             lighter_types = {"chat", "job_creation", "job_accept", "proposal", "rating", "withdrawal"}
+            if block[2] != "full":
+                return jsonify({"msg": "Cheklov turini faqat to‘liq blokdan yengilroq cheklovga almashtirish mumkin"}), 400
             if new_block_type not in lighter_types:
                 return jsonify({"msg": "Yengilroq cheklov turini tanlang"}), 400
             updated_type = new_block_type
         expires_at = (now_dt + datetime.timedelta(minutes=duration)).isoformat()
+        if block[5] and expires_at >= block[5]:
+            return jsonify({"msg": "Yangi muddat mavjud cheklovning qolgan muddatidan qisqaroq bo‘lishi kerak"}), 400
         new_reason = block[3]
         if response:
             new_reason = (str(block[3] or "") + f" [Appeal #{appeal_id}: {response}]")[:2000]
