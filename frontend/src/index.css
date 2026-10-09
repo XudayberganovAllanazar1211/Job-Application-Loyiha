@@ -2660,8 +2660,20 @@ html[data-theme="dark"] .profile-trust-badge.reputation{background:#172554;borde
 .dispute-locked-meta span{display:inline-flex;align-items:center;padding:6px 10px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:12px}
 
 
-/* Compact action buttons in dispute cards on desktop and mobile. */
-.dispute-item>.dispute-detail-btn,
+/* Make active dispute cards open from anywhere on the card. */
+.dispute-item{
+    cursor:pointer;
+    transition:border-color .16s ease,box-shadow .16s ease;
+}
+.dispute-item:hover{
+    border-color:var(--primary,#2563eb);
+}
+.dispute-item:focus-visible{
+    outline:2px solid var(--primary,#2563eb);
+    outline-offset:2px;
+}
+
+/* Compact review action in admin dispute cards. */
 .dispute-item>.admin-dispute-review-btn{
     width:fit-content;
     min-height:32px;
