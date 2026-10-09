@@ -30,6 +30,24 @@ const blockLabels = {
     withdrawal: "Mablag‘ yechish blok"
 }
 
+const disputeDecisionLabels = {
+    favor_opener: "Nizo ochgan tomon foydasiga",
+    favor_opponent: "Qarshi tomon foydasiga",
+    mutual_agreement: "Tomonlar kelishuvi bilan",
+    insufficient_evidence: "Dalillar yetarli emas",
+    policy_violation: "Qoidabuzarlik aniqlandi",
+    no_violation: "Qoidabuzarlik aniqlanmadi"
+}
+const disputePaymentActionLabels = {
+    none: "To‘lovga tegilmagan",
+    refund_payer: "Pul buyurtmachiga qaytarildi",
+    release_to_worker: "Pul ijrochiga o‘tkazildi"
+}
+const disputeJobActionLabels = {
+    none: "Ish o‘zgarishsiz qoldi",
+    block: "Ish bloklandi"
+}
+
 const actionLabel = {
     commission_update: "Komissiya o‘zgarishi",
     user_role_update: "Rol o‘zgarishi",
@@ -82,7 +100,11 @@ export default function Admin() {
     const [reviewingAppeal, setReviewingAppeal] = useState(null)
     const [appealReviewForm, setAppealReviewForm] = useState({ status: "reviewing", admin_response: "" })
     const [reviewingDispute, setReviewingDispute] = useState(null)
-    const [disputeReviewForm, setDisputeReviewForm] = useState({ status: "reviewing", admin_response: "" })
+    const [disputeReviewForm, setDisputeReviewForm] = useState({
+        status: "reviewing", admin_response: "", decision: "", payment_action: "none",
+        job_action: "none", sanction_target: "opponent", sanction_type: "none",
+        sanction_duration_minutes: "1440"
+    })
     const [auditPage, setAuditPage] = useState(1)
 
     const [notice, setNotice] = useState("")
@@ -268,17 +290,28 @@ export default function Admin() {
         setReviewingDispute(item)
         setDisputeReviewForm({
             status: item.status === "open" ? "reviewing" : item.status,
-            admin_response: item.admin_response || ""
+            admin_response: item.admin_response || "",
+            decision: item.decision || "",
+            payment_action: item.payment_action || "none",
+            job_action: item.job_action || "none",
+            sanction_target: Number(item.sanction_user_id) === Number(item.opened_by) ? "opener" : "opponent",
+            sanction_type: item.sanction_type || "none",
+            sanction_duration_minutes: item.sanction_duration_minutes == null ? "0" : String(item.sanction_duration_minutes)
         })
     }
 
     const submitDisputeReview = async (event) => {
         event.preventDefault()
         if (!reviewingDispute) return
+        if (["resolved", "rejected"].includes(disputeReviewForm.status) && !disputeReviewForm.decision) {
+            setNoticeType("warn")
+            setNotice("Yakuniy hukm uchun qaror turini tanlang.")
+            return
+        }
         const ok = await action("/admin/disputes/" + reviewingDispute.id, {
             method: "PATCH",
             body: disputeReviewForm
-        }, "Nizo holati yangilandi.")
+        }, "Nizo bo‘yicha hukm saqlandi.")
         if (ok) setReviewingDispute(null)
     }
 
@@ -816,6 +849,10 @@ export default function Admin() {
                                         <span>Ochildi: @{item.opened_by_username || "—"} · Qarshi tomon: @{item.against_username || "—"} · Ish ID: #{item.job_id}</span>
                                         {item.evidence && <p><strong>Dalillar:</strong> {item.evidence}</p>}
                                         {item.admin_response && <p><strong>Admin javobi:</strong> {item.admin_response}</p>}
+                                        {item.decision && <p><strong>Hukm:</strong> {disputeDecisionLabels[item.decision] || item.decision}</p>}
+                                        {item.payment_action && item.payment_action !== "none" && <p><strong>To‘lov chorasi:</strong> {disputePaymentActionLabels[item.payment_action] || item.payment_action}</p>}
+                                        {item.job_action && item.job_action !== "none" && <p><strong>Ish bo‘yicha:</strong> {disputeJobActionLabels[item.job_action] || item.job_action}</p>}
+                                        {item.sanction_type && item.sanction_type !== "none" && <p><strong>Qo‘llangan cheklov:</strong> {blockLabels[item.sanction_type] || item.sanction_type} · @{Number(item.sanction_user_id) === Number(item.opened_by) ? item.opened_by_username : item.against_username}</p>}
                                         <small>{formatTimeAgo(item.created_at)}</small>
                                     </div>
                                     <button className="btn btn-primary admin-dispute-review-btn" type="button" onClick={() => openDisputeReview(item)}>
@@ -832,10 +869,75 @@ export default function Admin() {
                                                     <option value="rejected">Rad etildi</option>
                                                 </select>
                                             </label>
+                                            <div className="form-row">
+                                                <label className="field">
+                                                    <span>Yakuniy hukm turi</span>
+                                                    <select className="select" value={disputeReviewForm.decision} onChange={(e) => setDisputeReviewForm({ ...disputeReviewForm, decision: e.target.value })}>
+                                                        <option value="">Hukmni tanlang...</option>
+                                                        <option value="favor_opener">Nizo ochgan tomon foydasiga</option>
+                                                        <option value="favor_opponent">Qarshi tomon foydasiga</option>
+                                                        <option value="mutual_agreement">Tomonlar kelishuvi bilan</option>
+                                                        <option value="insufficient_evidence">Dalillar yetarli emas</option>
+                                                        <option value="policy_violation">Qoidabuzarlik aniqlandi</option>
+                                                        <option value="no_violation">Qoidabuzarlik aniqlanmadi</option>
+                                                    </select>
+                                                </label>
+                                                <label className="field">
+                                                    <span>To‘lov bo‘yicha chora</span>
+                                                    <select className="select" value={disputeReviewForm.payment_action} onChange={(e) => setDisputeReviewForm({ ...disputeReviewForm, payment_action: e.target.value })}>
+                                                        <option value="none">To‘lovga tegmaslik</option>
+                                                        <option value="refund_payer">Escrowdagi pulni buyurtmachiga qaytarish</option>
+                                                        <option value="release_to_worker">Escrowdagi pulni ijrochiga o‘tkazish</option>
+                                                    </select>
+                                                </label>
+                                            </div>
+                                            <div className="form-row">
+                                                <label className="field">
+                                                    <span>Ish bo‘yicha chora</span>
+                                                    <select className="select" value={disputeReviewForm.job_action} onChange={(e) => setDisputeReviewForm({ ...disputeReviewForm, job_action: e.target.value })}>
+                                                        <option value="none">Ishni o‘zgarishsiz qoldirish</option>
+                                                        <option value="block">Ishni bloklash</option>
+                                                    </select>
+                                                </label>
+                                                <label className="field">
+                                                    <span>Kimga cheklov qo‘yiladi?</span>
+                                                    <select className="select" value={disputeReviewForm.sanction_target} onChange={(e) => setDisputeReviewForm({ ...disputeReviewForm, sanction_target: e.target.value })}>
+                                                        <option value="opener">Nizo ochgan: @{reviewingDispute.opened_by_username || "foydalanuvchi"}</option>
+                                                        <option value="opponent">Qarshi tomon: @{reviewingDispute.against_username || "foydalanuvchi"}</option>
+                                                    </select>
+                                                </label>
+                                            </div>
+                                            <div className="form-row">
+                                                <label className="field">
+                                                    <span>Foydalanuvchi chorasi</span>
+                                                    <select className="select" value={disputeReviewForm.sanction_type} onChange={(e) => setDisputeReviewForm({ ...disputeReviewForm, sanction_type: e.target.value })}>
+                                                        <option value="none">Cheklov qo‘llamaslik</option>
+                                                        <option value="chat">Chatdan vaqtincha cheklash</option>
+                                                        <option value="job_creation">Ish yaratishni cheklash</option>
+                                                        <option value="job_accept">Ish qabul qilishni cheklash</option>
+                                                        <option value="proposal">Taklif yuborishni cheklash</option>
+                                                        <option value="rating">Baholashni cheklash</option>
+                                                        <option value="withdrawal">Mablag‘ yechishni cheklash</option>
+                                                        <option value="full">To‘liq akkaunt bloki</option>
+                                                    </select>
+                                                </label>
+                                                <label className="field">
+                                                    <span>Cheklov muddati</span>
+                                                    <select className="select" disabled={disputeReviewForm.sanction_type === "none"} value={disputeReviewForm.sanction_duration_minutes} onChange={(e) => setDisputeReviewForm({ ...disputeReviewForm, sanction_duration_minutes: e.target.value })}>
+                                                        <option value="60">1 soat</option>
+                                                        <option value="1440">1 kun</option>
+                                                        <option value="10080">7 kun</option>
+                                                        <option value="43200">30 kun</option>
+                                                        <option value="525600">365 kun</option>
+                                                        <option value="0">Muddatsiz</option>
+                                                    </select>
+                                                </label>
+                                            </div>
                                             <label className="field">
-                                                <span>Administrator javobi</span>
-                                                <textarea className="textarea" rows="4" maxLength="3000" required={["resolved", "rejected"].includes(disputeReviewForm.status)} value={disputeReviewForm.admin_response} onChange={(e) => setDisputeReviewForm({ ...disputeReviewForm, admin_response: e.target.value })} placeholder="Tomonlar uchun qaror va izoh..." />
+                                                <span>Administrator javobi va qaror asoslari</span>
+                                                <textarea className="textarea" rows="4" maxLength="3000" required={["resolved", "rejected"].includes(disputeReviewForm.status)} value={disputeReviewForm.admin_response} onChange={(e) => setDisputeReviewForm({ ...disputeReviewForm, admin_response: e.target.value })} placeholder="Dalillar, qoida bandi va qaror sababini yozing..." />
                                             </label>
+                                            <p className="muted">Pul harakati faqat escrowda ushlab turilgan to‘lovga qo‘llanadi. Yakuniy hukm bilan tanlangan ish yoki akkaunt chorasi ham bajariladi.</p>
                                             <div className="form-row">
                                                 <button className="btn btn-primary" type="submit">Qarorni saqlash</button>
                                                 <button className="btn btn-secondary" type="button" onClick={() => setReviewingDispute(null)}>Bekor qilish</button>
