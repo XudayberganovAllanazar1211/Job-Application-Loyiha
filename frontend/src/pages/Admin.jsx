@@ -121,6 +121,7 @@ export default function Admin() {
         sanction_type: "none", sanction_duration_minutes: "1440"
     })
     const [reportReviewError, setReportReviewError] = useState("")
+    const [reportReviewSaving, setReportReviewSaving] = useState(false)
     const [editingService, setEditingService] = useState(null)
     const [serviceEditForm, setServiceEditForm] = useState({ name: "", parent_id: "" })
     const [verifyingUser, setVerifyingUser] = useState(null)
@@ -363,17 +364,28 @@ export default function Admin() {
 
     const submitReportReview = async (event) => {
         event.preventDefault()
-        if (!reviewingReport) return
+        if (!reviewingReport || reportReviewSaving) return
         setReportReviewError("")
         if (["resolved", "rejected"].includes(reportReviewForm.status) && (!reportReviewForm.decision || !reportReviewForm.admin_response.trim())) {
             setReportReviewError("Yakuniy qaror uchun hukm turini tanlang va sababini yozing.")
             return
         }
-        const ok = await action("/admin/report/" + reviewingReport.id, {
-            method: "PATCH",
-            body: reportReviewForm
-        }, "Shikoyat bo‘yicha qaror saqlandi.", (message) => setReportReviewError(message))
-        if (ok) setReviewingReport(null)
+
+        setReportReviewSaving(true)
+        try {
+            const ok = await action("/admin/report/" + reviewingReport.id, {
+                method: "PATCH",
+                body: reportReviewForm
+            }, "Shikoyat bo‘yicha qaror saqlandi.", (message) => setReportReviewError(message))
+            if (ok) setReviewingReport(null)
+        } catch (error) {
+            const message = error?.message || "Shikoyatni saqlashda kutilmagan xato yuz berdi."
+            setReportReviewError(message)
+            setNoticeType("warn")
+            setNotice(message)
+        } finally {
+            setReportReviewSaving(false)
+        }
     }
 
     const openVerification = (item) => {
@@ -1268,7 +1280,7 @@ export default function Admin() {
                             (!reviewingReport.decision || !String(reviewingReport.admin_response || "").trim()) &&
                             <p className="muted" role="status">Bu shikoyat eski versiyada yakunlangan, lekin hukm tafsilotlari saqlanmagan. Uni qayta ko‘rib chiqish uchun holat vaqtincha “Ko‘rib chiqilmoqda”ga o‘rnatildi.</p>}
                         {reportReviewError && <div className="notice warn" role="alert" style={{ marginBottom: 12 }}>{reportReviewError}</div>}
-                        <form className="admin-user-form" onSubmit={submitReportReview}>
+                        <form className="admin-user-form" noValidate onSubmit={submitReportReview}>
                             <label>Holat<select className="select" value={reportReviewForm.status} onChange={(e) => setReportReviewForm({ ...reportReviewForm, status: e.target.value })}><option value="reviewing">Ko‘rib chiqilmoqda</option><option value="resolved">Hal qilindi</option><option value="rejected">Rad etildi</option><option value="open">Ochiq qoldirish</option></select></label>
                             <label>Hukm turi<select className="select" value={reportReviewForm.decision} onChange={(e) => setReportReviewForm({ ...reportReviewForm, decision: e.target.value })}><option value="">Hukmni tanlang...</option><option value="violation">Qoidabuzarlik aniqlandi</option><option value="no_violation">Qoidabuzarlik aniqlanmadi</option><option value="insufficient_evidence">Dalil yetarli emas</option><option value="duplicate">Takroriy shikoyat</option><option value="mistake">Xato shikoyat</option><option value="other">Boshqa holat</option></select></label>
                             <div className="form-row">
@@ -1283,7 +1295,7 @@ export default function Admin() {
                             <label>Cheklov muddati<select className="select" disabled={reportReviewForm.sanction_type === "none"} value={reportReviewForm.sanction_duration_minutes} onChange={(e) => setReportReviewForm({ ...reportReviewForm, sanction_duration_minutes: e.target.value })}><option value="1">1 daqiqa</option><option value="5">5 daqiqa</option><option value="15">15 daqiqa</option><option value="30">30 daqiqa</option><option value="60">1 soat</option><option value="360">6 soat</option><option value="1440">1 kun</option><option value="10080">7 kun</option><option value="43200">30 kun</option><option value="525600">365 kun</option><option value="0">Muddatsiz</option></select></label>
                             <label>Qaror asosi va izoh<textarea className="input admin-textarea" maxLength="3000" required={["resolved", "rejected"].includes(reportReviewForm.status)} value={reportReviewForm.admin_response} onChange={(e) => setReportReviewForm({ ...reportReviewForm, admin_response: e.target.value })} placeholder="Dalillar va qoida bandi asosida tushuntiring..." /></label>
                             <p className="muted">To‘lov amallari faqat escrowda ushlangan to‘lovda ishlaydi. Qaytarish yoki bloklash qarorini berishdan oldin dalillarni tekshiring.</p>
-                            <div className="admin-modal-actions"><button type="button" className="btn btn-secondary" onClick={() => setReviewingReport(null)}>Yopish</button><button type="submit" className="btn btn-primary">Qarorni saqlash</button></div>
+                            <div className="admin-modal-actions"><button type="button" className="btn btn-secondary" disabled={reportReviewSaving} onClick={() => setReviewingReport(null)}>Yopish</button><button type="submit" className="btn btn-primary" disabled={reportReviewSaving}>{reportReviewSaving ? "Saqlanmoqda..." : "Qarorni saqlash"}</button></div>
                         </form>
                     </div>
                 </div>
