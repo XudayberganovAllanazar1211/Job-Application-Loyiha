@@ -1388,10 +1388,11 @@ def disputes():
         rows_data = db.q(
             """SELECT d.id,d.job_id,d.opened_by,d.against_user_id,d.category,d.description,d.evidence,
                       d.status,d.admin_response,d.created_at,d.updated_at,d.resolved_at,
-                      j.title,j.status,u.username
+                      j.title,j.status,ou.username,au.username
                FROM disputes d
                JOIN jobs j ON j.id=d.job_id
-               LEFT JOIN users u ON u.id=d.against_user_id
+               LEFT JOIN users ou ON ou.id=d.opened_by
+               LEFT JOIN users au ON au.id=d.against_user_id
                WHERE (d.opened_by=? OR d.against_user_id=?)
                  AND d.status IN ('open','reviewing')
                ORDER BY d.id DESC LIMIT 100""",
@@ -1402,7 +1403,8 @@ def disputes():
             "category": row[4], "description": row[5], "evidence": row[6] or "",
             "status": row[7], "admin_response": row[8] or "", "created_at": row[9],
             "updated_at": row[10], "resolved_at": row[11], "job_title": row[12] or "",
-            "job_status": row[13] or "", "against_username": row[14] or "",
+            "job_status": row[13] or "", "opened_by_username": row[14] or "",
+            "against_username": row[15] or "",
         } for row in rows_data])
 
     data = request.json or {}
