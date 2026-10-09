@@ -1720,6 +1720,10 @@ class JobPlatformTestCase(unittest.TestCase):
         self.assertEqual(eligible_after.status_code, 200)
         self.assertNotIn(job_id, [item["id"] for item in eligible_after.get_json()["items"]])
 
+        owner_view = self.client.get("/disputes", headers={"Authorization": f"Bearer {owner_token}"})
+        self.assertEqual(owner_view.status_code, 200)
+        self.assertTrue(any(item["id"] == dispute_id for item in owner_view.get_json()))
+
         worker_view = self.client.get("/disputes", headers={"Authorization": f"Bearer {worker_token}"})
         self.assertEqual(worker_view.status_code, 200)
         self.assertTrue(any(item["id"] == dispute_id for item in worker_view.get_json()))
