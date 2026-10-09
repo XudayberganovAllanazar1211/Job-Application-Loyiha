@@ -900,7 +900,7 @@ export default function Profile() {
                 <section className="card" style={{ marginTop: 18 }}>
                     <div className="profile-section-head">
                         <div>
-                            <span className="profile-eyebrow">PORTFOLIO</span>
+                            <span className="profile-eyebrow">ISH NAMUNALARI</span>
                             <h3 className="section-title">Ish namunalari</h3>
                             <p className="muted">Bajargan loyihalaringizni qisqacha ko‘rsating.</p>
                         </div>
@@ -956,7 +956,7 @@ export default function Profile() {
                         </div>
                     ) : (
                         <div className="profile-empty" style={{ marginBottom: 14 }}>
-                            <strong>Hali portfolio yo‘q</strong>
+                            <strong>Hali ish namunalari qo‘shilmagan</strong>
                             <span>Kamida 1–2 ta yaxshi ish namunasi qo‘shish profilingizni kuchaytiradi.</span>
                         </div>
                     )}
@@ -973,7 +973,7 @@ export default function Profile() {
                         onSubmit={async (event) => {
                             event.preventDefault()
                             if (portfolio.length >= 3) {
-                                setNotice("Siz maksimal 3 ta portfolio qo‘sha olasiz. Yangi portfolio qo‘shish uchun avval bittasini o‘chiring.")
+                                setNotice("Ko‘pi bilan 3 ta ish namunasi qo‘shish mumkin. Yangi namuna qo‘shish uchun avval mavjud namunadan birini o‘chiring.")
                                 return
                             }
                             if (!portfolioFile && !portfolioForm.title.trim()) {
