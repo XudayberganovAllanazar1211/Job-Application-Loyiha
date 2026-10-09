@@ -56,3 +56,12 @@ export function formatRelativeDay(value) {
     if (dayDifference === -1) return "Ertaga"
     return formatTimeAgo(value)
 }
+
+export function getMessageDateKey(value) {
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return ""
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, "0")
+    const day = String(date.getDate()).padStart(2, "0")
+    return `${year}-${month}-${day}`
+}
