@@ -399,7 +399,7 @@ export default function Chat() {
                                                         disabled={reportingMessageId === message.id}
                                                         onClick={() => reportMessage(message)}
                                                     >
-                                                        {reportingMessageId === message.id ? "Yuborilmoqda..." : "Report"}
+                                                        {reportingMessageId === message.id ? "Yuborilmoqda..." : "Shikoyat qilish"}
                                                     </button>
                                                 )}
                                             </div>
