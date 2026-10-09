@@ -1331,9 +1331,12 @@ def update_user_verification(user_id):
     if not target:
         return jsonify({"msg": "Foydalanuvchi topilmadi"}), 404
     allowed = {"email_verified", "phone_verified", "identity_verified"}
-    updates = {key: bool(data[key]) for key in allowed if key in data}
-    if not updates:
+    supplied = [key for key in allowed if key in data]
+    if not supplied:
         return jsonify({"msg": "Tasdiqlash maydoni kiritilmagan"}), 400
+    if any(type(data[key]) is not bool for key in supplied):
+        return jsonify({"msg": "Tasdiqlash holatlari true yoki false boolean bo‘lishi kerak"}), 400
+    updates = {key: data[key] for key in supplied}
     assignments = ", ".join(f"{key}=?" for key in updates)
     values = [int(value) for value in updates.values()]
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
