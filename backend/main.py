@@ -529,9 +529,33 @@ class DB:
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 resolved_at TEXT,
-                resolved_by INTEGER
+                resolved_by INTEGER,
+                decision TEXT NOT NULL DEFAULT '',
+                decision_for_user_id INTEGER,
+                payment_action TEXT NOT NULL DEFAULT 'none',
+                job_action TEXT NOT NULL DEFAULT 'none',
+                sanction_user_id INTEGER,
+                sanction_type TEXT NOT NULL DEFAULT 'none',
+                sanction_duration_minutes INTEGER
             )
         """)
+        cursor.execute("PRAGMA table_info(disputes)")
+        existing_dispute_cols = [row[1] for row in cursor.fetchall()]
+        dispute_migrations = [
+            ("decision", "ALTER TABLE disputes ADD COLUMN decision TEXT NOT NULL DEFAULT ''"),
+            ("decision_for_user_id", "ALTER TABLE disputes ADD COLUMN decision_for_user_id INTEGER"),
+            ("payment_action", "ALTER TABLE disputes ADD COLUMN payment_action TEXT NOT NULL DEFAULT 'none'"),
+            ("job_action", "ALTER TABLE disputes ADD COLUMN job_action TEXT NOT NULL DEFAULT 'none'"),
+            ("sanction_user_id", "ALTER TABLE disputes ADD COLUMN sanction_user_id INTEGER"),
+            ("sanction_type", "ALTER TABLE disputes ADD COLUMN sanction_type TEXT NOT NULL DEFAULT 'none'"),
+            ("sanction_duration_minutes", "ALTER TABLE disputes ADD COLUMN sanction_duration_minutes INTEGER"),
+        ]
+        for col_name, sql in dispute_migrations:
+            if col_name not in existing_dispute_cols:
+                try:
+                    cursor.execute(sql)
+                except Exception:
+                    pass
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_disputes_job_status ON disputes(job_id,status)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_disputes_opened_by ON disputes(opened_by,created_at DESC)")
 
@@ -1463,7 +1487,8 @@ def admin_disputes():
     rows_data = db.q(
         """SELECT d.id,d.job_id,d.opened_by,d.against_user_id,d.category,d.description,d.evidence,
                   d.status,d.admin_response,d.created_at,d.updated_at,d.resolved_at,
-                  j.title,ou.username,au.username
+                  j.title,ou.username,au.username,d.decision,d.decision_for_user_id,
+                  d.payment_action,d.job_action,d.sanction_user_id,d.sanction_type,d.sanction_duration_minutes
            FROM disputes d
            JOIN jobs j ON j.id=d.job_id
            LEFT JOIN users ou ON ou.id=d.opened_by
@@ -1477,6 +1502,10 @@ def admin_disputes():
         "status": r[7], "admin_response": r[8] or "", "created_at": r[9],
         "updated_at": r[10], "resolved_at": r[11], "job_title": r[12] or "",
         "opened_by_username": r[13] or "", "against_username": r[14] or "",
+        "decision": r[15] or "", "decision_for_user_id": r[16],
+        "payment_action": r[17] or "none", "job_action": r[18] or "none",
+        "sanction_user_id": r[19], "sanction_type": r[20] or "none",
+        "sanction_duration_minutes": r[21],
     } for r in rows_data])
 
 
@@ -1486,29 +1515,168 @@ def update_dispute(dispute_id):
     data = request.json or {}
     status = str(data.get("status", "")).strip()
     response = str(data.get("admin_response", "")).strip()
+    decision = str(data.get("decision", "")).strip().lower()
+    payment_action = str(data.get("payment_action", "none")).strip().lower()
+    job_action = str(data.get("job_action", "none")).strip().lower()
+    sanction_type = str(data.get("sanction_type", "none")).strip().lower()
+    sanction_target = str(data.get("sanction_target", "opponent")).strip().lower()
+    duration_raw = data.get("sanction_duration_minutes", "1440")
+
+    decisions = {
+        "favor_opener": "Nizo ochgan tomon foydasiga",
+        "favor_opponent": "Qarshi tomon foydasiga",
+        "mutual_agreement": "Tomonlar kelishuvi bilan",
+        "insufficient_evidence": "Dalillar yetarli emas",
+        "policy_violation": "Qoidabuzarlik aniqlandi",
+        "no_violation": "Qoidabuzarlik aniqlanmadi",
+    }
     if status not in {"open", "reviewing", "resolved", "rejected"}:
         return jsonify({"msg": "Nizo holati noto‘g‘ri"}), 400
+    if decision and decision not in decisions:
+        return jsonify({"msg": "Hukm turi noto‘g‘ri"}), 400
+    if payment_action not in {"none", "refund_payer", "release_to_worker"}:
+        return jsonify({"msg": "To‘lov chorasi noto‘g‘ri"}), 400
+    if job_action not in {"none", "block"}:
+        return jsonify({"msg": "Ish bo‘yicha chora noto‘g‘ri"}), 400
+    if sanction_type not in {"none", *BLOCK_TYPE_LABELS.keys()}:
+        return jsonify({"msg": "Foydalanuvchi uchun chora noto‘g‘ri"}), 400
     if len(response) > 3000:
         return jsonify({"msg": "Admin javobi juda uzun"}), 400
+
+    is_final = status in {"resolved", "rejected"}
+    if not is_final and (payment_action != "none" or job_action != "none" or sanction_type != "none"):
+        return jsonify({"msg": "Pul, ish yoki akkaunt bo‘yicha choralar faqat yakuniy hukmda qo‘llanadi"}), 400
+    if payment_action == "release_to_worker" and job_action == "block":
+        return jsonify({"msg": "Ishni bloklash va to‘lovni ijrochiga o‘tkazishni bir hukmda tanlab bo‘lmaydi"}), 400
+    if sanction_type != "none" and sanction_target not in {"opener", "opponent"}:
+        return jsonify({"msg": "Cheklov qo‘yiladigan tomon noto‘g‘ri"}), 400
+
     dispute = db.q(
-        "SELECT opened_by,against_user_id,job_id,status FROM disputes WHERE id=?",
+        """SELECT opened_by,against_user_id,job_id,status,sanction_user_id,sanction_type
+           FROM disputes WHERE id=?""",
         (dispute_id,),
     ).fetchone()
     if not dispute:
         return jsonify({"msg": "Nizo topilmadi"}), 404
+
+    opener_id, opponent_id, job_id, old_status, previous_sanction_user_id, previous_sanction_type = dispute
+    decision_for_user_id = (
+        opener_id if decision == "favor_opener" else
+        opponent_id if decision == "favor_opponent" else None
+    )
+
+    sanction_user_id = None
+    sanction_duration = None
+    prior_sanction_exists = False
+    if sanction_type != "none":
+        sanction_user_id = opener_id if sanction_target == "opener" else opponent_id
+        if sanction_user_id == int(request.uid):
+            return jsonify({"msg": "O‘zingizga cheklov qo‘ya olmaysiz"}), 400
+        target = db.q("SELECT role FROM users WHERE id=?", (sanction_user_id,)).fetchone()
+        if not target:
+            return jsonify({"msg": "Cheklov qo‘yiladigan foydalanuvchi topilmadi"}), 404
+        if target[0] == "admin":
+            return jsonify({"msg": "Administrator hisobini nizo orqali bloklab bo‘lmaydi"}), 400
+        if duration_raw not in (None, "", "null", "0", 0):
+            try:
+                sanction_duration = int(duration_raw)
+            except (TypeError, ValueError):
+                return jsonify({"msg": "Cheklov muddati noto‘g‘ri"}), 400
+            if sanction_duration < 1 or sanction_duration > 525600:
+                return jsonify({"msg": "Cheklov muddati 1 daqiqadan 365 kungacha bo‘lishi kerak"}), 400
+
+        existing_block = _active_block_row(sanction_user_id, sanction_type)
+        if existing_block:
+            prior_sanction_exists = (
+                previous_sanction_user_id == sanction_user_id and
+                previous_sanction_type == sanction_type
+            )
+            if not prior_sanction_exists:
+                return jsonify({"msg": "Bu foydalanuvchida ushbu turdagi faol cheklov allaqachon mavjud"}), 409
+
+    # Apply a requested escrow decision first, so a failed payment action never records a false ruling.
+    if payment_action != "none":
+        payment_handler = (
+            app.config.get("FINJOB_REFUND_PAYMENT") if payment_action == "refund_payer"
+            else app.config.get("FINJOB_RELEASE_PAYMENT")
+        )
+        if not payment_handler:
+            return jsonify({"msg": "To‘lov amali hozir mavjud emas"}), 503
+        payment_ok, payment_message, payment_data = payment_handler(job_id)
+        if not payment_ok:
+            return jsonify({"msg": payment_message or "To‘lov bo‘yicha chora bajarilmadi"}), 400
+
+    if job_action == "block":
+        db.q(
+            "UPDATE jobs SET status='blocked', finished_at=NULL, owner_finished=0, worker_finished=0 WHERE id=?",
+            (job_id,),
+        ).close()
+
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-    resolved_at = now if status in {"resolved", "rejected"} else None
+    expires_at = None
+    if sanction_type != "none" and sanction_user_id and not prior_sanction_exists:
+        expires_at = (
+            datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=sanction_duration)
+        ).isoformat() if sanction_duration else None
+        block_result = db.q(
+            """INSERT INTO user_blocks(user_id,block_type,reason,duration_minutes,created_at,expires_at,active,created_by)
+               VALUES(?,?,?,?,?,?,1,?)""",
+            (sanction_user_id, sanction_type, f"Nizo #{dispute_id}: {response}"[:2000],
+             sanction_duration, now, expires_at, request.uid),
+        )
+        block_id = block_result.lastrowid
+        block_result.close()
+        if sanction_type == "full":
+            db.q("UPDATE users SET is_blocked=1 WHERE id=?", (sanction_user_id,)).close()
+        deadline = "muddatsiz" if not expires_at else expires_at
+        create_notification(
+            sanction_user_id, "account_moderation", "Hisobingizga cheklov qo‘yildi",
+            f"Nizo #{dispute_id} bo‘yicha {BLOCK_TYPE_LABELS[sanction_type]} qo‘yildi. Sabab: {response}. Muddati: {deadline}.",
+            "/appeals",
+        )
+
     db.q(
-        """UPDATE disputes SET status=?,admin_response=?,updated_at=?,resolved_at=?,resolved_by=?
+        """UPDATE disputes SET status=?,admin_response=?,updated_at=?,resolved_at=?,resolved_by=?,
+                  decision=?,decision_for_user_id=?,payment_action=?,job_action=?,
+                  sanction_user_id=?,sanction_type=?,sanction_duration_minutes=?
            WHERE id=?""",
-        (status, response, now, resolved_at, request.uid if resolved_at else None, dispute_id),
+        (
+            status, response, now, now if is_final else None, request.uid if is_final else None,
+            decision, decision_for_user_id, payment_action, job_action,
+            sanction_user_id, sanction_type, sanction_duration, dispute_id,
+        ),
     ).close()
-    if status in {"resolved", "rejected"}:
-        title = "Nizo hal qilindi" if status == "resolved" else "Nizo rad etildi"
-        for uid in {dispute[0], dispute[1]}:
-            create_notification(uid, "dispute_update", title, response or "Administrator nizo bo‘yicha qaror chiqardi.", "/disputes")
-    admin_audit("dispute_status_update", "dispute", dispute_id, f"status={status}")
-    return jsonify({"msg": "Nizo yangilandi", "status": status})
+
+    if is_final:
+        title = "Nizo bo‘yicha yakuniy qaror"
+        parts = []
+        if decision:
+            parts.append(f"Hukm: {decisions[decision]}.")
+        if response:
+            parts.append(response)
+        if payment_action == "refund_payer":
+            parts.append("To‘lov buyurtmachiga qaytarildi.")
+        elif payment_action == "release_to_worker":
+            parts.append("To‘lov ijrochiga o‘tkazildi.")
+        if job_action == "block":
+            parts.append("Ish bloklandi.")
+        if sanction_type != "none":
+            parts.append(f"{BLOCK_TYPE_LABELS[sanction_type]} qo‘llandi.")
+        notice_message = " ".join(parts) or "Administrator nizo bo‘yicha qaror chiqardi."
+        for uid in {opener_id, opponent_id}:
+            create_notification(uid, "dispute_update", title, notice_message, "/disputes")
+
+    audit_parts = [f"status={status}", f"decision={decision or 'not_set'}",
+                   f"payment={payment_action}", f"job={job_action}"]
+    if sanction_type != "none":
+        audit_parts.append(f"sanction={sanction_type}; target={sanction_user_id}; minutes={sanction_duration}")
+    admin_audit("dispute_decision", "dispute", dispute_id, "; ".join(audit_parts))
+    return jsonify({
+        "msg": "Nizo bo‘yicha hukm va tanlangan choralar saqlandi.",
+        "status": status, "decision": decision, "payment_action": payment_action,
+        "job_action": job_action, "sanction_type": sanction_type,
+        "sanction_user_id": sanction_user_id,
+    })
 
 register_payment_routes(app, db, auth, admin_required, create_notification, admin_audit, enforce_block)
 
