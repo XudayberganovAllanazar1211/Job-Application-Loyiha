@@ -2653,3 +2653,8 @@ html[data-theme="dark"] .jobs-detail-panel.has-active-job .jobs-detail-panel-hea
 @media(max-width:700px){.profile-verification-grid{grid-template-columns:1fr}.dispute-item{grid-template-columns:1fr}.dispute-item>.btn{width:100%}}
 html[data-theme="dark"] .profile-trust-badge{background:#052e1b;border-color:#166534;color:#86efac}
 html[data-theme="dark"] .profile-trust-badge.reputation{background:#172554;border-color:#315a9d;color:#bfdbfe}
+
+
+.dispute-job-lock{display:grid;gap:10px;border-color:var(--primary,#2563eb);background:var(--primary-soft,#eff6ff)}
+.dispute-locked-meta{display:flex;flex-wrap:wrap;gap:8px}
+.dispute-locked-meta span{display:inline-flex;align-items:center;padding:6px 10px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:12px}
