@@ -563,7 +563,7 @@ export default function Profile() {
                         <div className="profile-verification-grid">
                             <div>
                                 <div className="profile-verification-title">Tasdiqlash</div>
-                                <VerificationBadges verification={form.verification} />
+                                <VerificationBadges verification={form.verification} interactive />
                             </div>
                             <div>
                                 <div className="profile-verification-title">Reputatsiya</div>
