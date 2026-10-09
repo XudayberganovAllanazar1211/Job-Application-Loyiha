@@ -1353,20 +1353,28 @@ def get_my_reputation():
 @app.route("/disputes/eligible-jobs", methods=["GET"])
 @auth
 def eligible_dispute_jobs():
-    rows = db.q(
-        """SELECT j.id,j.title,j.status,j.user_id,j.worker_id
-           FROM jobs j
-           WHERE j.worker_id IS NOT NULL
-             AND (j.user_id=? OR j.worker_id=?)
-             AND j.status IN ('payment_pending','accepted','pending_finish','finished')
-             AND NOT EXISTS (
-                 SELECT 1 FROM disputes d
-                 WHERE d.job_id=j.id AND d.status IN ('open','reviewing')
-             )
-           ORDER BY j.id DESC
-           LIMIT 200""",
-        (request.uid, request.uid),
-    ).fetchall()
+    requested_job_id = request.args.get("job_id", "").strip()
+    if requested_job_id and not requested_job_id.isdigit():
+        return jsonify({"msg": "Ish identifikatori noto‘g‘ri", "items": []}), 400
+
+    query = """SELECT j.id,j.title,j.status,j.user_id,j.worker_id
+               FROM jobs j
+               WHERE j.worker_id IS NOT NULL
+                 AND (j.user_id=? OR j.worker_id=?)
+                 AND j.status IN ('payment_pending','accepted','pending_finish','finished')
+                 AND NOT EXISTS (
+                     SELECT 1 FROM disputes d
+                     WHERE d.job_id=j.id AND d.status IN ('open','reviewing')
+                 )"""
+    params = [request.uid, request.uid]
+    if requested_job_id:
+        query += " AND j.id=?"
+        params.append(int(requested_job_id))
+    query += " ORDER BY j.id DESC"
+    if not requested_job_id:
+        query += " LIMIT 200"
+
+    rows = db.q(query, tuple(params)).fetchall()
     return jsonify({"items": [{
         "id": row[0], "title": row[1], "status": row[2],
         "user_id": row[3], "worker_id": row[4],
@@ -1384,7 +1392,8 @@ def disputes():
                FROM disputes d
                JOIN jobs j ON j.id=d.job_id
                LEFT JOIN users u ON u.id=d.against_user_id
-               WHERE d.opened_by=? OR d.against_user_id=?
+               WHERE (d.opened_by=? OR d.against_user_id=?)
+                 AND d.status IN ('open','reviewing')
                ORDER BY d.id DESC LIMIT 100""",
             (request.uid, request.uid),
         ).fetchall()
