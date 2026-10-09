@@ -298,7 +298,7 @@ export default function Dashboard() {
                 </div>
                 <div className="stat-card">
                     <div className="stat-card-icon">03</div>
-                    <div className="stat-card-kicker">Platform</div>
+                    <div className="stat-card-kicker">FINJOB</div>
                     <div className="stat-label">Tizim rejimi</div>
                     <div className="stat-value" style={{ fontSize: 22, color: "#10b981" }}>
                         Ko‘p yo‘nalishli bitta profil
@@ -310,16 +310,16 @@ export default function Dashboard() {
                 <section className="card">
                     <div className="section-toolbar" style={{ marginBottom: 16 }}>
                         <div className="page-head">
-                            <h2 style={{ margin: 0 }}>Mening ish maydonim</h2>
+                            <h2 style={{ margin: 0 }}>Ishlarim va e’lonlarim</h2>
                             <p className="muted" style={{ margin: 0 }}>
-                                Faol e’lonlar hamda siz yaratgan yoki qabul qilgan ishlar shu yerda ko‘rinadi.
+                                Siz joylashtirgan e’lonlar, qabul qilgan ishlar va hozir bajarayotgan vazifalaringiz shu yerda ko‘rinadi.
                             </p>
                         </div>
                         <div className="actions">
                             <input
                                 className="input"
                                 style={{ minWidth: 220 }}
-                                placeholder="Qidirish..."
+                                placeholder="Ish nomi yoki xizmatni qidiring..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                             />
