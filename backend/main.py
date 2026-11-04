@@ -3,7 +3,7 @@ import re
 import math
 import time
 import threading
-import sqlite3
+import pg_compat as sqlite3
 import datetime
 import secrets
 import smtplib
@@ -20,14 +20,17 @@ from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from PIL import Image, ImageOps, UnidentifiedImageError
-from payments import register_payment_routes
 import jwt
 
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    load_dotenv(os.path.join(PROJECT_DIR, ".env.local"), override=False)
+    load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"), override=False)
 except ImportError:
     pass
+
+from payments import register_payment_routes
 
 app = Flask(__name__)
 finjob_env = os.environ.get("FINJOB_ENV", "development").strip().lower()
@@ -239,32 +242,43 @@ def send_email_code(to_email, code):
 
 # -------- DATABASE --------
 class DB:
-    def __init__(self, db_name="app.db"):
-        self.db_name = db_name
+    def __init__(self, database_url=None):
+        self.database_url = (database_url or os.environ.get("DATABASE_URL", "")).strip()
+        self.db_name = self.database_url
+        if not self.database_url.startswith(("postgres://", "postgresql://")):
+            raise RuntimeError(
+                "DATABASE_URL PostgreSQL DSN majburiy. Ilova SQLite rejimida ishga tushmaydi."
+            )
         self.init()
         self.seed()
 
     def get_connection(self):
-        conn = sqlite3.connect(self.db_name, check_same_thread=False, timeout=15.0)
-        conn.execute("PRAGMA journal_mode = WAL;")
-        conn.execute("PRAGMA synchronous = NORMAL;")
-        conn.execute("PRAGMA busy_timeout = 5000;")
-        conn.execute("PRAGMA cache_size = -32768;")
-        conn.execute("PRAGMA temp_store = MEMORY;")
-        conn.execute("PRAGMA mmap_size = 268435456;")
-        conn.execute("PRAGMA foreign_keys = ON;")
-        return conn
+        return sqlite3.connect(self.database_url, check_same_thread=False, timeout=15.0)
 
     def _query_connection(self):
         local = getattr(threading.current_thread(), "_finjob_db", None)
-        if local is None or local.get("db_name") != self.db_name:
-            local = {"db_name": self.db_name, "conn": self.get_connection()}
+        if local is None or local.get("database_url") != self.database_url:
+            local = {"database_url": self.database_url, "conn": self.get_connection()}
             setattr(threading.current_thread(), "_finjob_db", local)
         return local["conn"]
 
     def init(self):
         conn = self.get_connection()
         cursor = conn.cursor()
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS schema_migrations(
+                version BIGINT PRIMARY KEY,
+                name TEXT NOT NULL,
+                applied_at TEXT NOT NULL
+            )
+        """)
+        if cursor.execute(
+            "SELECT version FROM schema_migrations WHERE version=1"
+        ).fetchone():
+            conn.commit()
+            conn.close()
+            return
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users(
@@ -555,7 +569,7 @@ class DB:
                 try:
                     cursor.execute(sql)
                 except Exception:
-                    pass
+                    raise
 
         cursor.execute("PRAGMA table_info(jobs)")
         existing_job_cols = [row[1] for row in cursor.fetchall()]
@@ -563,25 +577,25 @@ class DB:
             try:
                 cursor.execute("ALTER TABLE jobs ADD COLUMN currency TEXT DEFAULT 'UZS'")
             except Exception:
-                pass
+                raise
 
         if "custom_service" not in existing_job_cols:
             try:
                 cursor.execute("ALTER TABLE jobs ADD COLUMN custom_service TEXT DEFAULT ''")
             except Exception:
-                pass
+                raise
 
         if "agreed_price" not in existing_job_cols:
             try:
                 cursor.execute("ALTER TABLE jobs ADD COLUMN agreed_price REAL")
             except Exception:
-                pass
+                raise
 
         if "finished_at" not in existing_job_cols:
             try:
                 cursor.execute("ALTER TABLE jobs ADD COLUMN finished_at TEXT")
             except Exception:
-                pass
+                raise
 
         # Active ish hech qachon biriktirilgan bajaruvchiga ega bo‘lmasligi kerak.
         # Eski bazadagi active + worker_id holatini avtomatik tiklaymiz.
@@ -590,7 +604,7 @@ class DB:
                 "UPDATE jobs SET worker_id=NULL WHERE status='active' AND worker_id IS NOT NULL"
             )
         except Exception:
-            pass
+            raise
 
         cursor.execute("PRAGMA table_info(ratings)")
         existing_rating_cols = [row[1] for row in cursor.fetchall()]
@@ -600,22 +614,22 @@ class DB:
             try:
                 cursor.execute("ALTER TABLE messages ADD COLUMN read_at TEXT")
             except Exception:
-                pass
+                raise
         if "attachment_url" not in existing_message_cols:
             try:
                 cursor.execute("ALTER TABLE messages ADD COLUMN attachment_url TEXT DEFAULT ''")
             except Exception:
-                pass
+                raise
         if "attachment_name" not in existing_message_cols:
             try:
                 cursor.execute("ALTER TABLE messages ADD COLUMN attachment_name TEXT DEFAULT ''")
             except Exception:
-                pass
+                raise
         if "attachment_type" not in existing_message_cols:
             try:
                 cursor.execute("ALTER TABLE messages ADD COLUMN attachment_type TEXT DEFAULT ''")
             except Exception:
-                pass
+                raise
 
         cursor.execute("PRAGMA table_info(reports)")
         existing_report_cols = [row[1] for row in cursor.fetchall()]
@@ -623,13 +637,13 @@ class DB:
             try:
                 cursor.execute("ALTER TABLE reports ADD COLUMN message_id INTEGER")
             except Exception:
-                pass
+                raise
 
         if "created_at" not in existing_rating_cols:
             try:
                 cursor.execute("ALTER TABLE ratings ADD COLUMN created_at TEXT")
             except Exception:
-                pass
+                raise
 
         cursor.execute("PRAGMA table_info(portfolio_items)")
         existing_portfolio_cols = [row[1] for row in cursor.fetchall()]
@@ -642,7 +656,53 @@ class DB:
                 try:
                     cursor.execute(sql)
                 except Exception:
-                    pass
+                    raise
+
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS disputes(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id INTEGER NOT NULL,
+                opened_by INTEGER NOT NULL,
+                against_user_id INTEGER NOT NULL,
+                category TEXT NOT NULL,
+                description TEXT NOT NULL,
+                evidence TEXT DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'open',
+                admin_response TEXT DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT,
+                resolved_at TEXT,
+                resolved_by INTEGER,
+                decision TEXT,
+                decision_for_user_id INTEGER,
+                payment_action TEXT,
+                job_action TEXT,
+                sanction_user_id INTEGER,
+                sanction_type TEXT,
+                sanction_duration_minutes INTEGER
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS recently_viewed(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                job_id INTEGER NOT NULL,
+                viewed_at TEXT NOT NULL,
+                UNIQUE(user_id,job_id)
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS saved_searches(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                filters TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(user_id,name)
+            )
+        """)
 
         # Database Indexes
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);")
@@ -687,7 +747,26 @@ class DB:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_ratings_job ON ratings(job_id);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read, created_at);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status, created_at);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_location_status_created ON jobs(location,status,created_at DESC,id DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_job_services_service_job ON job_services(service_id,job_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_disputes_job_status ON disputes(job_id,status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_disputes_opened_by ON disputes(opened_by,created_at DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_recently_viewed_user_viewed ON recently_viewed(user_id,viewed_at DESC,id DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_saved_searches_user_updated ON saved_searches(user_id,updated_at DESC,id DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_rating ON users(average_rating DESC)")
 
+
+        cursor.execute(
+            "UPDATE payments SET status='released',released_at=COALESCE(released_at,paid_at) "
+            "WHERE provider='dummy' AND status='paid' AND released_at IS NULL"
+        )
+        cursor.execute(
+            "INSERT INTO schema_migrations(version,name,applied_at) VALUES(1,?,?)",
+            (
+                "initial_postgresql_schema",
+                datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            ),
+        )
         conn.commit()
         conn.close()
 
@@ -927,7 +1006,10 @@ class DB:
                 "INSERT INTO services(name,parent_id,created_by) VALUES(?,?,NULL)",
                 (name, parent_id)
             )
-            return cursor.lastrowid
+            inserted_row = cursor.fetchone()
+            if not inserted_row:
+                raise RuntimeError("PostgreSQL INSERT qaytargan ID topilmadi.")
+            return inserted_row[0]
 
         for root_name, groups in catalog.items():
             translated_root = service_translations.get(root_name, root_name)
@@ -948,9 +1030,10 @@ class DB:
         try:
             cursor.execute(sql, args)
             first_keyword = sql.lstrip().split(None, 1)[0].upper() if sql.strip() else ""
-            if first_keyword not in {"SELECT", "PRAGMA", "EXPLAIN"}:
+            is_read_query = first_keyword in {"SELECT", "PRAGMA", "EXPLAIN"}
+            if not is_read_query:
                 conn.commit()
-            return QueryResult(conn, cursor)
+            return QueryResult(conn, cursor, commit_on_close=is_read_query)
         except Exception:
             conn.rollback()
             cursor.close()
@@ -958,9 +1041,10 @@ class DB:
 
 
 class QueryResult:
-    def __init__(self, conn, cursor):
+    def __init__(self, conn, cursor, commit_on_close=False):
         self.conn = conn
         self.cursor = cursor
+        self.commit_on_close = commit_on_close
 
     def fetchone(self):
         row = self.cursor.fetchone()
@@ -983,6 +1067,8 @@ class QueryResult:
     def close(self):
         if self.cursor is not None:
             self.cursor.close()
+        if self.conn is not None and self.commit_on_close:
+            self.conn.commit()
         self.cursor = None
         self.conn = None
 
