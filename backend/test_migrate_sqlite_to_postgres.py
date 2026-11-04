@@ -242,6 +242,7 @@ class SQLiteToPostgreSQLMigrationTests(unittest.TestCase):
                     "FINJOB_TEST_MODE": "1",
                     "FINJOB_ALLOW_EMPTY_DB_BOOTSTRAP": "0",
                     "NEON_BRANCH": "finjob-development",
+                    "NEON_DEVELOPMENT_DATABASE_HOST": "127.0.0.1",
                     "DATABASE_URL": self.DATABASE_URL,
                     "DATABASE_SCHEMA": self.TARGET_SCHEMA,
                     "SECRET_KEY": "migration-test-secret",
