@@ -110,6 +110,42 @@ def create_source_tables(connection, tables):
         connection.execute(translate_sql(create_sql))
 
 
+def validate_source_columns(source, target, tables):
+    for table_name, _ in tables:
+        source_columns = [
+            row[1] for row in source.execute(
+                f"PRAGMA table_info({quote_identifier(table_name)})"
+            ).fetchall()
+        ]
+        target_columns = [
+            row[0] for row in target.execute(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = current_schema() AND table_name = %s
+                ORDER BY ordinal_position
+                """,
+                (table_name,),
+            ).fetchall()
+        ]
+        if source_columns != target_columns:
+            raise RuntimeError(
+                f"{table_name}: manba va PostgreSQL ustunlari mos emas. "
+                f"SQLite={source_columns}; PostgreSQL={target_columns}"
+            )
+
+
+def validate_explicit_indexes(target, indexes):
+    actual = {
+        row[0] for row in target.execute(
+            "SELECT indexname FROM pg_indexes WHERE schemaname = current_schema()"
+        ).fetchall()
+    }
+    missing = [name for name, _ in indexes if name not in actual]
+    if missing:
+        raise RuntimeError("PostgreSQL indekslari yetishmayapti: " + ", ".join(missing))
+
+
 def copy_table(source, target, table_name, batch_size=500):
     source_cursor = source.execute(f"SELECT * FROM {quote_identifier(table_name)}")
     column_names = [item[1] for item in source.execute(
@@ -237,6 +273,8 @@ def migrate(sqlite_path, confirm_branch):
             copied_counts = {}
             try:
                 create_source_tables(target, tables)
+                validate_source_columns(integrity, target, tables)
+
                 for table_name, _ in tables:
                     copied_counts[table_name] = copy_table(
                         integrity, target, table_name
@@ -244,6 +282,7 @@ def migrate(sqlite_path, confirm_branch):
 
                 for index_name, index_sql in indexes:
                     target.execute(translate_sql(index_sql))
+                validate_explicit_indexes(target, indexes)
 
                 reset_identity_sequences(integrity, target, tables)
                 record_schema_version(target)
