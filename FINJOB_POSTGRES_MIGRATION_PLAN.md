@@ -65,7 +65,7 @@ Status meanings:
 
 ## 7. SQLite-to-PostgreSQL data migration utility
 - [x] Add `backend/migrate_sqlite_to_postgres.py`.
-- [ ] Add an importer-specific integration test using a temporary SQLite fixture and a disposable PostgreSQL schema; the current workflow does not yet execute the importer.
+- [~] Add an importer-specific integration test using a temporary SQLite fixture and a disposable PostgreSQL schema in CI; execution is pending.
 - [~] Require `NEON_BRANCH=finjob-development` and explicit `--confirm-branch finjob-development`; the actual migration has not been run.
 - [~] Refuse production and refuse a non-empty target schema.
 - [~] Create a timestamped SQLite backup before migration.
@@ -79,7 +79,7 @@ Status meanings:
 - [~] Truncate and reset only the dedicated test database before tests.
 - [~] Add a regression test for Click provider transaction ID uniqueness.
 - [~] Add PostgreSQL transaction rollback and identity-sequence regression tests; execution is pending.
-- [~] Add compatibility, Click callback, identity, rollback, and application regression coverage; execution is pending. Importer-specific integration coverage is still pending.
+- [~] Add compatibility, importer, Click callback, identity, rollback, concurrency, and application regression coverage; execution is pending.
 - [~] Add a parallel wallet-withdrawal regression test; parallel release/refund/dummy-hold coverage remains pending.
 
 ## 9. Development deployment and end-to-end verification
@@ -103,5 +103,5 @@ Status meanings:
 - [x] Restrict Click prepare/confirm callbacks to the original provider transaction ID; mismatched IDs are rejected and repeated matching confirmations are idempotent.
 - [x] Add regression tests for SQL translation and Click callback idempotency.
 - [x] Add a concurrent wallet-withdrawal test that verifies two simultaneous withdrawals cannot overdraw the account.
-- [x] Add a PostgreSQL 16 GitHub Actions test workflow.
+- [x] Add a PostgreSQL 16 GitHub Actions workflow for application tests and a guarded SQLite importer fixture.
 - [ ] Observe a successful CI run and fix any resulting failures before calling the implementation verified.
