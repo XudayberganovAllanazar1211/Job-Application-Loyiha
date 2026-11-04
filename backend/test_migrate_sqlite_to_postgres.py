@@ -1,5 +1,7 @@
+import importlib
 import os
 import sqlite3
+import sys
 import tempfile
 import unittest
 from decimal import Decimal
@@ -55,9 +57,57 @@ class SQLiteToPostgreSQLMigrationTests(unittest.TestCase):
                     );
                     CREATE TABLE payments(
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        payment_uuid TEXT UNIQUE NOT NULL,
                         job_id INTEGER UNIQUE,
+                        payer_id INTEGER NOT NULL,
+                        payee_id INTEGER NOT NULL,
                         amount REAL,
+                        provider TEXT NOT NULL DEFAULT 'click',
+                        status TEXT NOT NULL DEFAULT 'pending',
+                        provider_transaction_id TEXT DEFAULT '',
                         created_at TEXT
+                    );
+                    CREATE TABLE services(
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT,
+                        parent_id INTEGER,
+                        created_by INTEGER
+                    );
+                    CREATE TABLE ratings(
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        job_id INTEGER,
+                        from_user INTEGER,
+                        to_user INTEGER,
+                        score INTEGER,
+                        comment TEXT
+                    );
+                    CREATE TABLE messages(
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        sender_id INTEGER,
+                        receiver_id INTEGER,
+                        job_id INTEGER,
+                        message TEXT,
+                        sent_at TEXT
+                    );
+                    CREATE TABLE reports(
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        reporter_id INTEGER NOT NULL,
+                        reported_user_id INTEGER,
+                        job_id INTEGER,
+                        reason TEXT NOT NULL,
+                        details TEXT DEFAULT '',
+                        status TEXT DEFAULT 'open',
+                        created_at TEXT NOT NULL
+                    );
+                    CREATE TABLE portfolio_items(
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        title TEXT NOT NULL,
+                        description TEXT DEFAULT '',
+                        url TEXT DEFAULT '',
+                        image_url TEXT DEFAULT '',
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
                     );
                     CREATE TABLE platform_wallet(
                         id INTEGER PRIMARY KEY CHECK(id=1),
@@ -154,6 +204,66 @@ class SQLiteToPostgreSQLMigrationTests(unittest.TestCase):
                     ("post-migration-user", Decimal("1.00")),
                 ).fetchone()[0]
                 self.assertGreater(inserted_id, 17)
+
+            # The real application startup must apply the imported schema's
+            # v2/v3/v4 migrations without replacing any imported rows.
+            with patch.dict(
+                os.environ,
+                {
+                    "FINJOB_ENV": "development",
+                    "FINJOB_TEST_MODE": "1",
+                    "FINJOB_ALLOW_EMPTY_DB_BOOTSTRAP": "0",
+                    "NEON_BRANCH": "finjob-development",
+                    "DATABASE_URL": self.DATABASE_URL,
+                    "DATABASE_SCHEMA": self.TARGET_SCHEMA,
+                    "SECRET_KEY": "migration-test-secret",
+                },
+            ):
+                sys.modules.pop("main", None)
+                importlib.import_module("main")
+
+            with psycopg.connect(self.DATABASE_URL) as migrated:
+                migrated.execute(f'SET search_path TO "{self.TARGET_SCHEMA}"')
+                self.assertEqual(
+                    migrated.execute(
+                        "SELECT version FROM schema_migrations ORDER BY version"
+                    ).fetchall(),
+                    [(1,), (2,), (3,), (4,)],
+                )
+                self.assertEqual(
+                    migrated.execute(
+                        """
+                        SELECT data_type
+                        FROM information_schema.columns
+                        WHERE table_schema=current_schema()
+                          AND table_name='jobs' AND column_name='price'
+                        """
+                    ).fetchone()[0],
+                    "numeric",
+                )
+                user_columns = {
+                    row[0] for row in migrated.execute(
+                        """
+                        SELECT column_name FROM information_schema.columns
+                        WHERE table_schema=current_schema() AND table_name='users'
+                        """
+                    ).fetchall()
+                }
+                self.assertTrue({"auth_provider","google_sub","is_blocked"}.issubset(user_columns))
+                self.assertTrue(
+                    migrated.execute(
+                        """
+                        SELECT 1 FROM pg_indexes
+                        WHERE schemaname=%s
+                          AND indexname='idx_payments_click_transaction'
+                        """,
+                        (self.TARGET_SCHEMA,),
+                    ).fetchone()
+                )
+                self.assertEqual(
+                    migrated.execute("SELECT username,balance FROM users WHERE id=17").fetchone(),
+                    ("migration-user", Decimal("12345.67")),
+                )
 
 
 if __name__ == "__main__":
