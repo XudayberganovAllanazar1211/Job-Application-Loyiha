@@ -29,3 +29,8 @@ Thumbs.db
 # Local SQLite databases
 **/*.db
 **/uploads/
+
+# Local database credentials and test artifacts
+**/.env.local
+**/test_app.db
+**/test_app.db-*
