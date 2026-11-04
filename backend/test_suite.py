@@ -1,20 +1,58 @@
 import os
 import unittest
 from io import BytesIO
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+BACKEND_DIR = Path(__file__).resolve().parent
+PROJECT_DIR = BACKEND_DIR.parent
+load_dotenv(PROJECT_DIR / ".env.local", override=False)
+load_dotenv(BACKEND_DIR / ".env", override=False)
+
+TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "").strip()
+APPLICATION_DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+FINJOB_ENV = os.environ.get("FINJOB_ENV", "development").strip().lower()
+
+if FINJOB_ENV in {"production", "prod"}:
+    raise RuntimeError("Testlar production muhitida ishga tushirilmaydi.")
+if not TEST_DATABASE_URL.startswith(("postgres://", "postgresql://")):
+    raise RuntimeError("TEST_DATABASE_URL alohida PostgreSQL test bazasiga sozlanishi shart.")
+if TEST_DATABASE_URL == APPLICATION_DATABASE_URL:
+    raise RuntimeError("TEST_DATABASE_URL DATABASE_URL bilan bir xil bo‘lishi mumkin emas.")
+
+# main import vaqtida global DB obyektini yaratadi; uni test DSN'ga yo‘naltiramiz.
+os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+
 from main import app, DB, pending_verifications
 import main
+
 
 class JobPlatformTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.test_db_name = "test_app.db"
         cls.original_db = main.db
-        cls.original_db_name = cls.original_db.db_name
-        if os.path.exists(cls.test_db_name):
-            os.remove(cls.test_db_name)
-        DB(cls.test_db_name)
-        cls.original_db.db_name = cls.test_db_name
-        main.db = cls.original_db
+        if cls.original_db.database_url != TEST_DATABASE_URL:
+            raise RuntimeError("Test DB noto‘g‘ri DSN bilan yaratildi.")
+
+        conn = cls.original_db.get_connection()
+        try:
+            tables = conn.execute(
+                "SELECT tablename FROM pg_tables WHERE schemaname=current_schema() "
+                "AND tablename <> 'schema_migrations' ORDER BY tablename"
+            ).fetchall()
+            if tables:
+                quoted = ", ".join('"' + row[0].replace('"', '""') + '"' for row in tables)
+                conn.execute(f"TRUNCATE TABLE {quoted} RESTART IDENTITY CASCADE")
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+        cls.original_db.seed()
+        pending_verifications.clear()
         cls.original_send_email_code = main.send_email_code
         main.send_email_code = lambda to_email, code: True
         app.config["TESTING"] = True
@@ -22,13 +60,7 @@ class JobPlatformTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        cls.original_db.db_name = cls.original_db_name
         main.send_email_code = cls.original_send_email_code
-        if os.path.exists(cls.test_db_name):
-            try:
-                os.remove(cls.test_db_name)
-            except Exception:
-                pass
 
     def setUp(self):
         # Testlar bir-birining rate-limit holatiga ta’sir qilmasin.
