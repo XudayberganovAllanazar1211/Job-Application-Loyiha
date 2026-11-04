@@ -65,6 +65,7 @@ jobs:
           FINJOB_ENV: development
           NEON_BRANCH: finjob-development
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/finjob_migration_test
+          NEON_DEVELOPMENT_DATABASE_HOST: 127.0.0.1
           DATABASE_SCHEMA: finjob_import_test
         run: python -m unittest -v test_migrate_sqlite_to_postgres
 
