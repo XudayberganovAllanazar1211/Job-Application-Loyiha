@@ -37,6 +37,7 @@ if APPLICATION_DATABASE_URL and database_identity(TEST_DATABASE_URL) == database
 # main import vaqtida global DB obyektini yaratadi; uni test DSN'ga yo‘naltiramiz.
 # FINJOB_TEST_MODE prevents a local .env.local from replacing this isolated test DSN.
 os.environ["FINJOB_TEST_MODE"] = "1"
+os.environ["NEON_BRANCH"] = ""
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 # The test suite is allowed to bootstrap only its independently validated TEST_DATABASE_URL.
 os.environ["FINJOB_ALLOW_EMPTY_DB_BOOTSTRAP"] = "1"
