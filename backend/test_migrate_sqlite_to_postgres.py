@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 import psycopg
 
+import migrate_sqlite_to_postgres as migration_module
 from migrate_sqlite_to_postgres import migrate, ensure_development_target
 
 
@@ -183,7 +184,40 @@ class SQLiteToPostgreSQLMigrationTests(unittest.TestCase):
                     "NEON_DEVELOPMENT_DATABASE_HOST": "127.0.0.1",
                 },
             ):
-                migrate(sqlite_path, "finjob-development")
+                original_create_backup = migration_module.create_backup
+                created_backups = []
+
+                def create_backup_then_mutate_live_source(source_connection, source_path):
+                    backup_path = original_create_backup(source_connection, source_path)
+                    created_backups.append(backup_path)
+                    with sqlite3.connect(source_path) as live_source:
+                        live_source.execute(
+                            "UPDATE users SET balance=? WHERE id=17",
+                            (99999.99,),
+                        )
+                    return backup_path
+
+                with patch(
+                    "migrate_sqlite_to_postgres.create_backup",
+                    side_effect=create_backup_then_mutate_live_source,
+                ):
+                    migrate(sqlite_path, "finjob-development")
+
+                self.assertEqual(len(created_backups), 1)
+                with sqlite3.connect(created_backups[0]) as backup_check:
+                    self.assertEqual(
+                        backup_check.execute(
+                            "SELECT balance FROM users WHERE id=17"
+                        ).fetchone()[0],
+                        12345.67,
+                    )
+                with sqlite3.connect(sqlite_path) as live_check:
+                    self.assertEqual(
+                        live_check.execute(
+                            "SELECT balance FROM users WHERE id=17"
+                        ).fetchone()[0],
+                        99999.99,
+                    )
 
             with psycopg.connect(self.DATABASE_URL) as target:
                 target.execute(f'SET search_path TO "{self.TARGET_SCHEMA}"')
