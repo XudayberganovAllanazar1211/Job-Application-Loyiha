@@ -1981,5 +1981,163 @@ class JobPlatformTestCase(unittest.TestCase):
                 cleanup.close()
 
 
+    def test_27_concurrent_release_and_refund_are_applied_once(self):
+        owner = main.db.q(
+            "SELECT id FROM users WHERE username='tester_creator'"
+        ).fetchone()
+        worker = main.db.q(
+            "SELECT id FROM users WHERE username='tester_worker'"
+        ).fetchone()
+        self.assertIsNotNone(owner)
+        self.assertIsNotNone(worker)
+        owner_id, worker_id = owner[0], worker[0]
+
+        original_owner_balance = main.db.q(
+            "SELECT balance FROM users WHERE id=?", (owner_id,)
+        ).fetchone()[0]
+        original_worker_balance = main.db.q(
+            "SELECT balance FROM users WHERE id=?", (worker_id,)
+        ).fetchone()[0]
+        original_platform = main.db.q(
+            "SELECT balance,escrow_balance FROM platform_wallet WHERE id=1"
+        ).fetchone()
+        previous_transaction_id = main.db.q(
+            "SELECT COALESCE(MAX(id),0) FROM wallet_transactions"
+        ).fetchone()[0]
+        previous_notification_id = main.db.q(
+            "SELECT COALESCE(MAX(id),0) FROM notifications"
+        ).fetchone()[0]
+
+        now = "2026-11-04T15:00:00+00:00"
+        release_uuid = "finjob-concurrent-release-regression"
+        refund_uuid = "finjob-concurrent-refund-regression"
+        amount = 1000
+        conn = main.db.get_connection()
+        try:
+            release_job_id = conn.execute(
+                """INSERT INTO jobs(
+                    user_id,service_id,title,description,price,currency,location,
+                    worker_id,status,created_at,custom_service,agreed_price
+                ) VALUES(?,1,?,?,?,?,?,?, 'finished',?,'',?)""",
+                (
+                    owner_id, "Concurrent release regression", "Release race test",
+                    amount, "UZS", "Remote", worker_id, now, amount,
+                ),
+            ).lastrowid
+            refund_job_id = conn.execute(
+                """INSERT INTO jobs(
+                    user_id,service_id,title,description,price,currency,location,
+                    worker_id,status,created_at,custom_service,agreed_price
+                ) VALUES(?,1,?,?,?,?,?,?, 'finished',?,'',?)""",
+                (
+                    owner_id, "Concurrent refund regression", "Refund race test",
+                    amount, "UZS", "Remote", worker_id, now, amount,
+                ),
+            ).lastrowid
+            conn.execute(
+                """INSERT INTO payments(
+                    payment_uuid,job_id,payer_id,payee_id,amount,currency,
+                    provider,status,created_at,paid_at
+                ) VALUES(?,?,?, ?,?,'UZS','dummy','held',?,?)""",
+                (release_uuid, release_job_id, owner_id, worker_id, amount, now, now),
+            )
+            conn.execute(
+                """INSERT INTO payments(
+                    payment_uuid,job_id,payer_id,payee_id,amount,currency,
+                    provider,status,created_at,paid_at
+                ) VALUES(?,?,?, ?,?,'UZS','dummy','held',?,?)""",
+                (refund_uuid, refund_job_id, owner_id, worker_id, amount, now, now),
+            )
+            conn.execute(
+                "UPDATE platform_wallet SET escrow_balance=escrow_balance+? WHERE id=1",
+                (amount * 2,),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        try:
+            release_action = app.config["FINJOB_RELEASE_PAYMENT"]
+            refund_action = app.config["FINJOB_REFUND_PAYMENT"]
+
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                list(executor.map(lambda _: release_action(release_job_id), range(2)))
+
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                list(executor.map(lambda _: refund_action(refund_job_id), range(2)))
+
+            release_status = main.db.q(
+                "SELECT status FROM payments WHERE payment_uuid=?", (release_uuid,)
+            ).fetchone()[0]
+            refund_status = main.db.q(
+                "SELECT status FROM payments WHERE payment_uuid=?", (refund_uuid,)
+            ).fetchone()[0]
+            self.assertEqual(release_status, "released")
+            self.assertEqual(refund_status, "refunded")
+
+            owner_after = main.db.q(
+                "SELECT balance FROM users WHERE id=?", (owner_id,)
+            ).fetchone()[0]
+            worker_after = main.db.q(
+                "SELECT balance FROM users WHERE id=?", (worker_id,)
+            ).fetchone()[0]
+            platform_after = main.db.q(
+                "SELECT balance,escrow_balance FROM platform_wallet WHERE id=1"
+            ).fetchone()
+
+            self.assertEqual(float(owner_after - original_owner_balance), 1000.0)
+            self.assertEqual(float(worker_after - original_worker_balance), 900.0)
+            self.assertEqual(float(platform_after[0] - original_platform[0]), 100.0)
+            self.assertEqual(float(platform_after[1] - original_platform[1]), 0.0)
+
+            release_ledger = main.db.q(
+                "SELECT COUNT(*) FROM wallet_transactions WHERE job_id=? AND type='payment_release'",
+                (release_job_id,),
+            ).fetchone()[0]
+            refund_ledger = main.db.q(
+                "SELECT COUNT(*) FROM wallet_transactions WHERE job_id=? AND type='payment_refund'",
+                (refund_job_id,),
+            ).fetchone()[0]
+            self.assertEqual(release_ledger, 1)
+            self.assertEqual(refund_ledger, 1)
+        finally:
+            cleanup = main.db.get_connection()
+            try:
+                cleanup.execute(
+                    "UPDATE users SET balance=? WHERE id=?",
+                    (original_owner_balance, owner_id),
+                )
+                cleanup.execute(
+                    "UPDATE users SET balance=? WHERE id=?",
+                    (original_worker_balance, worker_id),
+                )
+                cleanup.execute(
+                    "UPDATE platform_wallet SET balance=?,escrow_balance=? WHERE id=1",
+                    (original_platform[0], original_platform[1]),
+                )
+                cleanup.execute(
+                    "DELETE FROM wallet_transactions WHERE id>?",
+                    (previous_transaction_id,),
+                )
+                cleanup.execute(
+                    "DELETE FROM notifications WHERE id>?",
+                    (previous_notification_id,),
+                )
+                cleanup.execute(
+                    "DELETE FROM payments WHERE payment_uuid IN (?,?)",
+                    (release_uuid, refund_uuid),
+                )
+                cleanup.execute(
+                    "DELETE FROM jobs WHERE id IN (?,?)",
+                    (release_job_id, refund_job_id),
+                )
+                cleanup.commit()
+            except Exception:
+                cleanup.rollback()
+                raise
+            finally:
+                cleanup.close()
+
+
 if __name__ == "__main__":
     unittest.main()
