@@ -1,5 +1,6 @@
 import os
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import uuid
 from io import BytesIO
@@ -1900,6 +1901,77 @@ class JobPlatformTestCase(unittest.TestCase):
                 cleanup.close()
             payments_module.CLICK_SERVICE_ID = old_service_id
             payments_module.CLICK_SECRET_KEY = old_secret_key
+
+
+    def test_26_concurrent_wallet_withdrawals_cannot_overdraw_balance(self):
+        login = self.client.post(
+            "/login",
+            json={"username": "tester_creator", "password": "Password123!"},
+        )
+        self.assertEqual(login.status_code, 200)
+        token = login.get_json()["token"]
+        user_id = self.client.get(
+            "/profile", headers={"Authorization": f"Bearer {token}"}
+        ).get_json()["id"]
+
+        original_balance = main.db.q(
+            "SELECT balance FROM users WHERE id=?", (user_id,)
+        ).fetchone()[0]
+        previous_transaction_id = main.db.q(
+            "SELECT COALESCE(MAX(id),0) FROM wallet_transactions"
+        ).fetchone()[0]
+
+        setup = main.db.get_connection()
+        try:
+            setup.execute("UPDATE users SET balance=1000 WHERE id=?", (user_id,))
+            setup.commit()
+        finally:
+            setup.close()
+
+        def withdraw():
+            with app.test_client() as client:
+                return client.post(
+                    "/wallet/withdraw",
+                    headers={"Authorization": f"Bearer {token}"},
+                    json={"amount": 800},
+                )
+
+        try:
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                responses = list(executor.map(lambda _: withdraw(), range(2)))
+
+            statuses = [response.status_code for response in responses]
+            self.assertEqual(statuses.count(200), 1)
+            self.assertIn(next(code for code in statuses if code != 200), (400, 409))
+
+            final_balance = main.db.q(
+                "SELECT balance FROM users WHERE id=?", (user_id,)
+            ).fetchone()[0]
+            self.assertEqual(float(final_balance), 200.0)
+
+            new_withdrawals = main.db.q(
+                """SELECT COUNT(*) FROM wallet_transactions
+                   WHERE user_id=? AND type='withdrawal' AND id>?""",
+                (user_id, previous_transaction_id),
+            ).fetchone()[0]
+            self.assertEqual(new_withdrawals, 1)
+        finally:
+            cleanup = main.db.get_connection()
+            try:
+                cleanup.execute(
+                    "UPDATE users SET balance=? WHERE id=?",
+                    (original_balance, user_id),
+                )
+                cleanup.execute(
+                    "DELETE FROM wallet_transactions WHERE user_id=? AND id>?",
+                    (user_id, previous_transaction_id),
+                )
+                cleanup.commit()
+            except Exception:
+                cleanup.rollback()
+                raise
+            finally:
+                cleanup.close()
 
 
 if __name__ == "__main__":
