@@ -16,7 +16,10 @@ The repository root `.env.local` should contain the connection string pulled fro
 
 ```env
 NEON_BRANCH=finjob-development
+DATABASE_SCHEMA=finjob_data
 ```
+
+FinJob uses the isolated `finjob_data` schema by default in development. This is intentional: Neon branches can contain a copy of tables in `public`; the migration must not overwrite those. The importer creates/uses only `finjob_data`, leaving existing `public` tables unchanged. The Flask app uses the same schema automatically.
 
 Do not paste the full connection string into chat, tickets, source code, or GitHub. Do not commit `.env.local`.
 
@@ -39,10 +42,11 @@ python backend/migrate_sqlite_to_postgres.py --confirm-branch finjob-development
 ```
 
 The script:
+- creates/uses only the configured target schema (default `finjob_data`), not the branch's existing `public` schema;
 - reads `backend/app.db` in read-only mode;
 - validates the SQLite integrity check;
 - creates a consistent timestamped SQLite backup using SQLite's backup API;
-- refuses production and refuses a non-empty Neon target;
+- refuses production and refuses a non-empty target schema;
 - imports the source table definitions, data, explicit indexes, and identity sequence positions;
 - compares table columns, row counts, index names, and key financial totals;
 - rolls back all target changes if any step fails.
