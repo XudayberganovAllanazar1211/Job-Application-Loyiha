@@ -102,6 +102,7 @@ Status meanings:
 - [x] Compare financial totals with `Decimal` arithmetic and a one-tiyin tolerance instead of converting totals back to binary floating point.
 - [x] Make `PRAGMA table_info` primary-key metadata joins include the table name as well as the constraint name.
 - [x] Add a real endpoint-host allow-list so a typed `NEON_BRANCH=finjob-development` label alone cannot authorize a different database host.
+- [x] Import only from the verified timestamped SQLite backup snapshot, and add a regression test that mutates the live fixture after backup creation to prove the imported data remains snapshot-consistent.
 - [x] Restrict Click prepare/confirm callbacks to the original provider transaction ID; mismatched IDs are rejected and repeated matching confirmations are idempotent.
 - [x] Add regression tests for SQL translation and Click callback idempotency.
 - [x] Add a concurrent wallet-withdrawal test that verifies two simultaneous withdrawals cannot overdraw the account.
