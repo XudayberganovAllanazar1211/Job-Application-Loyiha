@@ -93,9 +93,9 @@ export default function ForgotPassword() {
                         Email orqali yuborilgan bir martalik kod yordamida parolingizni xavfsiz yangilang.
                     </p>
                     <div className="hero-points">
-                        <div className="hero-point">🔐 6 xonali bir martalik kod</div>
-                        <div className="hero-point">⏱️ Kod 10 daqiqa amal qiladi</div>
-                        <div className="hero-point">🚪 Parol o‘zgarganda eski sessiyalar yopiladi</div>
+                        <div className="hero-point">6 xonali bir martalik kod</div>
+                        <div className="hero-point">Kod 10 daqiqa amal qiladi</div>
+                        <div className="hero-point">Parol o‘zgarganda eski sessiyalar yopiladi</div>
                     </div>
                 </div>
             </section>

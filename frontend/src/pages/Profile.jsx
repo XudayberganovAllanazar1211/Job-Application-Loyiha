@@ -1080,7 +1080,7 @@ export default function Profile() {
 
                         <div className="avatar-crop-controls">
                             <div className="avatar-crop-zoom-row">
-                                <span>🔍</span>
+                                <span className="avatar-crop-zoom-label">Zoom</span>
                                 <input
                                     type="range"
                                     min="1"

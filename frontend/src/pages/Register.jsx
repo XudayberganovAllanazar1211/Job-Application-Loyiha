@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Link, useNavigate } from "react-router-dom"
+import { Link, useLocation, useNavigate } from "react-router-dom"
 import { api } from "../api"
 import GoogleAuthButton from "../components/GoogleAuthButton"
 
@@ -20,6 +20,7 @@ export default function Register() {
     const [loading, setLoading] = useState(false)
     const [acceptedPolicies, setAcceptedPolicies] = useState(false)
     const navigate = useNavigate()
+    const location = useLocation()
 
     const handleGoogleSuccess = async (credential) => {
         setNotice("")
@@ -90,7 +91,7 @@ export default function Register() {
         setLoading(false)
 
         if (result?.msg === "ok") {
-            setNotice("Tasdiqlash kodi elektron pochtangizga yuborildi 📩")
+            setNotice("Tasdiqlash kodi elektron pochtangizga yuborildi ")
             setStep(2) // Ikkinchi bosqichga o'tish
         } else {
             setNotice(result?.msg || "Email yuborishda xatolik yuz berdi.")
@@ -120,8 +121,8 @@ export default function Register() {
         setLoading(false)
 
         if (result?.msg === "ok") {
-            setNotice("Tabriklaymiz! Ro‘yxatdan o‘tish muvaffaqiyatli yakunlandi ✅")
-            setTimeout(() => navigate("/login"), 1500)
+            setNotice("Tabriklaymiz! Ro‘yxatdan o‘tish muvaffaqiyatli yakunlandi")
+            setTimeout(() => navigate("/login", { state: location.state }), 1500)
         } else {
             setNotice(result?.msg || "Kod noto'g'ri yoki uning muddati tugagan!")
         }
@@ -143,9 +144,9 @@ export default function Register() {
                         Elektron pochta orqali tasdiqlash kodi bilan himoyalangan zamonaviy platforma.
                     </p>
                     <div className="hero-points">
-                        <div className="hero-point">📧 Elektron pochta orqali ikki bosqichli tasdiqlash kodi</div>
-                        <div className="hero-point">🧩 Turli yo‘nalishlar uchun bitta umumiy profil</div>
-                        <div className="hero-point">📱 Mobil qurilmalarga mos dizayn</div>
+                        <div className="hero-point">Elektron pochta orqali ikki bosqichli tasdiqlash kodi</div>
+                        <div className="hero-point">Turli yo‘nalishlar uchun bitta umumiy profil</div>
+                        <div className="hero-point">Mobil qurilmalarga mos dizayn</div>
                     </div>
                 </div>
             </section>

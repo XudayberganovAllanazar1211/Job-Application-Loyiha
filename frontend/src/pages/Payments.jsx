@@ -239,7 +239,7 @@ export default function Payments() {
                             <article className="card job-card" key={item.payment_uuid}>
                                 <h3 className="job-title">{item.title}</h3>
                                 <div className="meta">
-                                    <span className="chip">💰 {Number(item.amount).toLocaleString("uz-UZ")} {item.currency}</span>
+                                    <span className="chip">Narx: {Number(item.amount).toLocaleString("uz-UZ")} {item.currency}</span>
                                     <span className="chip">{statusLabel(item.status)}</span>
                                     <span className="chip">{item.provider.toUpperCase()}</span>
                                 </div>
