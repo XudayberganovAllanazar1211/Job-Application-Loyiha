@@ -2174,7 +2174,11 @@ class JobPlatformTestCase(unittest.TestCase):
                 ),
                 1,
             )
-            self.assertTrue(all(response.status_code in (200, 400, 409) for response in responses))
+            self.assertEqual([response.status_code for response in responses].count(200), 2)
+            self.assertEqual(
+                sorted(payload.get("msg") for payload in payloads),
+                ["already_paid", "ok"],
+            )
 
             payment_rows = main.db.q(
                 "SELECT COUNT(*),MAX(status) FROM payments WHERE job_id=? AND provider='dummy'",
