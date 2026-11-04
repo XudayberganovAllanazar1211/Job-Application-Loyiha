@@ -2358,8 +2358,8 @@ html[data-theme="dark"] .admin-table th,html[data-theme="dark"] .payment-summary
 
 
 /* Public visitor landing page */
-.landing-page{min-height:100vh;background:var(--bg);color:var(--text);overflow:hidden}
-.landing-header{width:min(1180px,calc(100% - 48px));min-height:82px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:24px;border-bottom:1px solid var(--border)}
+.landing-page{min-height:100vh;background:var(--bg);color:var(--text);overflow-x:clip}
+.landing-header{position:sticky;top:0;z-index:1000;width:100%;min-height:82px;margin:0;padding-left:max(24px,calc((100vw - 1180px)/2));padding-right:max(24px,calc((100vw - 1180px)/2));display:flex;align-items:center;justify-content:space-between;gap:24px;border-bottom:1px solid var(--border);background:color-mix(in srgb,var(--surface) 94%,transparent);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 6px 20px rgba(15,23,42,.045)}
 .landing-brand{display:inline-flex;align-items:center;gap:11px;flex-shrink:0}
 .landing-brand-mark{width:42px;height:42px;display:grid;place-items:center;border-radius:12px;background:var(--primary);color:#fff;font:800 14px Manrope,sans-serif}
 .landing-brand-copy{display:grid;gap:2px}
@@ -2431,4 +2431,8 @@ html[data-theme="dark"] .landing-preview{box-shadow:0 24px 70px rgba(0,0,0,.22)}
 html[data-theme="dark"] .landing-final-cta{background:#122342;border-color:#27466f}
 html[data-theme="dark"] .landing-audience-card-blue{background:#122342;border-color:#27466f}
 @media(max-width:940px){.landing-nav{display:none}.landing-hero{grid-template-columns:1fr minmax(320px,.85fr);gap:30px}.landing-hero h1{font-size:clamp(36px,5vw,52px)}}
-@media(max-width:720px){.landing-header{width:calc(100% - 28px);min-height:70px;gap:12px}.landing-brand-copy small{display:none}.landing-header-actions{gap:9px}.landing-theme-toggle{font-size:0;width:36px;height:36px;padding:0;position:relative}.landing-theme-toggle:after{content:"◐";font-size:15px}.landing-login-link{font-size:12px}.landing-register-link{min-height:38px;padding:0 11px;font-size:11px}.landing-main{width:calc(100% - 30px)}.landing-hero{grid-template-columns:1fr;padding:54px 0 50px;gap:35px}.landing-hero h1{font-size:clamp(36px,10vw,48px);letter-spacing:-1.8px}.landing-hero-copy>p{font-size:13px}.landing-preview{max-width:520px;width:100%;margin:0 auto;padding:18px}.landing-section{padding:38px 0 46px}.landing-audience-grid,.landing-process-grid{grid-template-columns:1fr}.landing-audience-card{min-height:0}.landing-final-cta{align-items:flex-start;flex-direction:column;padding:23px;margin-bottom:42px}.landing-final-cta h2{font-size:23px}.landing-footer{width:calc(100% - 30px);padding:20px 0;align-items:flex-start;flex-direction:column}.landing-footer>div{gap:14px}}
+@media(max-width:720px){.landing-header{width:100%;min-height:70px;padding-left:14px;padding-right:14px;gap:12px}.landing-brand-copy small{display:none}.landing-header-actions{gap:9px}.landing-theme-toggle{font-size:0;width:36px;height:36px;padding:0;position:relative}.landing-theme-toggle:after{content:"◐";font-size:15px}.landing-login-link{font-size:12px}.landing-register-link{min-height:38px;padding:0 11px;font-size:11px}.landing-main{width:calc(100% - 30px)}.landing-hero{grid-template-columns:1fr;padding:54px 0 50px;gap:35px}.landing-hero h1{font-size:clamp(36px,10vw,48px);letter-spacing:-1.8px}.landing-hero-copy>p{font-size:13px}.landing-preview{max-width:520px;width:100%;margin:0 auto;padding:18px}.landing-section{padding:38px 0 46px}.landing-audience-grid,.landing-process-grid{grid-template-columns:1fr}.landing-audience-card{min-height:0}.landing-final-cta{align-items:flex-start;flex-direction:column;padding:23px;margin-bottom:42px}.landing-final-cta h2{font-size:23px}.landing-footer{width:calc(100% - 30px);padding:20px 0;align-items:flex-start;flex-direction:column}.landing-footer>div{gap:14px}}
+
+/* Keep in-page anchor targets visible below the sticky visitor navigation */
+.landing-section{scroll-margin-top:100px}
+html{scroll-padding-top:100px}
