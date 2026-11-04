@@ -1,4 +1,5 @@
-import { Navigate, Route, Routes } from "react-router-dom"
+import { Navigate, Route, Routes, useLocation } from "react-router-dom"
+import Landing from "./pages/Landing"
 import Login from "./pages/Login"
 import ForgotPassword from "./pages/ForgotPassword"
 import Register from "./pages/Register"
@@ -25,12 +26,33 @@ function AdminOnly({ children }) {
 
 function Protected({ children }) {
     const token = localStorage.getItem("token")
-    return token ? children : <Navigate to="/login" replace />
+    const location = useLocation()
+
+    if (token) return children
+
+    return (
+        <Navigate
+            to="/login"
+            replace
+            state={{
+                message: "Bu bo‘limdan foydalanish uchun avval tizimga kiring yoki bepul akkaunt yarating.",
+                from: {
+                    pathname: location.pathname,
+                    search: location.search,
+                    hash: location.hash
+                }
+            }}
+        />
+    )
 }
 
 function PublicOnly({ children }) {
     const token = localStorage.getItem("token")
     return token ? <Navigate to="/" replace /> : children
+}
+
+function Home() {
+    return localStorage.getItem("token") ? <Dashboard /> : <Landing />
 }
 
 export default function App() {
@@ -42,7 +64,7 @@ export default function App() {
             <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />
             <Route path="/forgot-password" element={<PublicOnly><ForgotPassword /></PublicOnly>} />
             <Route path="/register" element={<PublicOnly><Register /></PublicOnly>} />
-            <Route path="/" element={<Protected><Dashboard /></Protected>} />
+            <Route path="/" element={<Home />} />
             <Route path="/create" element={<Protected><CreateJob /></Protected>} />
             <Route path="/jobs" element={<Protected><Jobs /></Protected>} />
             <Route path="/chat/:jobId" element={<Protected><Chat /></Protected>} />
@@ -50,14 +72,12 @@ export default function App() {
             <Route path="/rating/:jobId" element={<Protected><Rating /></Protected>} />
             <Route path="/payments" element={<Protected><Payments /></Protected>} />
             <Route path="/payments/job/:jobId" element={<Protected><Payments /></Protected>} />
-
             <Route path="/leaderboard" element={<Protected><Leaderboard /></Protected>} />
             <Route path="/profile" element={<Protected><Profile /></Protected>} />
             <Route path="/appeals" element={<Protected><Appeals /></Protected>} />
             <Route path="/profile/:username" element={<Protected><PublicProfile /></Protected>} />
             <Route path="/profiles/:username" element={<Protected><PublicProfile /></Protected>} />
             <Route path="/admin" element={<Protected><AdminOnly><Admin /></AdminOnly></Protected>} />
-
             <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
     )

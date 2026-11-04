@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Link, useNavigate } from "react-router-dom"
+import { Link, useLocation, useNavigate } from "react-router-dom"
 import { api } from "../api"
 import GoogleAuthButton from "../components/GoogleAuthButton"
 
@@ -20,6 +20,7 @@ export default function Register() {
     const [loading, setLoading] = useState(false)
     const [acceptedPolicies, setAcceptedPolicies] = useState(false)
     const navigate = useNavigate()
+    const location = useLocation()
 
     const handleGoogleSuccess = async (credential) => {
         setNotice("")
@@ -121,7 +122,7 @@ export default function Register() {
 
         if (result?.msg === "ok") {
             setNotice("Tabriklaymiz! Ro‘yxatdan o‘tish muvaffaqiyatli yakunlandi")
-            setTimeout(() => navigate("/login"), 1500)
+            setTimeout(() => navigate("/login", { state: location.state }), 1500)
         } else {
             setNotice(result?.msg || "Kod noto'g'ri yoki uning muddati tugagan!")
         }

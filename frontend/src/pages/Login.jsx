@@ -1,14 +1,26 @@
 import { useState } from "react"
-import { Link, useNavigate } from "react-router-dom"
+import { Link, useLocation, useNavigate } from "react-router-dom"
 import { api } from "../api"
 import GoogleAuthButton from "../components/GoogleAuthButton"
 
 export default function Login() {
-    // Endi username maydoniga ham username, ham email yozib kirish mumkin
     const [form, setForm] = useState({ username: "", password: "" })
-    const [notice, setNotice] = useState("")
+    const location = useLocation()
+    const [notice, setNotice] = useState(location.state?.message || "")
     const [loading, setLoading] = useState(false)
     const navigate = useNavigate()
+
+    const continueAfterLogin = () => {
+        const destination = location.state?.from
+        if (destination?.pathname) {
+            navigate(
+                `${destination.pathname}${destination.search || ""}${destination.hash || ""}`,
+                { replace: true }
+            )
+        } else {
+            navigate("/", { replace: true })
+        }
+    }
 
     const handleGoogleSuccess = async (credential) => {
         setNotice("")
@@ -25,7 +37,7 @@ export default function Login() {
             if (profile?.id) {
                 localStorage.setItem("user", JSON.stringify(profile))
             }
-            navigate("/")
+            continueAfterLogin()
             return
         }
 
@@ -47,13 +59,11 @@ export default function Login() {
 
         if (result?.token) {
             localStorage.setItem("token", result.token)
-
             const profile = await api("/profile", { token: result.token })
             if (profile?.id) {
                 localStorage.setItem("user", JSON.stringify(profile))
             }
-
-            navigate("/")
+            continueAfterLogin()
             return
         }
 
@@ -71,15 +81,16 @@ export default function Login() {
                             <div className="helper">Ish toping. Ishni yakunlang.</div>
                         </div>
                     </div>
-                    <h1 className="hero-title">Tizimga kirish</h1>
+                    <h1 className="hero-title">FinJob imkoniyatlaridan foydalaning</h1>
                     <p className="hero-text">
-                        Yagona universal profil orqali ish topish va xizmat ko‘rsatish uchun mo‘ljallangan zamonaviy platforma.
+                        Ish topish, xizmat taklif qilish, buyurtmalarni boshqarish va mutaxassislar bilan muloqot qilish uchun akkauntingizga kiring.
                     </p>
                     <div className="hero-points">
-                        <div className="hero-point">Tezkor kirish va qulay boshqaruv paneli</div>
-                        <div className="hero-point">Xavfsiz kirish</div>
-                        <div className="hero-point">Suhbat, ish, baholash va reyting jadvali</div>
+                        <div className="hero-point">Ish va xizmatlarni bitta profildan boshqaring</div>
+                        <div className="hero-point">Buyurtmalar bo‘yicha taklif yuboring va qabul qiling</div>
+                        <div className="hero-point">Suhbatlar va ish holatini bir joyda kuzating</div>
                     </div>
+                    <Link to="/" className="landing-back-link">Bosh sahifaga qaytish</Link>
                 </div>
             </section>
 
@@ -90,7 +101,7 @@ export default function Login() {
                         Hisobingizga kirish uchun ma’lumotlaringizni kiriting.
                     </p>
 
-                    {notice && <div className="notice warn" style={{ marginBottom: 14 }}>{notice}</div>}
+                    {notice && <div className="notice warn auth-gate-notice" role="status">{notice}</div>}
 
                     <form className="form" onSubmit={submit}>
                         <input
@@ -123,7 +134,7 @@ export default function Login() {
                     </p>
 
                     <p style={{ marginTop: 8 }}>
-                        Hisobingiz yo‘qmi? <Link className="link" to="/register">Ro‘yxatdan o‘tish</Link>
+                        Hisobingiz yo‘qmi? <Link className="link" to="/register" state={location.state}>Ro‘yxatdan o‘tish</Link>
                     </p>
                     <div className="auth-legal-links">
                         <Link to="/privacy">Maxfiylik</Link>
