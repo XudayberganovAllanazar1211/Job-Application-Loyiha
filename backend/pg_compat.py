@@ -181,6 +181,13 @@ class PostgreSQLCursor:
         self._prefetched_row = None
 
     def execute(self, sql, params=None):
+        # A cursor may be reused for many statements; do not leak RETURNING
+        # state or a prefetched row from the previous statement.
+        self._auto_returning = False
+        self._lastrowid_loaded = False
+        self._lastrowid = None
+        self._prefetched_row = None
+
         query = translate_sql(sql)
         pragma_match = re.fullmatch(
             r"""PRAGMA\s+table_info\s*\(\s*['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?\s*\)\s*;?""",
