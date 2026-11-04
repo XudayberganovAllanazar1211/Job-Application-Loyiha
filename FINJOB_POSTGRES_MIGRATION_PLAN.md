@@ -60,7 +60,7 @@ Status meanings:
 - [~] Add row-count guards to wallet credits and escrow/platform ledger updates during release/refund.
 - [~] Add a partial unique index for Click provider transaction IDs and return a duplicate-transaction response on concurrent conflicts.
 - [~] Add a PostgreSQL regression test proving Click provider transaction IDs cannot be reused.
-- [~] Add a concurrent withdrawal overdraft regression test; concurrent release/refund/dummy-hold tests remain pending.
+- [~] Add concurrent withdrawal, release, and refund regression tests; concurrent dummy-hold coverage remains pending.
 - [ ] Verify all financial balances and escrow totals against source data.
 
 ## 7. SQLite-to-PostgreSQL data migration utility
@@ -80,7 +80,7 @@ Status meanings:
 - [~] Add a regression test for Click provider transaction ID uniqueness.
 - [~] Add PostgreSQL transaction rollback and identity-sequence regression tests; execution is pending.
 - [~] Add compatibility, importer, Click callback, identity, rollback, concurrency, and application regression coverage; execution is pending.
-- [~] Add a parallel wallet-withdrawal regression test; parallel release/refund/dummy-hold coverage remains pending.
+- [~] Add parallel wallet-withdrawal, release, and refund regression tests; parallel dummy-hold coverage remains pending.
 
 ## 9. Development deployment and end-to-end verification
 - [ ] Install dependencies in the local virtual environment.
@@ -103,5 +103,6 @@ Status meanings:
 - [x] Restrict Click prepare/confirm callbacks to the original provider transaction ID; mismatched IDs are rejected and repeated matching confirmations are idempotent.
 - [x] Add regression tests for SQL translation and Click callback idempotency.
 - [x] Add a concurrent wallet-withdrawal test that verifies two simultaneous withdrawals cannot overdraw the account.
+- [x] Add concurrent release/refund regression tests that verify escrow and wallet ledgers are updated only once.
 - [x] Add a PostgreSQL 16 GitHub Actions workflow for application tests and a guarded SQLite importer fixture.
 - [ ] Observe a successful CI run and fix any resulting failures before calling the implementation verified.
