@@ -33,6 +33,8 @@ if APPLICATION_DATABASE_URL and database_identity(TEST_DATABASE_URL) == database
     raise RuntimeError("TEST_DATABASE_URL DATABASE_URL bilan bir xil PostgreSQL bazasiga qarata olmaydi.")
 
 # main import vaqtida global DB obyektini yaratadi; uni test DSN'ga yo‘naltiramiz.
+# FINJOB_TEST_MODE prevents a local .env.local from replacing this isolated test DSN.
+os.environ["FINJOB_TEST_MODE"] = "1"
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 
 from main import app, DB, pending_verifications
