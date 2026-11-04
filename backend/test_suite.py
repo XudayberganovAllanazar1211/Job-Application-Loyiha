@@ -1752,6 +1752,9 @@ class JobPlatformTestCase(unittest.TestCase):
         baseline_escrow = main.db.q(
             "SELECT escrow_balance FROM platform_wallet WHERE id=1"
         ).fetchone()[0]
+        previous_notification_id = main.db.q(
+            "SELECT COALESCE(MAX(id),0) FROM notifications"
+        ).fetchone()[0]
 
         def click_payload(click_trans_id, action):
             sign_time = "2026-11-04T15:00:00"
@@ -1823,8 +1826,10 @@ class JobPlatformTestCase(unittest.TestCase):
                     (baseline_escrow,),
                 )
                 cleanup.execute(
-                    "DELETE FROM notifications WHERE user_id IN (?,?) AND type IN ('payment_success','payment_received')",
-                    (owner_id, worker_id),
+                    """DELETE FROM notifications
+                       WHERE id>? AND user_id IN (?,?)
+                         AND type IN ('payment_success','payment_received')""",
+                    (previous_notification_id, owner_id, worker_id),
                 )
                 cleanup.execute("DELETE FROM payments WHERE payment_uuid=?", (payment_uuid,))
                 cleanup.execute("DELETE FROM jobs WHERE title='Click callback regression' AND user_id=?", (owner_id,))
