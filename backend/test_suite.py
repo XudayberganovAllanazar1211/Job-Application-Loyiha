@@ -1614,6 +1614,50 @@ class JobPlatformTestCase(unittest.TestCase):
         main.db.q("DELETE FROM payments WHERE payment_uuid=?", (payment_uuid,)).close()
         main.db.q("DELETE FROM jobs WHERE id=?", (job_id,)).close()
 
+    def test_15_click_provider_transaction_id_is_unique(self):
+        transaction_id = "finjob-click-unique-regression"
+        conn = main.db.get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                INSERT INTO payments(
+                    payment_uuid,job_id,payer_id,payee_id,amount,provider,
+                    status,provider_transaction_id,created_at
+                ) VALUES(?,?,?,?,?,'click','pending',?,?)
+                """,
+                (
+                    "unique-click-test-payment-1",
+                    900000001,
+                    1,
+                    2,
+                    1,
+                    transaction_id,
+                    "2026-11-04T00:00:00+00:00",
+                ),
+            )
+            with self.assertRaises(main.sqlite3.IntegrityError):
+                cur.execute(
+                    """
+                    INSERT INTO payments(
+                        payment_uuid,job_id,payer_id,payee_id,amount,provider,
+                        status,provider_transaction_id,created_at
+                    ) VALUES(?,?,?,?,?,'click','pending',?,?)
+                    """,
+                    (
+                        "unique-click-test-payment-2",
+                        900000002,
+                        1,
+                        2,
+                        1,
+                        transaction_id,
+                        "2026-11-04T00:00:00+00:00",
+                    ),
+                )
+            conn.rollback()
+        finally:
+            conn.close()
+
 
 if __name__ == "__main__":
     unittest.main()
