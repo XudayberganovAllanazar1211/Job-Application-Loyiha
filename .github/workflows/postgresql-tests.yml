@@ -58,6 +58,7 @@ jobs:
         working-directory: backend
         env:
           FINJOB_ENV: development
+          FINJOB_ALLOW_EMPTY_DB_BOOTSTRAP: "1"
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/finjob_app
           TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/finjob_test
           SECRET_KEY: finjob-ci-test-secret-not-for-production
