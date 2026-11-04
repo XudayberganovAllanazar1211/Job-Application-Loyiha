@@ -352,18 +352,30 @@ def migrate(sqlite_path, confirm_branch):
     integrity = sqlite3.connect(
         sqlite_path.resolve().as_uri() + "?mode=ro", uri=True
     )
+    snapshot = None
     try:
         integrity_result = integrity.execute("PRAGMA integrity_check").fetchone()
         if not integrity_result or integrity_result[0] != "ok":
             raise RuntimeError("SQLite bazasi integrity_check tekshiruvidan o‘tmadi.")
 
-        tables = sqlite_tables(integrity)
-        indexes = sqlite_indexes(integrity)
-        if not tables:
-            raise RuntimeError("SQLite bazasida ko‘chiriladigan jadvallar topilmadi.")
-
         backup_path = create_backup(integrity, sqlite_path)
         print(f"SQLite backup yaratildi: {backup_path.name}")
+
+        # Import from the immutable backup snapshot, not the live app.db file.
+        # This keeps schema, rows, index DDL and financial totals from the
+        # exact same point in time even if the original SQLite file changes.
+        snapshot = sqlite3.connect(
+            backup_path.resolve().as_uri() + "?mode=ro", uri=True
+        )
+        snapshot_integrity = snapshot.execute("PRAGMA integrity_check").fetchone()
+        if not snapshot_integrity or snapshot_integrity[0] != "ok":
+            raise RuntimeError("SQLite backup integrity_check tekshiruvidan o‘tmadi.")
+
+        tables = sqlite_tables(snapshot)
+        indexes = sqlite_indexes(snapshot)
+        if not tables:
+            raise RuntimeError("SQLite backup ichida ko‘chiriladigan jadvallar topilmadi.")
+
         print(f"Ko‘chiriladigan jadvallar: {len(tables)}")
         print(f"Ko‘chiriladigan explicit indekslar: {len(indexes)}")
 
@@ -392,21 +404,21 @@ def migrate(sqlite_path, confirm_branch):
             copied_counts = {}
             try:
                 create_source_tables(target, tables)
-                validate_source_columns(integrity, target, tables)
+                validate_source_columns(snapshot, target, tables)
 
                 for table_name, _ in tables:
                     copied_counts[table_name] = copy_table(
-                        integrity, target, table_name
+                        snapshot, target, table_name
                     )
 
                 for index_name, index_sql in indexes:
                     target.execute(translate_sql(index_sql))
                 validate_explicit_indexes(target, indexes)
                 checked_financial_columns = validate_financial_totals(
-                    integrity, target, tables
+                    snapshot, target, tables
                 )
 
-                reset_identity_sequences(integrity, target, tables)
+                reset_identity_sequences(snapshot, target, tables)
                 record_schema_version(target)
 
                 for table_name, expected_count in copied_counts.items():
@@ -429,6 +441,8 @@ def migrate(sqlite_path, confirm_branch):
         print(f"Tekshirilgan moliyaviy ustunlar: {len(checked_financial_columns)}")
         print(f"Target: finjob-development / schema {target_schema} (production o‘zgartirilmadi).")
     finally:
+        if snapshot is not None:
+            snapshot.close()
         integrity.close()
 
 
