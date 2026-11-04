@@ -145,7 +145,7 @@ export default function AppLayout({ title, subtitle, children }) {
         } finally {
             localStorage.removeItem("token")
             localStorage.removeItem("user")
-            navigate("/login")
+            navigate("/")
         }
     }
 
