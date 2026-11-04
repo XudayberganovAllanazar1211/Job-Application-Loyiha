@@ -120,7 +120,7 @@ def ensure_target_is_empty(connection):
     if tables:
         names = ", ".join(row[0] for row in tables[:10])
         raise RuntimeError(
-             "FinJob target schema bo‘sh emas. Hech qanday jadval o‘chirilmagan. "
+            "FinJob target schema bo‘sh emas. Hech qanday jadval o‘chirilmagan. "
             f"Schema: {get_target_schema()}; topilgan jadvallar: {names}"
         )
 
@@ -135,7 +135,7 @@ def ensure_target_is_empty(connection):
         ).fetchone()[0]
         if applied:
             raise RuntimeError(
-                "Neon bazasida avval schema migration yozuvi mavjud. "
+                 "FinJob schema ichida avval migration yozuvi mavjud. "
                 "Target o‘zgartirilmagan; avval holatni tekshiring."
             )
 
