@@ -21,9 +21,9 @@ export default function Landing() {
                 </Link>
 
                 <nav className="landing-nav" aria-label="Asosiy navigatsiya">
-                    <a href="#how-it-works">Qanday ishlaydi?</a>
                     <a href="#for-everyone">Kimlar uchun?</a>
-                    <Link to="/community-rules">Platforma qoidalari</Link>
+                    <a href="#how-it-works">Qanday ishlaydi?</a>
+                    <a href="#community-rules">Qoidalar</a>
                 </nav>
 
                 <div className="landing-header-actions">
@@ -125,6 +125,36 @@ export default function Landing() {
                     </div>
                 </section>
 
+                <section className="landing-section" id="community-rules">
+                    <div className="landing-section-heading">
+                        <span className="landing-eyebrow">HAMMA UCHUN ANIQLIK</span>
+                        <h2>Eng muhim qoidalar</h2>
+                        <p>FinJobdan foydalanishda quyidagi oddiy qoidalarga amal qiling.</p>
+                    </div>
+                    <div className="landing-audience-grid">
+                        <article className="landing-audience-card">
+                            <span className="landing-card-index">01 / HALOLLIK</span>
+                            <h3>Haqiqiy e’lonlar</h3>
+                            <p>Ish, xizmat, narx va muddat haqida aniq hamda rost ma’lumot bering.</p>
+                        </article>
+                        <article className="landing-audience-card">
+                            <span className="landing-card-index">02 / HURMAT</span>
+                            <h3>Madaniyatli muloqot</h3>
+                            <p>Haqorat, tahdid, kamsitish va ta’qibga yo‘l qo‘ymang.</p>
+                        </article>
+                        <article className="landing-audience-card">
+                            <span className="landing-card-index">03 / XAVFSIZLIK</span>
+                            <h3>Firibgarlikdan saqlaning</h3>
+                            <p>Parol va tasdiqlash kodlarini hech kimga bermang. Shubhali havola va takliflardan ehtiyot bo‘ling.</p>
+                        </article>
+                        <article className="landing-audience-card">
+                            <span className="landing-card-index">04 / ADOLAT</span>
+                            <h3>Haqiqiy baho bering</h3>
+                            <p>Faqat real ish tajribangizga asoslanib baholang. Soxta reyting va spam tarqatmang.</p>
+                        </article>
+                    </div>
+                </section>
+
                 <section className="landing-final-cta">
                     <div>
                         <span className="landing-eyebrow">BOSHLASHGA TAYYORMISIZ?</span>
@@ -141,7 +171,6 @@ export default function Landing() {
                 <div>
                     <Link to="/terms">Foydalanish shartlari</Link>
                     <Link to="/privacy">Maxfiylik</Link>
-                    <Link to="/community-rules">Qoidalar</Link>
                 </div>
             </footer>
         </div>
