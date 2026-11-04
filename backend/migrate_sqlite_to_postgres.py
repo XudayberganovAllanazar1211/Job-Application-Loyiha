@@ -290,9 +290,9 @@ def reset_identity_sequences(source, target, tables):
             f"SELECT MAX(id) FROM {quote_identifier(table_name)}"
         ).fetchone()[0]
         if max_id is None:
-            target.execute("SELECT setval(%s, 1, false)", (sequence_name,))
+            target.execute("SELECT setval(%s::regclass, 1, false)", (sequence_name,))
         else:
-            target.execute("SELECT setval(%s, %s, true)", (sequence_name, max_id))
+            target.execute("SELECT setval(%s::regclass, %s, true)", (sequence_name, max_id))
 
 
 def record_schema_version(target):
