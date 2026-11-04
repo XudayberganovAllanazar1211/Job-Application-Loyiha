@@ -463,13 +463,9 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
         job = db.q("SELECT user_id,worker_id,status,COALESCE(agreed_price,price),currency,title FROM jobs WHERE id=?", (job_id,)).fetchone()
         if not job:
             return jsonify({"msg": "Ish topilmadi"}), 404
-        owner_id, worker_id, job_status, price, currency, title = job
+        owner_id = job[0]
         if owner_id != request.uid:
             return jsonify({"msg": "To‘lovni faqat ish egasi amalga oshirishi mumkin"}), 403
-        if job_status != "payment_pending" or not worker_id:
-            return jsonify({"msg": "Bu ish hozir to‘lov uchun tayyor emas"}), 400
-        if float(price) <= 0:
-            return jsonify({"msg": "Ish narxi noto‘g‘ri"}), 400
 
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         conn = db.get_connection()
