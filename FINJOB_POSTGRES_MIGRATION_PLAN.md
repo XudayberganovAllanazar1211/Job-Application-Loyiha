@@ -13,7 +13,7 @@ Status meanings:
 - [x] Confirm the working branch is `feature/postgresql-migration`.
 - [x] Confirm local SQLite main database and backup integrity checks were reported as `ok`.
 - [x] Inventory the 22 application tables and row counts.
-- [x] Inventory the 35 explicit SQLite indexes.
+- [x] Inventory the 35 explicit SQLite indexes plus one PostgreSQL-only Click idempotency index.
 - [x] Confirm `.env.local`, `.env` and SQLite files must stay out of Git.
 
 ## 1. SQLite / PostgreSQL compatibility audit
@@ -30,7 +30,7 @@ Status meanings:
 - [x] Add a JSON boundary conversion for PostgreSQL Decimal values.
 
 ## 3. PostgreSQL schema and versioned migrations
-- [~] Add a `schema_migrations` ledger with version 1 bootstrap, version 2 legacy-column compatibility, and version 3 exact job-price type migration.
+- [~] Add a `schema_migrations` ledger with version 1 bootstrap, version 2 legacy-column compatibility, and version 3 exact job-price type migration, and version 4 Click transaction idempotency.
 - [~] Add all 22 application tables, all 35 source indexes, and one additional unique Click transaction index to the PostgreSQL bootstrap.
 - [~] Map money columns, including `jobs.price`, to `NUMERIC(18,2)`.
 - [~] Clone the exact local SQLite table DDL (including the three auxiliary tables) in the guarded data migration utility.
@@ -66,9 +66,9 @@ Status meanings:
 ## 7. SQLite-to-PostgreSQL data migration utility
 - [~] Add `backend/migrate_sqlite_to_postgres.py`.
 - [~] Require `NEON_BRANCH=finjob-development` and explicit `--confirm-branch finjob-development`.
-- [~] Refuse production and refuse a non-empty target database.
+- [~] Refuse production and refuse a non-empty target schema.
 - [~] Create a timestamped SQLite backup before migration.
-- [~] Copy source tables, data, explicit indexes, and reset identity sequences.
+- [~] Copy source tables, data, explicit indexes, exact Decimal financial values, and reset identity sequences.
 - [ ] Run against the actual local `backend/app.db` and compare all 22 row counts and 35 indexes.
 - [ ] Verify financial sums, balances, escrow, and critical user/job/payment records.
 
@@ -76,7 +76,8 @@ Status meanings:
 - [~] Require a separate `TEST_DATABASE_URL` and normalize Neon pooler/direct host names in the safety check.
 - [~] Refuse to run tests against the same PostgreSQL database as `DATABASE_URL`.
 - [~] Truncate and reset only the dedicated test database before tests.
-- [ ] Add transaction rollback, unique-constraint, sequence, and concurrent payment regression tests.
+- [~] Add a regression test for Click provider transaction ID uniqueness.
+- [ ] Add transaction rollback, identity-sequence, and concurrent payment regression tests.
 - [ ] Execute the complete suite and fix every failure.
 
 ## 9. Development deployment and end-to-end verification
