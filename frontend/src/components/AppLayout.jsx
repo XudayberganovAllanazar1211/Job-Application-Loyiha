@@ -139,13 +139,26 @@ export default function AppLayout({ title, subtitle, children }) {
         }
     }
 
-    const logout = async () => {
-        try {
-            if (token) await api("/logout", { method: "POST", token })
-        } finally {
-            localStorage.removeItem("token")
-            localStorage.removeItem("user")
-            navigate("/")
+    const logout = () => {
+        const sessionToken = localStorage.getItem("token") || ""
+
+        // Log the user out locally immediately, without waiting for the server.
+        localStorage.removeItem("token")
+        localStorage.removeItem("user")
+        localStorage.removeItem("foydalanuvchi")
+
+        setUser(null)
+        setNotifications([])
+        setUnreadNotifications(0)
+        setUnreadMessages(0)
+        setShowNotifications(false)
+        setShowMobileMenu(false)
+
+        navigate("/login", { replace: true })
+
+        // Revoke the session on the backend in the background.
+        if (sessionToken) {
+            void api("/logout", { method: "POST", token: sessionToken })
         }
     }
 
