@@ -30,24 +30,26 @@ Status meanings:
 - [x] Add a JSON boundary conversion for PostgreSQL Decimal values.
 
 ## 3. PostgreSQL schema and versioned migrations
-- [~] Add a `schema_migrations` ledger and a version-1 schema bootstrap.
-- [~] Add the 22-table schema and all 35 named indexes to the PostgreSQL bootstrap.
-- [~] Map money-related REAL columns to `NUMERIC(18,2)` at the SQL compatibility boundary.
-- [ ] Review the exact local SQLite DDL for the three tables missing from the uploaded source snapshot.
-- [ ] Add future schema changes as explicit version 2+ migrations; never add runtime DDL to payment routes.
+- [~] Add a `schema_migrations` ledger with version 1 bootstrap, version 2 legacy-column compatibility, and version 3 exact job-price type migration.
+- [~] Add all 22 application tables and all 35 named indexes to the PostgreSQL bootstrap.
+- [~] Map money columns, including `jobs.price`, to `NUMERIC(18,2)`.
+- [~] Clone the exact local SQLite table DDL (including the three auxiliary tables) in the guarded data migration utility.
+- [ ] Run and validate these schema migrations against the development branch.
 
 ## 4. Database connection and SQL compatibility layer
 - [~] Add `backend/pg_compat.py` using psycopg and tuple rows.
 - [~] Translate qmark placeholders safely outside quoted strings and comments.
 - [~] Translate `lastrowid` through PostgreSQL `RETURNING id`.
 - [~] Translate `PRAGMA table_info`, `sqlite_master`, `INSERT OR IGNORE`, `IS ?`, `GROUP_CONCAT`, and `LIKE`.
-- [~] Commit completed read transactions when query results are closed.
+- [~] Bind monetary float parameters as `Decimal` / PostgreSQL `numeric` values.
+- [~] Commit completed read transactions when query results are closed and reset cursor state between statements.
 - [ ] Run a live PostgreSQL smoke test and verify all translated SQL against Neon development.
 
 ## 5. Main application SQL conversion
 - [~] Route the main DB class through PostgreSQL connections.
 - [~] Preserve existing API query call sites with the compatibility layer.
-- [~] Remove silent schema migration exception swallowing.
+- [~] Remove silent schema migration exception swallowing and move legacy columns into explicit schema versions.
+- [~] Add a guard against accidental empty-database bootstrap before the SQLite import.
 - [ ] Complete static review of all complex filters, aggregates, and transaction boundaries.
 - [ ] Run the full application test suite against the dedicated PostgreSQL test database.
 
@@ -69,8 +71,8 @@ Status meanings:
 - [ ] Verify financial sums, balances, escrow, and critical user/job/payment records.
 
 ## 8. Test suite and PostgreSQL regression tests
-- [~] Require a separate `TEST_DATABASE_URL`.
-- [~] Refuse to run tests against the same DSN as `DATABASE_URL`.
+- [~] Require a separate `TEST_DATABASE_URL` and normalize Neon pooler/direct host names in the safety check.
+- [~] Refuse to run tests against the same PostgreSQL database as `DATABASE_URL`.
 - [~] Truncate and reset only the dedicated test database before tests.
 - [ ] Add transaction rollback, unique-constraint, sequence, and concurrent payment regression tests.
 - [ ] Execute the complete suite and fix every failure.
