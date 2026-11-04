@@ -17,7 +17,10 @@ The repository root `.env.local` should contain the connection string pulled fro
 ```env
 NEON_BRANCH=finjob-development
 DATABASE_SCHEMA=finjob_data
+NEON_DEVELOPMENT_DATABASE_HOST=the exact hostname from the development DATABASE_URL
 ```
+
+The importer also compares the real hostname in `DATABASE_URL` with `NEON_DEVELOPMENT_DATABASE_HOST`. Copy only the exact host portion from the development branch connection string (include `-pooler` when present). This separate allow-list prevents a production DSN from passing merely because `NEON_BRANCH` was typed as `finjob-development`. Do not copy the username, password, query parameters, or full DSN into this setting.
 
 FinJob uses the isolated `finjob_data` schema by default in development. This is intentional: Neon branches can contain a copy of tables in `public`; the migration must not overwrite those. The importer creates/uses only `finjob_data`, leaving existing `public` tables unchanged. The Flask app uses the same schema automatically.
 
