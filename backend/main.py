@@ -361,6 +361,40 @@ class DB:
                         datetime.datetime.now(datetime.timezone.utc).isoformat(),
                     ),
                 )
+                applied_versions.add(3)
+            if 4 not in applied_versions:
+                duplicate_click_ids = cursor.execute(
+                    """
+                    SELECT provider_transaction_id, COUNT(*)
+                    FROM payments
+                    WHERE provider='click'
+                      AND provider_transaction_id IS NOT NULL
+                      AND provider_transaction_id <> ''
+                    GROUP BY provider_transaction_id
+                    HAVING COUNT(*) > 1
+                    """
+                ).fetchall()
+                if duplicate_click_ids:
+                    raise RuntimeError(
+                        "Click tranzaksiya ID'lari takrorlangan. "
+                        "Unique index yaratilmadi; avval duplicate yozuvlarni tekshiring."
+                    )
+                cursor.execute(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_click_transaction
+                    ON payments(provider_transaction_id)
+                    WHERE provider='click'
+                      AND provider_transaction_id IS NOT NULL
+                      AND provider_transaction_id <> ''
+                    """
+                )
+                cursor.execute(
+                    "INSERT INTO schema_migrations(version,name,applied_at) VALUES(4,?,?)",
+                    (
+                        "click_transaction_idempotency",
+                        datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    ),
+                )
             conn.commit()
             conn.close()
             return
@@ -705,6 +739,13 @@ class DB:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_payments_payer_status ON payments(payer_id,status,created_at);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_payments_payee_status ON payments(payee_id,status,created_at);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_payments_job_status ON payments(job_id,status);")
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_click_transaction
+            ON payments(provider_transaction_id)
+            WHERE provider='click'
+              AND provider_transaction_id IS NOT NULL
+              AND provider_transaction_id <> ''
+        """)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_wallet_transactions_user ON wallet_transactions(user_id,created_at);")
         duplicate_ratings = cursor.execute(
             """SELECT job_id,from_user,MIN(id)
@@ -753,6 +794,10 @@ class DB:
         cursor.execute(
             "INSERT INTO schema_migrations(version,name,applied_at) VALUES(3,?,?)",
             ("exact_money_columns", migration_time),
+        )
+        cursor.execute(
+            "INSERT INTO schema_migrations(version,name,applied_at) VALUES(4,?,?)",
+            ("click_transaction_idempotency", migration_time),
         )
         conn.commit()
         conn.close()
