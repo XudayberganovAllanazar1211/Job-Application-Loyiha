@@ -27,7 +27,13 @@ import jwt
 try:
     from dotenv import load_dotenv
     PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    load_dotenv(os.path.join(PROJECT_DIR, ".env.local"), override=False)
+    # In local development, the Neon CLI branch file is authoritative. CI/test
+    # suites opt out explicitly so TEST_DATABASE_URL cannot be overwritten.
+    is_test_mode = os.environ.get("FINJOB_TEST_MODE", "0").strip() == "1"
+    load_dotenv(
+        os.path.join(PROJECT_DIR, ".env.local"),
+        override=not is_test_mode,
+    )
     load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"), override=False)
 except ImportError:
     pass
