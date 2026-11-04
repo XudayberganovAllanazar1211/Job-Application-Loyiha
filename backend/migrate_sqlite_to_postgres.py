@@ -215,12 +215,9 @@ def validate_financial_totals(source, target, tables):
             target_total = target.execute(
                 f"SELECT COALESCE(SUM({quoted_column}), 0) FROM {quoted_table}"
             ).fetchone()[0]
-            if not math.isclose(
-                float(source_total or 0),
-                float(target_total or 0),
-                rel_tol=0.0,
-                abs_tol=0.01,
-            ):
+            source_total_decimal = Decimal(str(source_total or 0))
+            target_total_decimal = Decimal(str(target_total or 0))
+            if abs(source_total_decimal - target_total_decimal) > Decimal("0.01"):
                 raise RuntimeError(
                     f"{table_name}.{column}: moliyaviy yig‘indi mos kelmadi "
                     f"(SQLite={source_total}, PostgreSQL={target_total})."
