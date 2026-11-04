@@ -102,6 +102,21 @@ def ensure_target_is_empty(connection):
             f"Topilgan jadvallar: {names}"
         )
 
+    migration_ledger = connection.execute(
+        """
+        SELECT to_regclass(current_schema() || '.schema_migrations')
+        """
+    ).fetchone()[0]
+    if migration_ledger:
+        applied = connection.execute(
+            "SELECT COUNT(*) FROM schema_migrations"
+        ).fetchone()[0]
+        if applied:
+            raise RuntimeError(
+                "Neon bazasida avval schema migration yozuvi mavjud. "
+                "Target o‘zgartirilmagan; avval holatni tekshiring."
+            )
+
 
 def create_source_tables(connection, tables):
     for table_name, create_sql in tables:
@@ -243,7 +258,7 @@ def migrate(sqlite_path, confirm_branch):
         raise FileNotFoundError(f"SQLite bazasi topilmadi: {sqlite_path}")
 
     integrity = sqlite3.connect(
-        f"file:{sqlite_path.as_posix()}?mode=ro", uri=True
+        sqlite_path.resolve().as_uri() + "?mode=ro", uri=True
     )
     try:
         integrity_result = integrity.execute("PRAGMA integrity_check").fetchone()
