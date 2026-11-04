@@ -2105,5 +2105,130 @@ class JobPlatformTestCase(unittest.TestCase):
                 main.verify_development_database_target()
 
 
+    def test_30_concurrent_dummy_payment_creates_single_hold(self):
+        login = self.client.post(
+            "/login",
+            json={"username": "tester_creator", "password": "Password123!"},
+        )
+        self.assertEqual(login.status_code, 200)
+        token = login.get_json()["token"]
+        owner_id = self.client.get(
+            "/profile", headers={"Authorization": f"Bearer {token}"}
+        ).get_json()["id"]
+        worker_id = main.db.q(
+            "SELECT id FROM users WHERE username='tester_worker'"
+        ).fetchone()[0]
+
+        original_balance = main.db.q(
+            "SELECT balance FROM users WHERE id=?", (owner_id,)
+        ).fetchone()[0]
+        platform_before = main.db.q(
+            "SELECT balance,escrow_balance FROM platform_wallet WHERE id=1"
+        ).fetchone()
+        previous_transaction_id = main.db.q(
+            "SELECT COALESCE(MAX(id),0) FROM wallet_transactions"
+        ).fetchone()[0]
+        previous_notification_id = main.db.q(
+            "SELECT COALESCE(MAX(id),0) FROM notifications"
+        ).fetchone()[0]
+
+        now = "2026-11-04T15:00:00+00:00"
+        amount = 50000
+        setup = main.db.get_connection()
+        try:
+            job_id = setup.execute(
+                """INSERT INTO jobs(
+                    user_id,service_id,title,description,price,currency,location,
+                    worker_id,status,created_at,custom_service,agreed_price
+                ) VALUES(?,1,?,?,?,?,?,?, 'payment_pending',?,'',?)""",
+                (
+                    owner_id, "Concurrent dummy payment regression",
+                    "One escrow hold only", amount, "UZS", "Remote",
+                    worker_id, now, amount,
+                ),
+            ).lastrowid
+            setup.execute(
+                "UPDATE users SET balance=? WHERE id=?",
+                (100000, owner_id),
+            )
+            setup.commit()
+        finally:
+            setup.close()
+
+        def make_payment():
+            with app.test_client() as client:
+                return client.post(
+                    f"/payments/dummy/{job_id}",
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+
+        try:
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                responses = list(executor.map(lambda _: make_payment(), range(2)))
+
+            payloads = [response.get_json() or {} for response in responses]
+            self.assertEqual(
+                sum(
+                    response.status_code == 200 and payload.get("msg") == "ok"
+                    for response, payload in zip(responses, payloads)
+                ),
+                1,
+            )
+            self.assertTrue(all(response.status_code in (200, 400, 409) for response in responses))
+
+            payment_rows = main.db.q(
+                "SELECT COUNT(*),MAX(status) FROM payments WHERE job_id=? AND provider='dummy'",
+                (job_id,),
+            ).fetchone()
+            self.assertEqual(payment_rows, (1, "held"))
+
+            hold_ledger_count = main.db.q(
+                "SELECT COUNT(*) FROM wallet_transactions WHERE job_id=? AND type='payment_hold'",
+                (job_id,),
+            ).fetchone()[0]
+            self.assertEqual(hold_ledger_count, 1)
+
+            final_balance = main.db.q(
+                "SELECT balance FROM users WHERE id=?", (owner_id,)
+            ).fetchone()[0]
+            self.assertEqual(float(final_balance), 50000.0)
+
+            platform_after = main.db.q(
+                "SELECT balance,escrow_balance FROM platform_wallet WHERE id=1"
+            ).fetchone()
+            self.assertEqual(float(platform_after[0] - platform_before[0]), 0.0)
+            self.assertEqual(float(platform_after[1] - platform_before[1]), 50000.0)
+        finally:
+            cleanup = main.db.get_connection()
+            try:
+                cleanup.execute(
+                    "UPDATE users SET balance=? WHERE id=?",
+                    (original_balance, owner_id),
+                )
+                cleanup.execute(
+                    "UPDATE platform_wallet SET balance=?,escrow_balance=? WHERE id=1",
+                    (platform_before[0], platform_before[1]),
+                )
+                cleanup.execute(
+                    "DELETE FROM wallet_transactions WHERE job_id=? AND id>?",
+                    (job_id, previous_transaction_id),
+                )
+                cleanup.execute(
+                    "DELETE FROM notifications WHERE id>? AND user_id IN (?,?)",
+                    (previous_notification_id, owner_id, worker_id),
+                )
+                cleanup.execute(
+                    "DELETE FROM payments WHERE job_id=? AND provider='dummy'",
+                    (job_id,),
+                )
+                cleanup.execute("DELETE FROM jobs WHERE id=?", (job_id,))
+                cleanup.commit()
+            except Exception:
+                cleanup.rollback()
+                raise
+            finally:
+                cleanup.close()
+
+
 if __name__ == "__main__":
     unittest.main()
