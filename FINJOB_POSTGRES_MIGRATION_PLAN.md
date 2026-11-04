@@ -104,5 +104,5 @@ Status meanings:
 - [x] Add regression tests for SQL translation and Click callback idempotency.
 - [x] Add a concurrent wallet-withdrawal test that verifies two simultaneous withdrawals cannot overdraw the account.
 - [x] Add concurrent release/refund regression tests that verify escrow and wallet ledgers are updated only once.
-- [x] Add a PostgreSQL 16 GitHub Actions workflow for application tests and a guarded SQLite importer fixture.
+- [x] Keep one canonical PostgreSQL 16 GitHub Actions workflow; it runs the dedicated SQL compatibility tests, importer fixture plus post-import schema migrations, and application regression suite.
 - [ ] Observe a successful CI run and fix any resulting failures before calling the implementation verified.
