@@ -36,6 +36,8 @@ if APPLICATION_DATABASE_URL and database_identity(TEST_DATABASE_URL) == database
 # FINJOB_TEST_MODE prevents a local .env.local from replacing this isolated test DSN.
 os.environ["FINJOB_TEST_MODE"] = "1"
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+# The test suite is allowed to bootstrap only its independently validated TEST_DATABASE_URL.
+os.environ["FINJOB_ALLOW_EMPTY_DB_BOOTSTRAP"] = "1"
 
 from main import app, DB, pending_verifications
 import main
