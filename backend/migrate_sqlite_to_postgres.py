@@ -9,7 +9,6 @@ import argparse
 import datetime
 import os
 import re
-import math
 from decimal import Decimal
 import sqlite3
 import sys
