@@ -1,6 +1,7 @@
 import unittest
+from decimal import Decimal
 
-from pg_compat import PostgreSQLCursor, translate_sql, _replace_qmark_placeholders
+from pg_compat import PostgreSQLCursor, translate_sql, _replace_qmark_placeholders, _adapt_money_params
 
 
 class FakeCursor:
@@ -109,6 +110,21 @@ class SQLTranslationTests(unittest.TestCase):
         )
         self.assertIn("information_schema.tables", result)
         self.assertIn("table_name = 'payments'", result)
+
+    def test_money_float_parameters_are_converted_to_decimal(self):
+        result = _adapt_money_params(
+            "UPDATE users SET balance=balance-? WHERE id=?",
+            (123.45, 7),
+        )
+        self.assertEqual(result, (Decimal("123.45"), 7))
+
+    def test_non_money_float_parameters_are_left_as_float(self):
+        result = _adapt_money_params(
+            "INSERT INTO typing_states(job_id,user_id,updated_at) VALUES(?,?,?)",
+            (5, 8, 123.456),
+        )
+        self.assertEqual(result, (5, 8, 123.456))
+        self.assertIsInstance(result[2], float)
 
 
 if __name__ == "__main__":
