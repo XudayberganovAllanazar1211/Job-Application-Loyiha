@@ -14,6 +14,7 @@ import Profile from "./pages/Profile"
 import PublicProfile from "./pages/PublicProfile"
 import PrivacyPolicy from "./pages/PrivacyPolicy"
 import Terms from "./pages/Terms"
+import CommunityRules from "./pages/CommunityRules"
 import Admin from "./pages/Admin"
 import Appeals from "./pages/Appeals"
 import Payments from "./pages/Payments"
@@ -59,6 +60,7 @@ export default function App() {
         <Routes>
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/terms" element={<Terms />} />
+            <Route path="/community-rules" element={<CommunityRules />} />
             <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />
             <Route path="/forgot-password" element={<PublicOnly><ForgotPassword /></PublicOnly>} />
             <Route path="/register" element={<PublicOnly><Register /></PublicOnly>} />

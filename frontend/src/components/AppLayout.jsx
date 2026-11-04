@@ -208,6 +208,7 @@ export default function AppLayout({ title, subtitle, children }) {
                     <div className="legal-footer-links">
                         <NavLink to="/privacy">Maxfiylik</NavLink>
                         <NavLink to="/terms">Shartlar</NavLink>
+                        <NavLink to="/community-rules">Qoidalar</NavLink>
                     </div>
                 </div>
                 <div className="sidebar-footer">
@@ -251,6 +252,7 @@ export default function AppLayout({ title, subtitle, children }) {
                             {isAdmin && <NavLink to="/admin" className="mobile-menu-link">A <span>Administrator</span></NavLink>}
                             <NavLink to="/privacy" className="mobile-menu-link">M <span>Maxfiylik</span></NavLink>
                             <NavLink to="/terms" className="mobile-menu-link">S <span>Shartlar</span></NavLink>
+                            <NavLink to="/community-rules" className="mobile-menu-link">Q <span>Qoidalar</span></NavLink>
                         </div>
                         <button type="button" className="btn btn-danger mobile-menu-logout" onClick={logout}>Chiqish</button>
                     </div>
