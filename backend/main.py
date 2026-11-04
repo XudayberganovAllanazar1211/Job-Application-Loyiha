@@ -318,7 +318,7 @@ class DB:
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS average_rating DOUBLE PRECISION DEFAULT 0.0",
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user'",
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT ''",
-                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version BIGINT NOT NULL DEFAULT 0",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0",
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS balance NUMERIC(18,2) DEFAULT 0",
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at TEXT DEFAULT ''",
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_blocked INTEGER NOT NULL DEFAULT 0",
@@ -335,7 +335,7 @@ class DB:
                     "ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_url TEXT DEFAULT ''",
                     "ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_name TEXT DEFAULT ''",
                     "ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_type TEXT DEFAULT ''",
-                    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS message_id BIGINT",
+                    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS message_id INTEGER",
                     "ALTER TABLE portfolio_items ADD COLUMN IF NOT EXISTS file_url TEXT DEFAULT ''",
                     "ALTER TABLE portfolio_items ADD COLUMN IF NOT EXISTS file_name TEXT DEFAULT ''",
                 ]
