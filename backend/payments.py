@@ -363,6 +363,8 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
                 raise ValueError("payee_missing")
             worker_after = cur.execute("SELECT COALESCE(balance,0) FROM users WHERE id=?", (job[1],)).fetchone()[0]
             cur.execute("UPDATE platform_wallet SET balance=ROUND(balance+?,2) WHERE id=1", (commission,))
+            if cur.rowcount != 1:
+                raise ValueError("platform_wallet_missing")
             cur.execute(
                 "UPDATE payments SET status='released',payee_id=?,released_at=?,provider_payload=? WHERE id=? AND status='held'",
                 (job[1], now, json.dumps({"commission": commission, "worker_amount": worker_amount}, ensure_ascii=False), payment_id),
@@ -377,6 +379,10 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
                 return False, "Escrow balansida mablag‘ yetarli emas", None
             if str(e) == "payment_state_changed":
                 return False, "To‘lov holati o‘zgardi", None
+            if str(e) == "platform_wallet_missing":
+                return False, "Platforma wallet yozuvi topilmadi", None
+            if str(e) == "payee_missing":
+                return False, "To‘lov oluvchisi topilmadi", None
             raise
         finally:
             conn.close()
