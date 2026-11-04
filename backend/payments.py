@@ -471,60 +471,138 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
         if float(price) <= 0:
             return jsonify({"msg": "Ish narxi noto‘g‘ri"}), 400
 
-        existing = db.q("SELECT payment_uuid,status FROM payments WHERE job_id=? AND provider='dummy'", (job_id,)).fetchone()
-        if existing and existing[1] == "held":
-            return jsonify({"msg": "already_paid", "status": "held", "payment_uuid": existing[0]})
-        if existing and existing[1] in ("released", "refunded"):
-            return jsonify({"msg": "already_processed", "status": existing[1]})
-
-        payer_balance = db.q("SELECT COALESCE(balance,0) FROM users WHERE id=?", (owner_id,)).fetchone()
-        amount = float(price)
-        if not payer_balance or float(payer_balance[0]) < amount:
-            return jsonify({"msg": "Hisobingizda mablag‘ yetarli emas", "required": amount, "balance": float(payer_balance[0]) if payer_balance else 0}), 400
-
-        payment_uuid = existing[0] if existing else str(uuid.uuid4())
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         conn = db.get_connection()
         try:
             cur = conn.cursor()
+
+            # Serialize all payment attempts for this job. A second request
+            # waits here, then observes the committed held payment and returns
+            # it instead of debiting the owner's wallet a second time.
+            locked_job = cur.execute(
+                """SELECT user_id,worker_id,status,COALESCE(agreed_price,price),currency,title
+                   FROM jobs WHERE id=? FOR UPDATE""",
+                (job_id,),
+            ).fetchone()
+            if not locked_job:
+                conn.rollback()
+                return jsonify({"msg": "Ish topilmadi"}), 404
+
+            owner_id, worker_id, job_status, price, currency, title = locked_job
+            if owner_id != request.uid:
+                conn.rollback()
+                return jsonify({"msg": "To‘lovni faqat ish egasi amalga oshirishi mumkin"}), 403
+
+            existing = cur.execute(
+                """SELECT payment_uuid,status FROM payments
+                   WHERE job_id=? AND provider='dummy' FOR UPDATE""",
+                (job_id,),
+            ).fetchone()
+            if existing and existing[1] == "held":
+                conn.rollback()
+                return jsonify({
+                    "msg": "already_paid",
+                    "status": "held",
+                    "payment_uuid": existing[0],
+                })
+            if existing and existing[1] in ("released", "refunded"):
+                conn.rollback()
+                return jsonify({
+                    "msg": "already_processed",
+                    "status": existing[1],
+                })
+
+            if job_status != "payment_pending" or not worker_id:
+                conn.rollback()
+                return jsonify({"msg": "Bu ish hozir to‘lov uchun tayyor emas"}), 400
+
+            amount = float(price)
+            if amount <= 0:
+                conn.rollback()
+                return jsonify({"msg": "Ish narxi noto‘g‘ri"}), 400
+
+            payer_balance = cur.execute(
+                "SELECT COALESCE(balance,0) FROM users WHERE id=?",
+                (owner_id,),
+            ).fetchone()
+            if not payer_balance or float(payer_balance[0]) < amount:
+                conn.rollback()
+                return jsonify({
+                    "msg": "Hisobingizda mablag‘ yetarli emas",
+                    "required": amount,
+                    "balance": float(payer_balance[0]) if payer_balance else 0,
+                }), 400
+
+            payment_uuid = existing[0] if existing else str(uuid.uuid4())
             payload = json.dumps({"test": True, "escrow": True}, ensure_ascii=False)
             if existing:
-                cur.execute(
+                updated = cur.execute(
                     """UPDATE payments SET payer_id=?,payee_id=?,amount=?,currency='UZS',
                        status='held',paid_at=?,provider_payload=?
-                       WHERE payment_uuid=? AND provider='dummy'""",
+                       WHERE payment_uuid=? AND provider='dummy' AND status='pending'""",
                     (owner_id, worker_id, amount, now, payload, payment_uuid),
                 )
+                if updated.rowcount != 1:
+                    raise ValueError("payment_state_changed")
             else:
                 cur.execute(
                     """INSERT INTO payments(
                         payment_uuid,job_id,payer_id,payee_id,amount,currency,provider,status,
                         provider_payload,created_at,paid_at
                     ) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
-                    (payment_uuid,job_id,owner_id,worker_id,amount,"UZS","dummy","held",payload,now,now),
+                    (
+                        payment_uuid, job_id, owner_id, worker_id, amount,
+                        "UZS", "dummy", "held", payload, now, now,
+                    ),
                 )
+
             cur.execute(
-                "UPDATE users SET balance=ROUND(COALESCE(balance,0)-?,2) WHERE id=? AND COALESCE(balance,0)>=?",
+                """UPDATE users
+                   SET balance=ROUND(COALESCE(balance,0)-?,2)
+                   WHERE id=? AND COALESCE(balance,0)>=?""",
                 (amount, owner_id, amount),
             )
             if cur.rowcount != 1:
                 raise ValueError("insufficient_balance")
-            cur.execute("INSERT INTO platform_wallet(id,balance,escrow_balance) VALUES(1,0,0) ON CONFLICT (id) DO NOTHING")
-            cur.execute("UPDATE platform_wallet SET escrow_balance=ROUND(escrow_balance+?,2) WHERE id=1", (amount,))
+
+            cur.execute(
+                "INSERT INTO platform_wallet(id,balance,escrow_balance) VALUES(1,0,0) ON CONFLICT (id) DO NOTHING"
+            )
+            cur.execute(
+                "UPDATE platform_wallet SET escrow_balance=ROUND(escrow_balance+?,2) WHERE id=1",
+                (amount,),
+            )
             if cur.rowcount != 1:
                 raise RuntimeError("platform_wallet_missing")
-            payer_after = cur.execute("SELECT balance FROM users WHERE id=?", (owner_id,)).fetchone()[0]
-            _wallet_tx(cur, owner_id, "payment_hold", -amount, payer_after, job_id, f"«{title}» uchun waiting to‘lovi", now)
-            cur.execute("UPDATE jobs SET status='accepted' WHERE id=? AND status='payment_pending'", (job_id,))
+
+            payer_after = cur.execute(
+                "SELECT balance FROM users WHERE id=?",
+                (owner_id,),
+            ).fetchone()[0]
+            _wallet_tx(
+                cur, owner_id, "payment_hold", -amount, payer_after, job_id,
+                f"«{title}» uchun waiting to‘lovi", now,
+            )
+            cur.execute(
+                """UPDATE jobs SET status='accepted'
+                   WHERE id=? AND status='payment_pending'
+                     AND user_id=? AND worker_id=?""",
+                (job_id, owner_id, worker_id),
+            )
             if cur.rowcount != 1:
                 raise ValueError("job_state_changed")
             conn.commit()
+        except sqlite3.IntegrityError:
+            conn.rollback()
+            return jsonify({"msg": "To‘lov allaqachon yaratilgan yoki qayta ishlangan"}), 409
         except Exception as e:
             conn.rollback()
             if str(e) == "insufficient_balance":
                 return jsonify({"msg": "Hisobingizda mablag‘ yetarli emas"}), 400
             if str(e) == "job_state_changed":
                 return jsonify({"msg": "Ish holati o‘zgardi. Qayta urinib ko‘ring"}), 409
+            if str(e) == "payment_state_changed":
+                return jsonify({"msg": "To‘lov holati o‘zgardi. Qayta urinib ko‘ring"}), 409
             raise
         finally:
             conn.close()
