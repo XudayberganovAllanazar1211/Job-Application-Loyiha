@@ -8,6 +8,7 @@ The script refuses production and refuses a non-empty target schema.
 import argparse
 import datetime
 import os
+import re
 import math
 from decimal import Decimal
 import sqlite3
