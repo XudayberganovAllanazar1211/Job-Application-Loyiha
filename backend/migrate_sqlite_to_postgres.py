@@ -27,7 +27,14 @@ EXPECTED_BRANCH = "finjob-development"
 
 
 def load_environment():
-    load_dotenv(PROJECT_DIR / ".env.local", override=False)
+    development_env = PROJECT_DIR / ".env.local"
+    if not development_env.is_file():
+        raise RuntimeError(
+            "Loyiha root papkasida .env.local topilmadi. "
+            "Neon CLI orqali finjob-development branch environment qiymatlarini pull qiling."
+        )
+    # The branch-specific Neon file is authoritative for this one-time import.
+    load_dotenv(development_env, override=True)
     load_dotenv(BACKEND_DIR / ".env", override=False)
 
 
@@ -53,7 +60,7 @@ def ensure_development_target(confirm_branch):
 
 
 def create_backup(source, sqlite_path):
-    stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     backup_path = sqlite_path.with_name(
         f"{sqlite_path.stem}.pre-postgres-{stamp}{sqlite_path.suffix}"
     )
