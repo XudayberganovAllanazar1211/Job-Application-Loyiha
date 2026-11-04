@@ -627,6 +627,51 @@ class DB:
             "UPDATE jobs SET worker_id=NULL WHERE status='active' AND worker_id IS NOT NULL"
         )
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS disputes(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id INTEGER NOT NULL,
+                opened_by INTEGER NOT NULL,
+                against_user_id INTEGER NOT NULL,
+                category TEXT NOT NULL,
+                description TEXT NOT NULL,
+                evidence TEXT DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'open',
+                admin_response TEXT DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT,
+                resolved_at TEXT,
+                resolved_by INTEGER,
+                decision TEXT,
+                decision_for_user_id INTEGER,
+                payment_action TEXT,
+                job_action TEXT,
+                sanction_user_id INTEGER,
+                sanction_type TEXT,
+                sanction_duration_minutes INTEGER
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS recently_viewed(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                job_id INTEGER NOT NULL,
+                viewed_at TEXT NOT NULL,
+                UNIQUE(user_id,job_id)
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS saved_searches(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                filters TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(user_id,name)
+            )
+        """)
+
         # Database Indexes
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);")
