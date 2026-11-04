@@ -27,6 +27,7 @@ Status meanings:
 - [x] Add psycopg 3 to backend requirements.
 - [x] Load root `.env.local` as the authoritative local branch config; test mode explicitly protects `TEST_DATABASE_URL` from override.
 - [x] Require `DATABASE_URL`; do not silently fall back to SQLite.
+- [x] Verify the real PostgreSQL endpoint hostname against `NEON_DEVELOPMENT_DATABASE_HOST` in the importer and development Flask startup.
 - [x] Add a JSON boundary conversion for PostgreSQL Decimal values.
 
 ## 3. PostgreSQL schema and versioned migrations
@@ -100,6 +101,7 @@ Status meanings:
 - [x] Fix missing `re` import in the SQLite-to-PostgreSQL importer (the schema-name validation used `re.fullmatch`).
 - [x] Compare financial totals with `Decimal` arithmetic and a one-tiyin tolerance instead of converting totals back to binary floating point.
 - [x] Make `PRAGMA table_info` primary-key metadata joins include the table name as well as the constraint name.
+- [x] Add a real endpoint-host allow-list so a typed `NEON_BRANCH=finjob-development` label alone cannot authorize a different database host.
 - [x] Restrict Click prepare/confirm callbacks to the original provider transaction ID; mismatched IDs are rejected and repeated matching confirmations are idempotent.
 - [x] Add regression tests for SQL translation and Click callback idempotency.
 - [x] Add a concurrent wallet-withdrawal test that verifies two simultaneous withdrawals cannot overdraw the account.
