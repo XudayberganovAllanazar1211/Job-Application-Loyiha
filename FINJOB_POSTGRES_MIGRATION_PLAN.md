@@ -31,7 +31,7 @@ Status meanings:
 
 ## 3. PostgreSQL schema and versioned migrations
 - [~] Add a `schema_migrations` ledger with version 1 bootstrap, version 2 legacy-column compatibility, and version 3 exact job-price type migration.
-- [~] Add all 22 application tables and all 35 named indexes to the PostgreSQL bootstrap.
+- [~] Add all 22 application tables, all 35 source indexes, and one additional unique Click transaction index to the PostgreSQL bootstrap.
 - [~] Map money columns, including `jobs.price`, to `NUMERIC(18,2)`.
 - [~] Clone the exact local SQLite table DDL (including the three auxiliary tables) in the guarded data migration utility.
 - [ ] Run and validate these schema migrations against the development branch.
@@ -57,8 +57,10 @@ Status meanings:
 - [~] Remove runtime CREATE/ALTER TABLE statements from `payments.py`.
 - [~] Keep wallet, payment, platform, and settings schema under the central migration.
 - [~] Add row-count guards to Click callback escrow and job-state updates.
-- [~] Add row-count guards to wallet credits during release/refund.
-- [ ] Add concurrent/idempotency regression tests for Click callback, release, refund, dummy hold, and withdrawal.
+- [~] Add row-count guards to wallet credits and escrow/platform ledger updates during release/refund.
+- [~] Add a partial unique index for Click provider transaction IDs and return a duplicate-transaction response on concurrent conflicts.
+- [~] Add a PostgreSQL regression test proving Click provider transaction IDs cannot be reused.
+- [ ] Add broader concurrent/idempotency regression tests for release, refund, dummy hold, and withdrawal.
 - [ ] Verify all financial balances and escrow totals against source data.
 
 ## 7. SQLite-to-PostgreSQL data migration utility
