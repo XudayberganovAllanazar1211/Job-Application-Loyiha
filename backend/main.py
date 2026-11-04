@@ -277,6 +277,26 @@ class DB:
         conn = self.get_connection()
         cursor = conn.cursor()
 
+        existing_table_count = cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM information_schema.tables
+            WHERE table_schema = current_schema()
+              AND table_type = 'BASE TABLE'
+              AND table_name <> 'schema_migrations'
+            """
+        ).fetchone()[0]
+        if (
+            not existing_table_count
+            and os.environ.get("FINJOB_ALLOW_EMPTY_DB_BOOTSTRAP", "0").strip() != "1"
+        ):
+            conn.close()
+            raise RuntimeError(
+                "PostgreSQL bazasi bo‘sh. Avval migrate_sqlite_to_postgres.py bilan "
+                "SQLite ma’lumotlarini ko‘chiring. Faqat yangi, bo‘sh loyiha uchun "
+                "FINJOB_ALLOW_EMPTY_DB_BOOTSTRAP=1 ni ataylab o‘rnating."
+            )
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS schema_migrations(
                 version BIGINT PRIMARY KEY,
