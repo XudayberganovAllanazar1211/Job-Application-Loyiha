@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import psycopg
 
-from migrate_sqlite_to_postgres import migrate
+from migrate_sqlite_to_postgres import migrate, ensure_development_target
 
 
 class SQLiteToPostgreSQLMigrationTests(unittest.TestCase):
@@ -36,6 +36,33 @@ class SQLiteToPostgreSQLMigrationTests(unittest.TestCase):
         with psycopg.connect(cls.DATABASE_URL) as connection:
             connection.execute(
                 f'DROP SCHEMA IF EXISTS "{cls.TARGET_SCHEMA}" CASCADE'
+            )
+
+    def test_development_guard_checks_the_real_dsn_host(self):
+        with patch.dict(
+            os.environ,
+            {
+                "FINJOB_ENV": "development",
+                "NEON_BRANCH": "finjob-development",
+                "DATABASE_URL": "postgresql://postgres:postgres@127.0.0.1:5432/finjob_migration_test",
+                "NEON_DEVELOPMENT_DATABASE_HOST": "production-endpoint.example.neon.tech",
+            },
+        ):
+            with self.assertRaises(RuntimeError):
+                ensure_development_target("finjob-development")
+
+    def test_development_guard_accepts_only_the_expected_endpoint_host(self):
+        with patch.dict(
+            os.environ,
+            {
+                "FINJOB_ENV": "development",
+                "NEON_BRANCH": "finjob-development",
+                "DATABASE_URL": "postgresql://postgres:postgres@127.0.0.1:5432/finjob_migration_test",
+                "NEON_DEVELOPMENT_DATABASE_HOST": "127.0.0.1",
+            },
+        ):
+            self.assertTrue(
+                ensure_development_target("finjob-development").startswith("postgresql://")
             )
 
     def test_migrate_tables_rows_money_indexes_and_identity(self):
@@ -153,6 +180,7 @@ class SQLiteToPostgreSQLMigrationTests(unittest.TestCase):
                     "NEON_BRANCH": "finjob-development",
                     "DATABASE_URL": self.DATABASE_URL,
                     "DATABASE_SCHEMA": self.TARGET_SCHEMA,
+                    "NEON_DEVELOPMENT_DATABASE_HOST": "127.0.0.1",
                 },
             ):
                 migrate(sqlite_path, "finjob-development")
