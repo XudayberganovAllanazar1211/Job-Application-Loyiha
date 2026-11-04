@@ -48,7 +48,7 @@ jobs:
 
       - name: Compile backend modules
         run: |
-          python -m py_compile             backend/main.py             backend/payments.py             backend/pg_compat.py             backend/migrate_sqlite_to_postgres.py             backend/test_suite.py
+          python -m py_compile backend/main.py backend/payments.py backend/pg_compat.py backend/migrate_sqlite_to_postgres.py backend/test_suite.py
 
       - name: Run PostgreSQL integration tests
         env:
