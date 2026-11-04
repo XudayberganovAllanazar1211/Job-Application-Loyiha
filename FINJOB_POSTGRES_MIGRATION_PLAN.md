@@ -61,7 +61,7 @@ Status meanings:
 - [~] Add row-count guards to wallet credits and escrow/platform ledger updates during release/refund.
 - [~] Add a partial unique index for Click provider transaction IDs and return a duplicate-transaction response on concurrent conflicts.
 - [~] Add a PostgreSQL regression test proving Click provider transaction IDs cannot be reused.
-- [~] Add concurrent withdrawal, release, and refund regression tests; concurrent dummy-hold coverage remains pending.
+- [~] Add concurrent withdrawal, release, refund, and dummy-hold regression tests; execution is pending.
 - [ ] Verify all financial balances and escrow totals against source data.
 
 ## 7. SQLite-to-PostgreSQL data migration utility
@@ -81,7 +81,7 @@ Status meanings:
 - [~] Add a regression test for Click provider transaction ID uniqueness.
 - [~] Add PostgreSQL transaction rollback and identity-sequence regression tests; execution is pending.
 - [~] Add compatibility, importer, Click callback, identity, rollback, concurrency, and application regression coverage; execution is pending.
-- [~] Add parallel wallet-withdrawal, release, and refund regression tests; parallel dummy-hold coverage remains pending.
+- [~] Add parallel wallet-withdrawal, release, refund, and dummy-hold regression tests; execution is pending.
 
 ## 9. Development deployment and end-to-end verification
 - [ ] Install dependencies in the local virtual environment.
@@ -106,5 +106,6 @@ Status meanings:
 - [x] Add regression tests for SQL translation and Click callback idempotency.
 - [x] Add a concurrent wallet-withdrawal test that verifies two simultaneous withdrawals cannot overdraw the account.
 - [x] Add concurrent release/refund regression tests that verify escrow and wallet ledgers are updated only once.
+- [x] Serialize dummy escrow payment attempts with a job-row lock and test that parallel requests create only one debit, escrow hold, and ledger row.
 - [x] Keep one canonical PostgreSQL 16 GitHub Actions workflow; it runs the dedicated SQL compatibility tests, importer fixture plus post-import schema migrations, and application regression suite.
 - [ ] Observe a successful CI run and fix any resulting failures before calling the implementation verified.
