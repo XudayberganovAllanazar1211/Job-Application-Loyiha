@@ -348,6 +348,19 @@ class DB:
                         datetime.datetime.now(datetime.timezone.utc).isoformat(),
                     ),
                 )
+                applied_versions.add(2)
+            if 3 not in applied_versions:
+                cursor.execute(
+                    "ALTER TABLE jobs ALTER COLUMN price TYPE NUMERIC(18,2) "
+                    "USING price::NUMERIC(18,2)"
+                )
+                cursor.execute(
+                    "INSERT INTO schema_migrations(version,name,applied_at) VALUES(3,?,?)",
+                    (
+                        "exact_money_columns",
+                        datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    ),
+                )
             conn.commit()
             conn.close()
             return
@@ -392,7 +405,7 @@ class DB:
                 service_id INTEGER,
                 title TEXT,
                 description TEXT,
-                price INTEGER,
+                price NUMERIC(18,2),
                 currency TEXT DEFAULT 'UZS',
                 location TEXT,
                 worker_id INTEGER,
@@ -736,6 +749,10 @@ class DB:
         cursor.execute(
             "INSERT INTO schema_migrations(version,name,applied_at) VALUES(2,?,?)",
             ("legacy_schema_columns", migration_time),
+        )
+        cursor.execute(
+            "INSERT INTO schema_migrations(version,name,applied_at) VALUES(3,?,?)",
+            ("exact_money_columns", migration_time),
         )
         conn.commit()
         conn.close()
