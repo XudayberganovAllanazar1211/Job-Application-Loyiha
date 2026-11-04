@@ -1,5 +1,5 @@
 import datetime
-import sqlite3
+import pg_compat as sqlite3
 import hashlib
 import json
 import os
@@ -35,74 +35,7 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
         }
         return CLICK_CHECKOUT_URL + "?" + urlencode(params)
 
-    def ensure_table():
-        conn = db.get_connection()
-        try:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS payments(
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    payment_uuid TEXT UNIQUE NOT NULL,
-                    job_id INTEGER NOT NULL UNIQUE,
-                    payer_id INTEGER NOT NULL,
-                    payee_id INTEGER NOT NULL,
-                    amount REAL NOT NULL,
-                    currency TEXT NOT NULL DEFAULT 'UZS',
-                    provider TEXT NOT NULL DEFAULT 'click',
-                    status TEXT NOT NULL DEFAULT 'pending',
-                    provider_transaction_id TEXT DEFAULT '',
-                    provider_prepare_id TEXT DEFAULT '',
-                    provider_payload TEXT DEFAULT '',
-                    created_at TEXT NOT NULL,
-                    paid_at TEXT,
-                    released_at TEXT,
-                    refunded_at TEXT
-                )
-            """)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_payments_payer_status ON payments(payer_id,status,created_at)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_payments_payee_status ON payments(payee_id,status,created_at)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_payments_job_status ON payments(job_id,status)")
-            conn.commit()
-        finally:
-            conn.close()
-
-    ensure_table()
-    conn = db.get_connection()
-    try:
-        columns = [row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()]
-        if "balance" not in columns:
-            conn.execute("ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0")
-        conn.execute("""CREATE TABLE IF NOT EXISTS wallet_transactions(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            type TEXT NOT NULL,
-            amount REAL NOT NULL,
-            balance_after REAL NOT NULL,
-            job_id INTEGER,
-            description TEXT NOT NULL,
-            created_at TEXT NOT NULL
-        )""")
-        conn.execute("""CREATE TABLE IF NOT EXISTS platform_wallet(
-            id INTEGER PRIMARY KEY CHECK(id=1),
-            balance REAL NOT NULL DEFAULT 0,
-            escrow_balance REAL NOT NULL DEFAULT 0
-        )""")
-        conn.execute("""CREATE TABLE IF NOT EXISTS platform_settings(
-            key TEXT PRIMARY KEY,
-            value TEXT NOT NULL
-        )""")
-        conn.execute(
-            "INSERT OR IGNORE INTO platform_settings(key,value) VALUES('commission_percent','10')"
-        )
-        platform_columns = [row[1] for row in conn.execute("PRAGMA table_info(platform_wallet)").fetchall()]
-        if "escrow_balance" not in platform_columns:
-            conn.execute("ALTER TABLE platform_wallet ADD COLUMN escrow_balance REAL NOT NULL DEFAULT 0")
-        conn.execute("INSERT OR IGNORE INTO platform_wallet(id,balance,escrow_balance) VALUES(1,0,0)")
-        conn.execute(
-            "UPDATE payments SET status='released',released_at=COALESCE(released_at,paid_at) WHERE provider='dummy' AND status='paid' AND released_at IS NULL"
-        )
-        conn.commit()
-    finally:
-        conn.close()
+    # payments, wallets and settings are created by versioned DB migrations in main.py.
 
     def _commission_preview(amount):
         amount = float(amount)
@@ -426,6 +359,8 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
                 "UPDATE users SET balance=ROUND(COALESCE(balance,0)+?,2) WHERE id=?",
                 (worker_amount, job[1]),
             )
+            if cur.rowcount != 1:
+                raise ValueError("payee_missing")
             worker_after = cur.execute("SELECT COALESCE(balance,0) FROM users WHERE id=?", (job[1],)).fetchone()[0]
             cur.execute("UPDATE platform_wallet SET balance=ROUND(balance+?,2) WHERE id=1", (commission,))
             cur.execute(
@@ -481,6 +416,8 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
             if cur.rowcount != 1:
                 raise ValueError("escrow_insufficient")
             cur.execute("UPDATE users SET balance=ROUND(COALESCE(balance,0)+?,2) WHERE id=?", (amount, payer_id))
+            if cur.rowcount != 1:
+                raise ValueError("payer_missing")
             payer_after = cur.execute("SELECT COALESCE(balance,0) FROM users WHERE id=?", (payer_id,)).fetchone()[0]
             cur.execute(
                 "UPDATE payments SET status='refunded',refunded_at=?,provider_payload=? WHERE id=? AND status='held'",
@@ -566,18 +503,10 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
             )
             if cur.rowcount != 1:
                 raise ValueError("insufficient_balance")
-            cur.execute(
-                """CREATE TABLE IF NOT EXISTS platform_wallet(
-                    id INTEGER PRIMARY KEY CHECK(id=1),
-                    balance REAL NOT NULL DEFAULT 0,
-                    escrow_balance REAL NOT NULL DEFAULT 0
-                )"""
-            )
-            platform_columns = [row[1] for row in cur.execute("PRAGMA table_info(platform_wallet)").fetchall()]
-            if "escrow_balance" not in platform_columns:
-                cur.execute("ALTER TABLE platform_wallet ADD COLUMN escrow_balance REAL NOT NULL DEFAULT 0")
-            cur.execute("INSERT OR IGNORE INTO platform_wallet(id,balance,escrow_balance) VALUES(1,0,0)")
+            cur.execute("INSERT INTO platform_wallet(id,balance,escrow_balance) VALUES(1,0,0) ON CONFLICT (id) DO NOTHING")
             cur.execute("UPDATE platform_wallet SET escrow_balance=ROUND(escrow_balance+?,2) WHERE id=1", (amount,))
+            if cur.rowcount != 1:
+                raise RuntimeError("platform_wallet_missing")
             cur.execute(
                 """CREATE TABLE IF NOT EXISTS wallet_transactions(
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -690,9 +619,7 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
             """SELECT type,amount,balance_after,job_id,description,created_at
                FROM wallet_transactions WHERE user_id=? ORDER BY id DESC LIMIT 100""",
             (request.uid,),
-        ).fetchall() if db.q(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='wallet_transactions'"
-        ).fetchone() else []
+        ).fetchall()
         return jsonify({
             "balance": float(user[0]) if user else 0,
             "transactions": [
@@ -904,9 +831,7 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
         ).fetchall()
         platform = db.q(
             "SELECT balance,COALESCE(escrow_balance,0) FROM platform_wallet WHERE id=1"
-        ).fetchone() if db.q(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='platform_wallet'"
-        ).fetchone() else None
+        ).fetchone()
         return jsonify({
             "platform_balance": float(platform[0]) if platform else 0,
             "escrow_balance": float(platform[1]) if platform else 0,
@@ -1016,25 +941,19 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
             )
             changed = cursor.rowcount
             if changed:
-                cursor.execute(
-                    """CREATE TABLE IF NOT EXISTS platform_wallet(
-                        id INTEGER PRIMARY KEY CHECK(id=1),
-                        balance REAL NOT NULL DEFAULT 0,
-                        escrow_balance REAL NOT NULL DEFAULT 0
-                    )"""
-                )
-                platform_columns = [row[1] for row in cursor.execute("PRAGMA table_info(platform_wallet)").fetchall()]
-                if "escrow_balance" not in platform_columns:
-                    cursor.execute("ALTER TABLE platform_wallet ADD COLUMN escrow_balance REAL NOT NULL DEFAULT 0")
-                cursor.execute("INSERT OR IGNORE INTO platform_wallet(id,balance,escrow_balance) VALUES(1,0,0)")
+                cursor.execute("INSERT INTO platform_wallet(id,balance,escrow_balance) VALUES(1,0,0) ON CONFLICT (id) DO NOTHING")
                 cursor.execute(
                     "UPDATE platform_wallet SET escrow_balance=ROUND(escrow_balance+?,2) WHERE id=1",
                     (float(expected_amount),),
                 )
+                if cursor.rowcount != 1:
+                    raise RuntimeError("platform_wallet_missing")
                 cursor.execute(
                     "UPDATE jobs SET status='accepted' WHERE id=? AND status='payment_pending'",
                     (job_id,),
                 )
+                if cursor.rowcount != 1:
+                    raise RuntimeError("job_state_changed")
             conn.commit()
         except Exception:
             conn.rollback()
