@@ -98,6 +98,12 @@ class SQLTranslationTests(unittest.TestCase):
         self.assertIn("amount NUMERIC(18,2)", result)
         self.assertIn("balance NUMERIC(18,2)", result)
 
+    def test_integer_job_price_becomes_numeric(self):
+        result = translate_sql(
+            "CREATE TABLE jobs(id INTEGER PRIMARY KEY AUTOINCREMENT, price INTEGER)"
+        )
+        self.assertIn("price NUMERIC(18,2)", result)
+
     def test_table_info_uses_information_schema(self):
         result = translate_sql("PRAGMA table_info(users)")
         self.assertIn("information_schema.columns", result)
