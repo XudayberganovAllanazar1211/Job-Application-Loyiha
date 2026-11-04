@@ -13,6 +13,7 @@ from decimal import Decimal
 import sqlite3
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 import psycopg
 from dotenv import load_dotenv
@@ -67,6 +68,18 @@ def ensure_development_target(confirm_branch):
         )
     if not dsn.startswith(("postgres://", "postgresql://")):
         raise RuntimeError("DATABASE_URL PostgreSQL DSN bo‘lishi kerak.")
+
+    # NEON_BRANCH is a user-editable label, not proof that the DSN points to
+    # that branch. Require an independently copied development endpoint host.
+    actual_host = (urlparse(dsn).hostname or "").strip().lower()
+    expected_host = os.environ.get(
+        "NEON_DEVELOPMENT_DATABASE_HOST", ""
+    ).strip().lower()
+    if not expected_host or actual_host != expected_host:
+        raise RuntimeError(
+            "DATABASE_URL hosti NEON_DEVELOPMENT_DATABASE_HOST bilan mos emas. "
+            "Development endpoint hostname'ini Neon branch detail sahifasidan tekshiring."
+        )
     return dsn
 
 
