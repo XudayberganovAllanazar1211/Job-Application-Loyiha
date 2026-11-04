@@ -8,6 +8,7 @@ import re
 from decimal import Decimal
 
 import psycopg
+from psycopg import sql as pg_sql
 from psycopg.rows import tuple_row
 
 
@@ -347,21 +348,21 @@ def connect(database=None, check_same_thread=False, timeout=15.0, **kwargs):
         **kwargs,
     )
     schema = get_database_schema()
-    if schema != "public":
-        try:
+    try:
+        if schema != "public":
             raw.execute(
                 pg_sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(
                     pg_sql.Identifier(schema)
                 )
             )
-            raw.execute(
-                pg_sql.SQL("SET search_path TO {}").format(
-                    pg_sql.Identifier(schema)
-                )
+        raw.execute(
+            pg_sql.SQL("SET search_path TO {}").format(
+                pg_sql.Identifier(schema)
             )
-            raw.commit()
-        except Exception:
-            raw.rollback()
-            raw.close()
-            raise
+        )
+        raw.commit()
+    except Exception:
+        raw.rollback()
+        raw.close()
+        raise
     return PostgreSQLConnection(raw)
