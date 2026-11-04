@@ -21,8 +21,9 @@ if not TEST_DATABASE_URL.startswith(("postgres://", "postgresql://")):
     raise RuntimeError("TEST_DATABASE_URL alohida PostgreSQL test bazasiga sozlanishi shart.")
 def database_identity(dsn):
     parsed = urlparse(dsn)
+    hostname = (parsed.hostname or "").lower().replace("-pooler.", ".")
     return (
-        (parsed.hostname or "").lower(),
+        hostname,
         parsed.port or 5432,
         parsed.path.rstrip("/").lower(),
     )
