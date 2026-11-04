@@ -320,8 +320,18 @@ class PostgreSQLConnection:
         return getattr(self._connection, name)
 
 
+def get_database_schema():
+    """Use an isolated schema by default in development; public in production."""
+    finjob_env = os.environ.get("FINJOB_ENV", "development").strip().lower()
+    default_schema = "public" if finjob_env in {"production", "prod"} else "finjob_data"
+    schema = os.environ.get("DATABASE_SCHEMA", default_schema).strip()
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", schema):
+        raise RuntimeError("DATABASE_SCHEMA faqat harf, raqam va underscore ishlatishi mumkin.")
+    return schema
+
+
 def connect(database=None, check_same_thread=False, timeout=15.0, **kwargs):
-    """Open a PostgreSQL connection using DATABASE_URL or an explicit DSN."""
+    """Open a PostgreSQL connection and select FinJob's isolated database schema."""
     dsn = database or os.environ.get("DATABASE_URL", "").strip()
     if not dsn or "://" not in dsn:
         raise RuntimeError(
@@ -336,4 +346,22 @@ def connect(database=None, check_same_thread=False, timeout=15.0, **kwargs):
         prepare_threshold=None,
         **kwargs,
     )
+    schema = get_database_schema()
+    if schema != "public":
+        try:
+            raw.execute(
+                pg_sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(
+                    pg_sql.Identifier(schema)
+                )
+            )
+            raw.execute(
+                pg_sql.SQL("SET search_path TO {}").format(
+                    pg_sql.Identifier(schema)
+                )
+            )
+            raw.commit()
+        except Exception:
+            raw.rollback()
+            raw.close()
+            raise
     return PostgreSQLConnection(raw)
