@@ -25,7 +25,7 @@ Status meanings:
 
 ## 2. PostgreSQL driver and configuration
 - [x] Add psycopg 3 to backend requirements.
-- [x] Load root `.env.local` and backend `.env` without overriding process environment variables.
+- [x] Load root `.env.local` as the authoritative local branch config; test mode explicitly protects `TEST_DATABASE_URL` from override.
 - [x] Require `DATABASE_URL`; do not silently fall back to SQLite.
 - [x] Add a JSON boundary conversion for PostgreSQL Decimal values.
 
@@ -51,7 +51,7 @@ Status meanings:
 - [~] Remove silent schema migration exception swallowing and move legacy columns into explicit schema versions.
 - [~] Add a guard against accidental empty-database bootstrap before the SQLite import.
 - [ ] Complete static review of all complex filters, aggregates, and transaction boundaries.
-- [ ] Run the full application test suite against the dedicated PostgreSQL test database.
+- [x] Run all 23 application regression tests against a dedicated PostgreSQL test database in CI (PostgreSQL 16).
 
 ## 6. Payments, wallet, and escrow
 - [~] Remove runtime CREATE/ALTER TABLE statements from `payments.py`.
@@ -64,7 +64,8 @@ Status meanings:
 - [ ] Verify all financial balances and escrow totals against source data.
 
 ## 7. SQLite-to-PostgreSQL data migration utility
-- [~] Add `backend/migrate_sqlite_to_postgres.py`.
+- [x] Add `backend/migrate_sqlite_to_postgres.py`.
+- [x] Test the importer against a temporary SQLite fixture and disposable PostgreSQL schema in CI (PostgreSQL 16).
 - [~] Require `NEON_BRANCH=finjob-development` and explicit `--confirm-branch finjob-development`.
 - [~] Refuse production and refuse a non-empty target schema.
 - [~] Create a timestamped SQLite backup before migration.
@@ -77,13 +78,14 @@ Status meanings:
 - [~] Refuse to run tests against the same PostgreSQL database as `DATABASE_URL`.
 - [~] Truncate and reset only the dedicated test database before tests.
 - [~] Add a regression test for Click provider transaction ID uniqueness.
-- [ ] Add transaction rollback, identity-sequence, and concurrent payment regression tests.
-- [ ] Execute the complete suite and fix every failure.
+- [x] Add PostgreSQL transaction rollback and identity-sequence regression tests.
+- [x] Execute the complete compatibility, importer, and application suites in CI; all passed.
+- [ ] Add broader parallel/concurrent payment regression tests.
 
 ## 9. Development deployment and end-to-end verification
 - [ ] Install dependencies in the local virtual environment.
 - [ ] Configure a separate PostgreSQL test database.
-- [ ] Run syntax/import checks and all tests.
+- [x] Run syntax/import checks and all tests in GitHub Actions on PostgreSQL 16.
 - [ ] Run the SQLite data migration against `finjob-development`.
 - [ ] Start Flask against Neon development.
 - [ ] Verify registration, login, jobs, proposals, chat, moderation, legal/community rules, Click callback, wallet, escrow, release, refund, and receipts.
