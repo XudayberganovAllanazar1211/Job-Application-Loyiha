@@ -3,11 +3,11 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom"
 import { api } from "../api"
 
 const navItems = [
-    ["/", "Boshqaruv paneli", "⌂"],
+    ["/", "Bosh sahifa", "B"],
+    ["/jobs", "Ishlar", "I"],
     ["/create", "Ish yaratish", "+"],
-    ["/jobs", "Ishlar", "▤"],
-    ["/payments", "To‘lovlar", "₿"],
-    ["/leaderboard", "Reyting jadvali", "★"]
+    ["/payments", "To‘lovlar", "T"],
+    ["/leaderboard", "Reyting", "R"]
 ]
 
 export default function AppLayout({ title, subtitle, children }) {
@@ -157,7 +157,7 @@ export default function AppLayout({ title, subtitle, children }) {
                         <div className="brand-badge">FJ</div>
                         <div>
                             <div className="brand-name">FinJob</div>
-                            <div className="helper">Ish toping. Ishni yakunlang.</div>
+                            
                         </div>
                     </button>
                     <div className="sidebar-profile">
@@ -178,16 +178,16 @@ export default function AppLayout({ title, subtitle, children }) {
                     ))}
                 </nav>
                 <NavLink to="/conversations" className={({isActive}) => `nav-link ${isActive ? "active" : ""}`}>
-                    <span className="nav-link-icon">✉</span>
+                    <span className="nav-link-icon">S</span>
                     <span className="nav-link-label">Suhbatlar</span>
                     {unreadMessages > 0 && <span className="notification-sidebar-badge">{unreadMessages > 99 ? "99+" : unreadMessages}</span>}
                 </NavLink>
                 <NavLink to="/appeals" className={({isActive}) => `nav-link ${isActive ? "active" : ""}`}>
-                    <span className="nav-link-icon">⚑</span><span className="nav-link-label">Appeals</span>
+                    <span className="nav-link-icon">A</span><span className="nav-link-label">Appeals</span>
                 </NavLink>
                 {isAdmin && (
                     <NavLink to="/admin" className={({isActive}) => `nav-link admin-nav-link ${isActive ? "active" : ""}`}>
-                        <span className="nav-link-icon">⚙</span><span className="nav-link-label">Administrator</span>
+                        <span className="nav-link-icon">A</span><span className="nav-link-label">Administrator</span>
                     </NavLink>
                 )}
                 <div className="legal-footer">
@@ -217,7 +217,7 @@ export default function AppLayout({ title, subtitle, children }) {
                     aria-controls="finjob-mobile-menu"
                     onClick={() => setShowMobileMenu((value) => !value)}
                 >
-                    <span className="mobile-nav-icon">☰</span>
+                    <span className="mobile-nav-icon">M</span>
                     <span className="mobile-nav-label">Menyu</span>
                 </button>
             </nav>
@@ -232,14 +232,14 @@ export default function AppLayout({ title, subtitle, children }) {
                             <button type="button" className="mobile-menu-close" onClick={() => setShowMobileMenu(false)} aria-label="Menyuni yopish">×</button>
                         </div>
                         <div className="mobile-menu-grid">
-                            <NavLink to="/conversations" className="mobile-menu-link">✉ <span>Suhbatlar{unreadMessages > 0 ? ` (${unreadMessages})` : ""}</span></NavLink>
-                            <NavLink to="/leaderboard" className="mobile-menu-link">★ <span>Reyting jadvali</span></NavLink>
-                            <NavLink to="/profile" className="mobile-menu-link">◎ <span>Profil</span></NavLink>
-                            <NavLink to="/appeals" className="mobile-menu-link">⚑ <span>Appeals</span></NavLink>
-                            {isAdmin && <NavLink to="/admin" className="mobile-menu-link">⚙ <span>Administrator</span></NavLink>}
-                            <NavLink to="/privacy" className="mobile-menu-link">⌁ <span>Maxfiylik</span></NavLink>
-                            <NavLink to="/terms" className="mobile-menu-link">§ <span>Shartlar</span></NavLink>
-                            <NavLink to="/community-rules" className="mobile-menu-link">✓ <span>Qoidalar</span></NavLink>
+                            <NavLink to="/conversations" className="mobile-menu-link">S <span>Suhbatlar{unreadMessages > 0 ? ` (${unreadMessages})` : ""}</span></NavLink>
+                            <NavLink to="/leaderboard" className="mobile-menu-link">R <span>Reyting jadvali</span></NavLink>
+                            <NavLink to="/profile" className="mobile-menu-link">P <span>Profil</span></NavLink>
+                            <NavLink to="/appeals" className="mobile-menu-link">A <span>Appeals</span></NavLink>
+                            {isAdmin && <NavLink to="/admin" className="mobile-menu-link">A <span>Administrator</span></NavLink>}
+                            <NavLink to="/privacy" className="mobile-menu-link">M <span>Maxfiylik</span></NavLink>
+                            <NavLink to="/terms" className="mobile-menu-link">S <span>Shartlar</span></NavLink>
+                            <NavLink to="/community-rules" className="mobile-menu-link">Q <span>Qoidalar</span></NavLink>
                         </div>
                         <button type="button" className="btn btn-danger mobile-menu-logout" onClick={logout}>Chiqish</button>
                     </div>
@@ -248,14 +248,14 @@ export default function AppLayout({ title, subtitle, children }) {
             <main className="main">
                 <div className="app-topbar">
                     <div className="page-head">
-                        <div className="chip" style={{width:"fit-content",color:"#2563eb",background:"#eff6ff",borderColor:"#dbeafe"}}>FINJOB / ISH MAYDONI</div>
+                        
                         <h1 className="page-title">{title}</h1>
                         <p className="page-subtitle">{subtitle}</p>
                     </div>
                     <div className="topbar-actions">
                         <div className="notification-wrap" ref={notificationRef}>
                             <button className="notification-button" type="button" onClick={openNotifications} aria-label="Bildirishnomalar">
-                                <span className="notification-icon" aria-hidden="true">🔔</span>
+                                <span className="notification-icon" aria-hidden="true">N</span>
                                 {unreadNotifications > 0 && <b>{unreadNotifications > 99 ? "99+" : unreadNotifications}</b>}
                             </button>
                             {showNotifications && (
@@ -272,8 +272,8 @@ export default function AppLayout({ title, subtitle, children }) {
                             )}
                         </div>
                         <button className="theme-toggle" type="button" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label={theme === "dark" ? "Yorug‘ rejimga o‘tish" : "Qorong‘i rejimga o‘tish"}>
-                            <span>{theme === "dark" ? "☀" : "☾"}</span>
-                            <span>{theme === "dark" ? "Yorug‘" : "Qorong‘i"}</span>
+                            <span className="theme-toggle-indicator" aria-hidden="true"></span>
+                            <span>{theme === "dark" ? "Yorug‘ rejim" : "Qorong‘i rejim"}</span>
                         </button>
                         <button className="btn btn-secondary topbar-profile-btn" onClick={() => navigate("/profile")} aria-label="Profilni ochish">
                         <span className="topbar-avatar">{avatarSrc ? <img src={avatarSrc} alt="" /> : initials}</span>
