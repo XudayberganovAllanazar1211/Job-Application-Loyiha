@@ -5,6 +5,7 @@ at the database boundary. New database code should prefer native PostgreSQL SQL.
 """
 import os
 import re
+from decimal import Decimal
 
 import psycopg
 from psycopg.rows import tuple_row
@@ -74,6 +75,27 @@ def _replace_qmark_placeholders(sql):
                 state = "normal"
         index += 1
     return "".join(result)
+
+
+_MONEY_SQL_PATTERN = re.compile(
+    r"\\b(balance|escrow_balance|amount|balance_after|agreed_price|price)\\b",
+    flags=re.IGNORECASE,
+)
+
+
+def _adapt_money_params(sql, params):
+    """Bind monetary Python floats as Decimal/numeric, not float8."""
+    if params is None or not _MONEY_SQL_PATTERN.search(sql):
+        return params
+    if isinstance(params, dict):
+        return {
+            key: Decimal(str(value)) if isinstance(value, float) else value
+            for key, value in params.items()
+        }
+    return tuple(
+        Decimal(str(value)) if isinstance(value, float) else value
+        for value in params
+    )
 
 
 def translate_sql(sql):
@@ -209,14 +231,18 @@ class PostgreSQLCursor:
             ):
                 query = query.rstrip().rstrip(";") + " RETURNING id"
                 self._auto_returning = True
-        self._cursor.execute(query, params if params is not None else ())
+        adapted_params = _adapt_money_params(query, params)
+        self._cursor.execute(query, adapted_params if adapted_params is not None else ())
         return self
 
     def executemany(self, sql, params_seq):
         query = translate_sql(sql)
         if "RETURNING" in query.upper():
             raise ValueError("executemany bilan RETURNING ishlatilmaydi.")
-        self._cursor.executemany(query, params_seq)
+        adapted_params = [
+            _adapt_money_params(query, params) for params in params_seq
+        ]
+        self._cursor.executemany(query, adapted_params)
         return self
 
     def fetchone(self):
