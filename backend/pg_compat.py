@@ -78,7 +78,7 @@ def _replace_qmark_placeholders(sql):
 
 
 _MONEY_SQL_PATTERN = re.compile(
-    r"\\b(balance|escrow_balance|amount|balance_after|agreed_price|price)\\b",
+    r"\b(balance|escrow_balance|amount|balance_after|agreed_price|price)\b",
     flags=re.IGNORECASE,
 )
 
