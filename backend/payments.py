@@ -879,12 +879,16 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
             return click_error(-2, "Transaction is not ready for payment")
 
         if action == 0:
-            db.q(
-                """UPDATE payments
-                   SET provider_transaction_id=?,provider_prepare_id=?,provider_payload=?
-                   WHERE id=?""",
-                (click_trans_id,str(payment_id),json.dumps(data,ensure_ascii=False),payment_id),
-            ).close()
+            try:
+                prepare_result = db.q(
+                    """UPDATE payments
+                       SET provider_transaction_id=?,provider_prepare_id=?,provider_payload=?
+                       WHERE id=?""",
+                    (click_trans_id,str(payment_id),json.dumps(data,ensure_ascii=False),payment_id),
+                )
+                prepare_result.close()
+            except sqlite3.IntegrityError:
+                return click_error(-4, "Transaction already processed")
             return jsonify({
                 "click_trans_id": click_trans_id,
                 "merchant_trans_id": payment_uuid,
@@ -937,8 +941,12 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
                 if cursor.rowcount != 1:
                     raise RuntimeError("job_state_changed")
             conn.commit()
+        except sqlite3.IntegrityError:
+            conn.rollback()
+            return click_error(-4, "Transaction already processed")
         except Exception:
             conn.rollback()
+            app.logger.exception("Click callback database transaction failed")
             return click_error(-9, "Temporary database error")
         finally:
             conn.close()
