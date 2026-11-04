@@ -9,6 +9,7 @@ import secrets
 import smtplib
 import uuid
 import json
+from decimal import Decimal
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request as URLRequest, urlopen
@@ -17,6 +18,7 @@ from email.mime.multipart import MIMEMultipart
 from functools import wraps
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
+from flask.json.provider import DefaultJSONProvider
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from PIL import Image, ImageOps, UnidentifiedImageError
@@ -32,7 +34,16 @@ except ImportError:
 
 from payments import register_payment_routes
 
+class FinJobJSONProvider(DefaultJSONProvider):
+    @staticmethod
+    def default(value):
+        if isinstance(value, Decimal):
+            return float(value)
+        return DefaultJSONProvider.default(value)
+
+
 app = Flask(__name__)
+app.json = FinJobJSONProvider(app)
 finjob_env = os.environ.get("FINJOB_ENV", "development").strip().lower()
 is_production = finjob_env in {"production", "prod"}
 raw_cors_origins = os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://localhost:5174")
