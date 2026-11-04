@@ -507,18 +507,6 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
             cur.execute("UPDATE platform_wallet SET escrow_balance=ROUND(escrow_balance+?,2) WHERE id=1", (amount,))
             if cur.rowcount != 1:
                 raise RuntimeError("platform_wallet_missing")
-            cur.execute(
-                """CREATE TABLE IF NOT EXISTS wallet_transactions(
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    type TEXT NOT NULL,
-                    amount REAL NOT NULL,
-                    balance_after REAL NOT NULL,
-                    job_id INTEGER,
-                    description TEXT NOT NULL,
-                    created_at TEXT NOT NULL
-                )"""
-            )
             payer_after = cur.execute("SELECT balance FROM users WHERE id=?", (owner_id,)).fetchone()[0]
             _wallet_tx(cur, owner_id, "payment_hold", -amount, payer_after, job_id, f"«{title}» uchun waiting to‘lovi", now)
             cur.execute("UPDATE jobs SET status='accepted' WHERE id=? AND status='payment_pending'", (job_id,))
@@ -734,18 +722,6 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
                 (amount,user_id),
             )
             balance = cur.execute("SELECT COALESCE(balance,0) FROM users WHERE id=?", (user_id,)).fetchone()[0]
-            cur.execute(
-                """CREATE TABLE IF NOT EXISTS wallet_transactions(
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    type TEXT NOT NULL,
-                    amount REAL NOT NULL,
-                    balance_after REAL NOT NULL,
-                    job_id INTEGER,
-                    description TEXT NOT NULL,
-                    created_at TEXT NOT NULL
-                )"""
-            )
             cur.execute(
                 """INSERT INTO wallet_transactions
                    (user_id,type,amount,balance_after,job_id,description,created_at)
