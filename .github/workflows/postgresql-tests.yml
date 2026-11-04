@@ -6,8 +6,12 @@ on:
       - feature/postgresql-migration
   pull_request:
     branches:
+      - main
       - feature/postgresql-migration
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   backend-tests:
