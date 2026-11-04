@@ -169,7 +169,7 @@ def validate_explicit_indexes(target, indexes):
 def validate_financial_totals(source, target, tables):
     financial_columns = {
         "users": ("balance",),
-        "jobs": ("agreed_price",),
+        "jobs": ("price", "agreed_price"),
         "job_proposals": ("price",),
         "payments": ("amount",),
         "platform_wallet": ("balance", "escrow_balance"),
