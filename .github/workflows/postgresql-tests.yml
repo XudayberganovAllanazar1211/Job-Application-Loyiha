@@ -49,10 +49,20 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE finjob_app"
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE finjob_test"
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE finjob_migration_test"
 
       - name: Test SQL compatibility layer
         working-directory: backend
         run: python -m unittest -v test_pg_compat
+
+      - name: Test SQLite-to-PostgreSQL migration utility
+        working-directory: backend
+        env:
+          FINJOB_ENV: development
+          NEON_BRANCH: finjob-development
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/finjob_migration_test
+          DATABASE_SCHEMA: finjob_import_test
+        run: python -m unittest -v test_migrate_sqlite_to_postgres
 
       - name: Run backend regression suite
         working-directory: backend
