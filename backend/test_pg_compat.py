@@ -1,6 +1,62 @@
 import unittest
 
-from pg_compat import translate_sql, _replace_qmark_placeholders
+from pg_compat import PostgreSQLCursor, translate_sql, _replace_qmark_placeholders
+
+
+class FakeCursor:
+    def __init__(self):
+        self.rows = []
+        self.query = ""
+        self.closed = False
+
+    def execute(self, query, params=()):
+        self.query = query
+        self.rows = [(41,)] if "RETURNING id" in query.upper() else [("ok",)]
+        return self
+
+    def executemany(self, query, params):
+        self.query = query
+        return self
+
+    def fetchone(self):
+        return self.rows.pop(0) if self.rows else None
+
+    def fetchmany(self, size=None):
+        size = size or 1
+        rows, self.rows = self.rows[:size], self.rows[size:]
+        return rows
+
+    def fetchall(self):
+        rows, self.rows = self.rows, []
+        return rows
+
+    @property
+    def rowcount(self):
+        return 1
+
+    @property
+    def description(self):
+        return None
+
+    def close(self):
+        self.closed = True
+
+
+class CursorCompatibilityTests(unittest.TestCase):
+    def test_lastrowid_is_returning_id_and_row_remains_fetchable(self):
+        raw = FakeCursor()
+        cursor = PostgreSQLCursor(raw)
+        cursor.execute("INSERT INTO users(username) VALUES(?)", ("tester",))
+        self.assertEqual(cursor.lastrowid, 41)
+        self.assertEqual(cursor.fetchone(), (41,))
+
+    def test_reusing_cursor_does_not_leak_previous_lastrowid(self):
+        raw = FakeCursor()
+        cursor = PostgreSQLCursor(raw)
+        cursor.execute("INSERT INTO users(username) VALUES(?)", ("tester",))
+        self.assertEqual(cursor.lastrowid, 41)
+        cursor.execute("SELECT 1")
+        self.assertIsNone(cursor.lastrowid)
 
 
 class SQLTranslationTests(unittest.TestCase):
