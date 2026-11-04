@@ -176,6 +176,7 @@ def translate_sql(sql):
         flags=re.IGNORECASE,
     )
     query = re.sub(r"\bREAL\b", "DOUBLE PRECISION", query, flags=re.IGNORECASE)
+    query = re.sub(r"(\\bprice\\s+)INTEGER\\b", r"\\1NUMERIC(18,2)", query, flags=re.IGNORECASE)
 
     for column in (
         "balance", "escrow_balance", "amount", "balance_after",
