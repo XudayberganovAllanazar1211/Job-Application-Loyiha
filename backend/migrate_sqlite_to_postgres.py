@@ -3,7 +3,7 @@
 Run from the repository root:
   python backend/migrate_sqlite_to_postgres.py --confirm-branch finjob-development
 
-The script refuses production and refuses a non-empty destination database.
+The script refuses production and refuses a non-empty target schema.
 """
 import argparse
 import datetime
