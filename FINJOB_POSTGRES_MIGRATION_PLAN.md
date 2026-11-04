@@ -51,7 +51,7 @@ Status meanings:
 - [~] Remove silent schema migration exception swallowing and move legacy columns into explicit schema versions.
 - [~] Add a guard against accidental empty-database bootstrap before the SQLite import.
 - [ ] Complete static review of all complex filters, aggregates, and transaction boundaries.
-- [x] Run all 23 application regression tests against a dedicated PostgreSQL test database in CI (PostgreSQL 16).
+- [~] Add PostgreSQL CI workflow and expand regression tests (including SQL translation and Click callback idempotency); the workflow run result has not yet been confirmed.
 
 ## 6. Payments, wallet, and escrow
 - [~] Remove runtime CREATE/ALTER TABLE statements from `payments.py`.
@@ -65,7 +65,7 @@ Status meanings:
 
 ## 7. SQLite-to-PostgreSQL data migration utility
 - [x] Add `backend/migrate_sqlite_to_postgres.py`.
-- [x] Test the importer against a temporary SQLite fixture and disposable PostgreSQL schema in CI (PostgreSQL 16).
+- [~] Configure CI to test PostgreSQL 16 and the import path; no successful workflow run has been confirmed.
 - [~] Require `NEON_BRANCH=finjob-development` and explicit `--confirm-branch finjob-development`.
 - [~] Refuse production and refuse a non-empty target schema.
 - [~] Create a timestamped SQLite backup before migration.
@@ -78,14 +78,14 @@ Status meanings:
 - [~] Refuse to run tests against the same PostgreSQL database as `DATABASE_URL`.
 - [~] Truncate and reset only the dedicated test database before tests.
 - [~] Add a regression test for Click provider transaction ID uniqueness.
-- [x] Add PostgreSQL transaction rollback and identity-sequence regression tests.
-- [x] Execute the complete compatibility, importer, and application suites in CI; all passed.
+- [~] Add PostgreSQL transaction rollback and identity-sequence regression tests; execution is pending.
+- [~] Add compatibility, importer, Click callback, identity, rollback, and application regression coverage; execution is pending.
 - [ ] Add broader parallel/concurrent payment regression tests.
 
 ## 9. Development deployment and end-to-end verification
 - [ ] Install dependencies in the local virtual environment.
 - [ ] Configure a separate PostgreSQL test database.
-- [x] Run syntax/import checks and all tests in GitHub Actions on PostgreSQL 16.
+- [~] Add a GitHub Actions workflow for syntax checks and PostgreSQL 16 integration tests; no completed run has been observed.
 - [ ] Run the SQLite data migration against `finjob-development`.
 - [ ] Start Flask against Neon development.
 - [ ] Verify registration, login, jobs, proposals, chat, moderation, legal/community rules, Click callback, wallet, escrow, release, refund, and receipts.
@@ -95,3 +95,12 @@ Status meanings:
 - [ ] Prepare backup, downtime, DNS/environment, and rollback steps.
 - [ ] Review the migration result and production readiness with the project owner.
 - [ ] Do not run production migrations, deploy, or cut over without explicit approval.
+
+## 11. Work completed during this implementation pass
+- [x] Fix missing `re` import in the SQLite-to-PostgreSQL importer (the schema-name validation used `re.fullmatch`).
+- [x] Compare financial totals with `Decimal` arithmetic and a one-tiyin tolerance instead of converting totals back to binary floating point.
+- [x] Make `PRAGMA table_info` primary-key metadata joins include the table name as well as the constraint name.
+- [x] Restrict Click prepare/confirm callbacks to the original provider transaction ID; mismatched IDs are rejected and repeated matching confirmations are idempotent.
+- [x] Add regression tests for SQL translation and Click callback idempotency.
+- [x] Add a PostgreSQL 16 GitHub Actions test workflow.
+- [ ] Observe a successful CI run and fix any resulting failures before calling the implementation verified.
