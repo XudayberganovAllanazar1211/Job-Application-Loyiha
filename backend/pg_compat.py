@@ -306,6 +306,7 @@ def connect(database=None, check_same_thread=False, timeout=15.0, **kwargs):
         connect_timeout=connect_timeout,
         row_factory=tuple_row,
         application_name="finjob",
+        prepare_threshold=None,
         **kwargs,
     )
     return PostgreSQLConnection(raw)
