@@ -12,7 +12,7 @@ class FakeCursor:
 
     def execute(self, query, params=()):
         self.query = query
-        self.rows = [(41,)] if "RETURNING id" in query.upper() else [("ok",)]
+        self.rows = [(41,)] if "RETURNING ID" in query.upper() else [("ok",)]
         return self
 
     def executemany(self, query, params):
