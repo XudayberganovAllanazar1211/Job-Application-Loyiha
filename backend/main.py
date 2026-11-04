@@ -11,7 +11,7 @@ import uuid
 import json
 from decimal import Decimal
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 from urllib.request import Request as URLRequest, urlopen
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -37,6 +37,34 @@ try:
     load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"), override=False)
 except ImportError:
     pass
+
+
+def verify_development_database_target():
+    environment = os.environ.get("FINJOB_ENV", "development").strip().lower()
+    if environment in {"production", "prod"}:
+        return
+
+    branch = os.environ.get("NEON_BRANCH", "").strip()
+    if not branch:
+        return
+    if branch != "finjob-development":
+        raise RuntimeError(
+            "Development ilovasi faqat finjob-development Neon branchidan foydalanishi mumkin."
+        )
+
+    database_url = os.environ.get("DATABASE_URL", "").strip()
+    actual_host = (urlparse(database_url).hostname or "").strip().lower()
+    expected_host = os.environ.get(
+        "NEON_DEVELOPMENT_DATABASE_HOST", ""
+    ).strip().lower()
+    if not expected_host or actual_host != expected_host:
+        raise RuntimeError(
+            "DATABASE_URL hosti NEON_DEVELOPMENT_DATABASE_HOST bilan mos emas. "
+            "Development Neon endpoint hostname'ini tekshiring."
+        )
+
+
+verify_development_database_target()
 
 from payments import register_payment_routes
 
