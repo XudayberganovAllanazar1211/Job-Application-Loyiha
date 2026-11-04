@@ -55,6 +55,20 @@ class JobPlatformTestCase(unittest.TestCase):
             if tables:
                 quoted = ", ".join('"' + row[0].replace('"', '""') + '"' for row in tables)
                 conn.execute(f"TRUNCATE TABLE {quoted} RESTART IDENTITY CASCADE")
+            conn.execute(
+                """
+                INSERT INTO platform_settings(key,value)
+                VALUES('commission_percent','10')
+                ON CONFLICT (key) DO NOTHING
+                """
+            )
+            conn.execute(
+                """
+                INSERT INTO platform_wallet(id,balance,escrow_balance)
+                VALUES(1,0,0)
+                ON CONFLICT (id) DO NOTHING
+                """
+            )
             conn.commit()
         except Exception:
             conn.rollback()
