@@ -1,5 +1,6 @@
 import os
 import unittest
+from unittest.mock import patch
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
 from io import BytesIO
@@ -2074,7 +2075,7 @@ class JobPlatformTestCase(unittest.TestCase):
 
 
     def test_28_development_startup_guard_accepts_the_allowlisted_endpoint(self):
-        with unittest.mock.patch.dict(
+        with patch.dict(
             os.environ,
             {
                 "FINJOB_ENV": "development",
@@ -2086,7 +2087,7 @@ class JobPlatformTestCase(unittest.TestCase):
             main.verify_development_database_target()
 
     def test_29_development_startup_guard_rejects_a_different_endpoint(self):
-        with unittest.mock.patch.dict(
+        with patch.dict(
             os.environ,
             {
                 "FINJOB_ENV": "development",
