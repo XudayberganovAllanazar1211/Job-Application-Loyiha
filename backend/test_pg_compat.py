@@ -1,7 +1,8 @@
 import unittest
+from unittest.mock import patch
 from decimal import Decimal
 
-from pg_compat import PostgreSQLCursor, translate_sql, _replace_qmark_placeholders, _adapt_money_params
+from pg_compat import PostgreSQLCursor, translate_sql, _replace_qmark_placeholders, _adapt_money_params, get_database_schema
 
 
 class FakeCursor:
@@ -131,6 +132,23 @@ class SQLTranslationTests(unittest.TestCase):
         )
         self.assertEqual(result, (5, 8, 123.456))
         self.assertIsInstance(result[2], float)
+
+    def test_development_schema_defaults_to_finjob_data(self):
+        with patch.dict("os.environ", {"FINJOB_ENV": "development"}, clear=True):
+            self.assertEqual(get_database_schema(), "finjob_data")
+
+    def test_production_schema_defaults_to_public(self):
+        with patch.dict("os.environ", {"FINJOB_ENV": "production"}, clear=True):
+            self.assertEqual(get_database_schema(), "public")
+
+    def test_schema_name_rejects_sql_injection(self):
+        with patch.dict(
+            "os.environ",
+            {"FINJOB_ENV": "development", "DATABASE_SCHEMA": 'public; DROP SCHEMA public'},
+            clear=True,
+        ):
+            with self.assertRaises(RuntimeError):
+                get_database_schema()
 
 
 if __name__ == "__main__":
