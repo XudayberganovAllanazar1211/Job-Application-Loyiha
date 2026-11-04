@@ -856,14 +856,18 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
             return click_error(-1, "SIGN CHECK FAILED")
 
         payment = db.q(
-            """SELECT id,payment_uuid,job_id,payer_id,payee_id,amount,currency,status
+            """SELECT id,payment_uuid,job_id,payer_id,payee_id,amount,currency,status,
+                      provider_transaction_id
                FROM payments WHERE payment_uuid=? AND provider='click'""",
             (merchant_trans_id,),
         ).fetchone()
         if not payment:
             return click_error(-5, "Transaction does not exist")
 
-        payment_id,payment_uuid,job_id,payer_id,payee_id,expected_amount,currency,payment_status = payment
+        (
+            payment_id, payment_uuid, job_id, payer_id, payee_id,
+            expected_amount, currency, payment_status, saved_transaction_id
+        ) = payment
         if str(currency).upper() != "UZS" or not math.isfinite(float(expected_amount)) or abs(amount-float(expected_amount)) > 0.001:
             return click_error(-2, "Incorrect amount")
 
@@ -883,12 +887,33 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
                 prepare_result = db.q(
                     """UPDATE payments
                        SET provider_transaction_id=?,provider_prepare_id=?,provider_payload=?
-                       WHERE id=?""",
-                    (click_trans_id,str(payment_id),json.dumps(data,ensure_ascii=False),payment_id),
+                       WHERE id=? AND provider='click' AND status='pending'
+                         AND (
+                             provider_transaction_id IS NULL
+                             OR provider_transaction_id=''
+                             OR provider_transaction_id=?
+                         )""",
+                    (
+                        click_trans_id,
+                        str(payment_id),
+                        json.dumps(data,ensure_ascii=False),
+                        payment_id,
+                        click_trans_id,
+                    ),
                 )
+                prepare_changed = prepare_result.rowcount
                 prepare_result.close()
             except sqlite3.IntegrityError:
                 return click_error(-4, "Transaction already processed")
+
+            if prepare_changed != 1:
+                current = db.q(
+                    "SELECT status,provider_transaction_id FROM payments WHERE id=? AND provider='click'",
+                    (payment_id,),
+                ).fetchone()
+                if not current or current[1] != click_trans_id or current[0] not in ("pending", "held", "released"):
+                    return click_error(-4, "Transaction already processed")
+
             return jsonify({
                 "click_trans_id": click_trans_id,
                 "merchant_trans_id": payment_uuid,
@@ -907,6 +932,9 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
         if duplicate_transaction:
             return click_error(-4, "Transaction already processed")
 
+        if saved_transaction_id and saved_transaction_id != click_trans_id:
+            return click_error(-4, "Transaction already processed")
+
         if payment_status in ("held", "released"):
             return jsonify({
                 "click_trans_id": click_trans_id,
@@ -915,6 +943,8 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
                 "error": 0,
                 "error_note": "Success",
             })
+        if payment_status != "pending":
+            return click_error(-4, "Transaction already processed")
 
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         conn = db.get_connection()
@@ -922,8 +952,20 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
             cursor = conn.cursor()
             cursor.execute(
                 """UPDATE payments SET provider_transaction_id=?,provider_payload=?,
-                   status='held',paid_at=? WHERE id=? AND status='pending'""",
-                (click_trans_id,json.dumps(data,ensure_ascii=False),now,payment_id),
+                   status='held',paid_at=?
+                   WHERE id=? AND provider='click' AND status='pending'
+                     AND (
+                         provider_transaction_id IS NULL
+                         OR provider_transaction_id=''
+                         OR provider_transaction_id=?
+                     )""",
+                (
+                    click_trans_id,
+                    json.dumps(data, ensure_ascii=False),
+                    now,
+                    payment_id,
+                    click_trans_id,
+                ),
             )
             changed = cursor.rowcount
             if changed:
@@ -940,6 +982,18 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
                 )
                 if cursor.rowcount != 1:
                     raise RuntimeError("job_state_changed")
+            else:
+                current = cursor.execute(
+                    "SELECT status,provider_transaction_id FROM payments WHERE id=? AND provider='click'",
+                    (payment_id,),
+                ).fetchone()
+                if (
+                    not current
+                    or current[0] not in ("held", "released")
+                    or current[1] != click_trans_id
+                ):
+                    conn.rollback()
+                    return click_error(-4, "Transaction already processed")
             conn.commit()
         except sqlite3.IntegrityError:
             conn.rollback()
