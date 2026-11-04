@@ -9,6 +9,7 @@ import argparse
 import datetime
 import os
 import math
+from decimal import Decimal
 import sqlite3
 import sys
 from pathlib import Path
@@ -243,13 +244,28 @@ def copy_table(source, target, table_name, batch_size=500):
     )
 
     copied = 0
+    money_columns = {
+        "balance", "escrow_balance", "amount", "balance_after",
+        "agreed_price", "price",
+    }
+    money_positions = [
+        index for index, name in enumerate(column_names)
+        if name.lower() in money_columns
+    ]
     target_cursor = target.cursor()
     try:
         while True:
             rows = source_cursor.fetchmany(batch_size)
             if not rows:
                 break
-            target_cursor.executemany(insert_sql, rows)
+            adapted_rows = []
+            for row in rows:
+                values = list(row)
+                for position in money_positions:
+                    if isinstance(values[position], float):
+                        values[position] = Decimal(str(values[position]))
+                adapted_rows.append(tuple(values))
+            target_cursor.executemany(insert_sql, adapted_rows)
             copied += len(rows)
     finally:
         target_cursor.close()
