@@ -1920,6 +1920,9 @@ class JobPlatformTestCase(unittest.TestCase):
         previous_transaction_id = main.db.q(
             "SELECT COALESCE(MAX(id),0) FROM wallet_transactions"
         ).fetchone()[0]
+        previous_notification_id = main.db.q(
+            "SELECT COALESCE(MAX(id),0) FROM notifications"
+        ).fetchone()[0]
 
         setup = main.db.get_connection()
         try:
@@ -1965,6 +1968,10 @@ class JobPlatformTestCase(unittest.TestCase):
                 cleanup.execute(
                     "DELETE FROM wallet_transactions WHERE user_id=? AND id>?",
                     (user_id, previous_transaction_id),
+                )
+                cleanup.execute(
+                    "DELETE FROM notifications WHERE user_id=? AND id>?",
+                    (user_id, previous_notification_id),
                 )
                 cleanup.commit()
             except Exception:
