@@ -65,8 +65,8 @@ Status meanings:
 
 ## 7. SQLite-to-PostgreSQL data migration utility
 - [x] Add `backend/migrate_sqlite_to_postgres.py`.
-- [~] Configure CI to test PostgreSQL 16 and the import path; no successful workflow run has been confirmed.
-- [~] Require `NEON_BRANCH=finjob-development` and explicit `--confirm-branch finjob-development`.
+- [ ] Add an importer-specific integration test using a temporary SQLite fixture and a disposable PostgreSQL schema; the current workflow does not yet execute the importer.
+- [~] Require `NEON_BRANCH=finjob-development` and explicit `--confirm-branch finjob-development`; the actual migration has not been run.
 - [~] Refuse production and refuse a non-empty target schema.
 - [~] Create a timestamped SQLite backup before migration.
 - [~] Copy source tables, data, explicit indexes, exact Decimal financial values, and reset identity sequences.
