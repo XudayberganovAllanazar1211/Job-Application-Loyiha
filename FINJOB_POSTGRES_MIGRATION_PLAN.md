@@ -79,7 +79,7 @@ Status meanings:
 - [~] Truncate and reset only the dedicated test database before tests.
 - [~] Add a regression test for Click provider transaction ID uniqueness.
 - [~] Add PostgreSQL transaction rollback and identity-sequence regression tests; execution is pending.
-- [~] Add compatibility, importer, Click callback, identity, rollback, and application regression coverage; execution is pending.
+- [~] Add compatibility, Click callback, identity, rollback, and application regression coverage; execution is pending. Importer-specific integration coverage is still pending.
 - [~] Add a parallel wallet-withdrawal regression test; parallel release/refund/dummy-hold coverage remains pending.
 
 ## 9. Development deployment and end-to-end verification
