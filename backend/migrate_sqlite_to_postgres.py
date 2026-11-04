@@ -16,6 +16,7 @@ from pathlib import Path
 import psycopg
 from dotenv import load_dotenv
 from psycopg.rows import tuple_row
+from psycopg import sql as pg_sql
 
 from pg_compat import translate_sql
 
@@ -40,6 +41,15 @@ def load_environment():
 
 def quote_identifier(value):
     return '"' + str(value).replace('"', '""') + '"'
+
+
+def get_target_schema():
+    finjob_env = os.environ.get("FINJOB_ENV", "development").strip().lower()
+    default_schema = "public" if finjob_env in {"production", "prod"} else "finjob_data"
+    schema = os.environ.get("DATABASE_SCHEMA", default_schema).strip()
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", schema):
+        raise RuntimeError("DATABASE_SCHEMA faqat harf, raqam va underscore ishlatishi mumkin.")
+    return schema
 
 
 def ensure_development_target(confirm_branch):
@@ -110,8 +120,8 @@ def ensure_target_is_empty(connection):
     if tables:
         names = ", ".join(row[0] for row in tables[:10])
         raise RuntimeError(
-            "Neon target bazasi bo‘sh emas. Hech qanday jadval o‘chirilmagan. "
-            f"Topilgan jadvallar: {names}"
+             "FinJob target schema bo‘sh emas. Hech qanday jadval o‘chirilmagan. "
+            f"Schema: {get_target_schema()}; topilgan jadvallar: {names}"
         )
 
     migration_ledger = connection.execute(
@@ -331,12 +341,24 @@ def migrate(sqlite_path, confirm_branch):
         print(f"Ko‘chiriladigan jadvallar: {len(tables)}")
         print(f"Ko‘chiriladigan explicit indekslar: {len(indexes)}")
 
+        target_schema = get_target_schema()
         with psycopg.connect(
             dsn,
             connect_timeout=15,
             row_factory=tuple_row,
             application_name="finjob-sqlite-migration",
+            prepare_threshold=None,
         ) as target:
+            target.execute(
+                pg_sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(
+                    pg_sql.Identifier(target_schema)
+                )
+            )
+            target.execute(
+                pg_sql.SQL("SET search_path TO {}").format(
+                    pg_sql.Identifier(target_schema)
+                )
+            )
             ensure_target_is_empty(target)
             target.execute("SET lock_timeout = '15s'")
             target.execute("SET statement_timeout = '10min'")
@@ -379,7 +401,7 @@ def migrate(sqlite_path, confirm_branch):
         print(f"Indekslar: {len(indexes)}")
         print(f"Jami qatorlar: {sum(copied_counts.values())}")
         print(f"Tekshirilgan moliyaviy ustunlar: {len(checked_financial_columns)}")
-        print("Target: finjob-development (production o‘zgartirilmadi).")
+        print(f"Target: finjob-development / schema {target_schema} (production o‘zgartirilmadi).")
     finally:
         integrity.close()
 
