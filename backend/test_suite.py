@@ -2,6 +2,7 @@ import os
 import unittest
 from io import BytesIO
 from pathlib import Path
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
@@ -18,8 +19,17 @@ if FINJOB_ENV in {"production", "prod"}:
     raise RuntimeError("Testlar production muhitida ishga tushirilmaydi.")
 if not TEST_DATABASE_URL.startswith(("postgres://", "postgresql://")):
     raise RuntimeError("TEST_DATABASE_URL alohida PostgreSQL test bazasiga sozlanishi shart.")
-if TEST_DATABASE_URL == APPLICATION_DATABASE_URL:
-    raise RuntimeError("TEST_DATABASE_URL DATABASE_URL bilan bir xil bo‘lishi mumkin emas.")
+def database_identity(dsn):
+    parsed = urlparse(dsn)
+    return (
+        (parsed.hostname or "").lower(),
+        parsed.port or 5432,
+        parsed.path.rstrip("/").lower(),
+    )
+
+
+if APPLICATION_DATABASE_URL and database_identity(TEST_DATABASE_URL) == database_identity(APPLICATION_DATABASE_URL):
+    raise RuntimeError("TEST_DATABASE_URL DATABASE_URL bilan bir xil PostgreSQL bazasiga qarata olmaydi.")
 
 # main import vaqtida global DB obyektini yaratadi; uni test DSN'ga yo‘naltiramiz.
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
