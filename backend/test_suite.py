@@ -1614,6 +1614,39 @@ class JobPlatformTestCase(unittest.TestCase):
         main.db.q("DELETE FROM payments WHERE payment_uuid=?", (payment_uuid,)).close()
         main.db.q("DELETE FROM jobs WHERE id=?", (job_id,)).close()
 
+    def test_16_postgresql_identity_sequence_and_returning_id(self):
+        before = main.db.q("SELECT COALESCE(MAX(id),0) FROM services").fetchone()[0]
+        result = main.db.q(
+            "INSERT INTO services(name,parent_id,created_by) VALUES(?,?,NULL)",
+            ("PostgreSQL identity regression", None),
+        )
+        inserted_id = result.lastrowid
+        result.close()
+        self.assertIsNotNone(inserted_id)
+        self.assertGreater(inserted_id, before)
+        main.db.q(
+            "DELETE FROM services WHERE id=?",
+            (inserted_id,),
+        ).close()
+
+    def test_17_postgresql_transaction_rollback(self):
+        before = main.db.q(
+            "SELECT balance FROM platform_wallet WHERE id=1"
+        ).fetchone()[0]
+        conn = main.db.get_connection()
+        try:
+            conn.execute(
+                "UPDATE platform_wallet SET balance=balance+123.45 WHERE id=1"
+            )
+            conn.rollback()
+        finally:
+            conn.close()
+        after = main.db.q(
+            "SELECT balance FROM platform_wallet WHERE id=1"
+        ).fetchone()[0]
+        self.assertEqual(after, before)
+
+
     def test_15_click_provider_transaction_id_is_unique(self):
         transaction_id = "finjob-click-unique-regression"
         conn = main.db.get_connection()
