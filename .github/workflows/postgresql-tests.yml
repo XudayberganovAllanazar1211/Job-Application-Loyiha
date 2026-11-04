@@ -43,6 +43,10 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r backend/requirements.txt
 
+      - name: Compile backend modules
+        run: |
+          python -m py_compile backend/main.py backend/payments.py backend/pg_compat.py backend/migrate_sqlite_to_postgres.py backend/test_suite.py backend/test_pg_compat.py backend/test_migrate_sqlite_to_postgres.py
+
       - name: Create separate application and test databases
         env:
           PGPASSWORD: postgres
