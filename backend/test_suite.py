@@ -1,5 +1,7 @@
 import os
 import unittest
+import hashlib
+import uuid
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import urlparse
@@ -41,6 +43,7 @@ os.environ["FINJOB_ALLOW_EMPTY_DB_BOOTSTRAP"] = "1"
 
 from main import app, DB, pending_verifications
 import main
+import payments as payments_module
 
 
 class JobPlatformTestCase(unittest.TestCase):
@@ -1760,6 +1763,143 @@ class JobPlatformTestCase(unittest.TestCase):
         )
         self.assertIn("STRING_AGG(name, ', ')", translated)
         self.assertIn("name ILIKE %s", translated)
+
+
+    def test_25_click_callbacks_are_idempotent_and_keep_transaction_id(self):
+        old_service_id = payments_module.CLICK_SERVICE_ID
+        old_secret_key = payments_module.CLICK_SECRET_KEY
+        payments_module.CLICK_SERVICE_ID = "finjob-test-service"
+        payments_module.CLICK_SECRET_KEY = "finjob-test-click-secret"
+
+        owner = main.db.q(
+            "SELECT id FROM users WHERE username='tester_creator'"
+        ).fetchone()
+        worker = main.db.q(
+            "SELECT id FROM users WHERE username='tester_worker'"
+        ).fetchone()
+        self.assertIsNotNone(owner)
+        self.assertIsNotNone(worker)
+        owner_id, worker_id = owner[0], worker[0]
+
+        payment_uuid = "finjob-click-idempotency-regression"
+        transaction_id = "finjob-click-callback-regression-tx"
+        different_transaction_id = "finjob-click-callback-different-tx"
+        amount_text = "25000.00"
+        now = "2026-11-04T00:00:00+00:00"
+        conn = main.db.get_connection()
+        try:
+            conn.execute(
+                """INSERT INTO jobs(
+                    user_id,service_id,title,description,price,currency,location,
+                    worker_id,status,created_at,custom_service,agreed_price
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    owner_id, 1, "Click callback regression",
+                    "Idempotency test", 25000, "UZS", "Remote",
+                    worker_id, "payment_pending", now, "", 25000,
+                ),
+            )
+            job_id = conn.execute(
+                "SELECT id FROM jobs WHERE title='Click callback regression' ORDER BY id DESC LIMIT 1"
+            ).fetchone()[0]
+            conn.execute(
+                """INSERT INTO payments(
+                    payment_uuid,job_id,payer_id,payee_id,amount,currency,
+                    provider,status,created_at
+                ) VALUES(?,?,?,?,?,'UZS','click','pending',?)""",
+                (payment_uuid, job_id, owner_id, worker_id, 25000, now),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        baseline_escrow = main.db.q(
+            "SELECT escrow_balance FROM platform_wallet WHERE id=1"
+        ).fetchone()[0]
+
+        def click_payload(click_trans_id, action):
+            sign_time = "2026-11-04T15:00:00"
+            raw = (
+                f"{click_trans_id}finjob-test-servicefinjob-test-click-secret"
+                f"{payment_uuid}{amount_text}{action}{sign_time}"
+            )
+            return {
+                "click_trans_id": click_trans_id,
+                "service_id": "finjob-test-service",
+                "click_paydoc_id": "test-paydoc-1",
+                "merchant_trans_id": payment_uuid,
+                "amount": amount_text,
+                "action": str(action),
+                "sign_time": sign_time,
+                "sign_string": hashlib.md5(raw.encode("utf-8")).hexdigest(),
+            }
+
+        try:
+            prepare = self.client.post(
+                "/payments/click", data=click_payload(transaction_id, 0)
+            )
+            self.assertEqual(prepare.status_code, 200)
+            self.assertEqual(prepare.get_json()["error"], 0)
+
+            conflicting_prepare = self.client.post(
+                "/payments/click",
+                data=click_payload(different_transaction_id, 0),
+            )
+            self.assertEqual(conflicting_prepare.get_json()["error"], -4)
+
+            confirm = self.client.post(
+                "/payments/click", data=click_payload(transaction_id, 1)
+            )
+            self.assertEqual(confirm.status_code, 200)
+            self.assertEqual(confirm.get_json()["error"], 0)
+
+            repeated_confirm = self.client.post(
+                "/payments/click", data=click_payload(transaction_id, 1)
+            )
+            self.assertEqual(repeated_confirm.get_json()["error"], 0)
+
+            conflicting_confirm = self.client.post(
+                "/payments/click",
+                data=click_payload(different_transaction_id, 1),
+            )
+            self.assertEqual(conflicting_confirm.get_json()["error"], -4)
+
+            payment = main.db.q(
+                "SELECT status,provider_transaction_id FROM payments WHERE payment_uuid=?",
+                (payment_uuid,),
+            ).fetchone()
+            self.assertEqual(payment, ("held", transaction_id))
+
+            job_status = main.db.q(
+                "SELECT status FROM jobs WHERE id=?", (job_id,)
+            ).fetchone()[0]
+            self.assertEqual(job_status, "accepted")
+
+            after_escrow = main.db.q(
+                "SELECT escrow_balance FROM platform_wallet WHERE id=1"
+            ).fetchone()[0]
+            self.assertEqual(after_escrow - baseline_escrow, 25000)
+        finally:
+            cleanup = main.db.get_connection()
+            try:
+                cleanup.execute(
+                    "UPDATE platform_wallet SET escrow_balance=? WHERE id=1",
+                    (baseline_escrow,),
+                )
+                cleanup.execute(
+                    "DELETE FROM notifications WHERE user_id IN (?,?) AND type IN ('payment_success','payment_received')",
+                    (owner_id, worker_id),
+                )
+                cleanup.execute("DELETE FROM payments WHERE payment_uuid=?", (payment_uuid,))
+                cleanup.execute("DELETE FROM jobs WHERE title='Click callback regression' AND user_id=?", (owner_id,))
+                cleanup.commit()
+            except Exception:
+                cleanup.rollback()
+                raise
+            finally:
+                cleanup.close()
+            payments_module.CLICK_SERVICE_ID = old_service_id
+            payments_module.CLICK_SECRET_KEY = old_secret_key
 
 
 if __name__ == "__main__":
