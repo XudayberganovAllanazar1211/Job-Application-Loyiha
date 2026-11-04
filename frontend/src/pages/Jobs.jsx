@@ -732,9 +732,9 @@ export default function Jobs() {
                                                 <h3 className="job-title">{job.title}</h3>
                                                 <p className="job-desc">{job.description || "Tavsif kiritilmagan"}</p>
                                                 <div className="meta">
-                                                    <span className="chip">💰 {job.price ?? "-"} {job.currency || "UZS"}</span>
-                                                    <span className="chip">📍 {job.location || "-"}</span>
-                                                    <span className="chip">🧩 {job.service_name || serviceMap[String(job.service_id)] || "Noma’lum"}</span>
+                                                    <span className="chip">Narx: {job.price ?? "-"} {job.currency || "UZS"}</span>
+                                                    <span className="chip">Manzil: {job.location || "-"}</span>
+                                                    <span className="chip">Xizmat: {job.service_name || serviceMap[String(job.service_id)] || "Noma’lum"}</span>
                                                 </div>
                                                 {String(job.status || "").toLowerCase() === "active" && String(job.user_id) !== String(user?.id) && job.worker_id == null && (
                                                     <div className="actions" style={{ marginTop: 12 }}>
@@ -784,23 +784,23 @@ export default function Jobs() {
                                             </div>
                                             <p className="job-desc">{job.description || "Tavsif kiritilmagan"}</p>
                                             <div className="meta">
-                                                <span className="chip">🕒 {formatTimeAgo(job.created_at)}</span>
-                                                <span className="chip">💰 {job.price ?? "-"} {job.currency || "UZS"}</span>
-                                                <span className="chip">📍 {job.location || "-"}</span>
-                                                <span className="chip">🧩 {job.service_name || serviceMap[String(job.service_id)] || "Noma’lum"}</span>
+                                                <span className="chip">{formatTimeAgo(job.created_at)}</span>
+                                                <span className="chip">Narx: {job.price ?? "-"} {job.currency || "UZS"}</span>
+                                                <span className="chip">Manzil: {job.location || "-"}</span>
+                                                <span className="chip">Xizmat: {job.service_name || serviceMap[String(job.service_id)] || "Noma’lum"}</span>
                                                 <span className={`chip status-chip status-${String(job.status || "").toLowerCase()}`}>
                                                     <span className="status-dot" />
                                                     {({ active: "Faol", payment_pending: "To‘lov kutilmoqda", accepted: "Qabul qilingan", pending_finish: "Tasdiqlash kutilmoqda", finished: "Yakunlangan" })[String(job.status || "").toLowerCase()] || job.status}
                                                 </span>
-                                                <span className="chip">📅 {job.created_at || "Sana noma’lum"}</span>
+                                                <span className="chip">{job.created_at || "Sana noma’lum"}</span>
                                                 <span className="chip job-worker-chip">
-                                                    👤 Yaratuvchi:
+                                                    Yaratuvchi:
                                                     <button type="button" className="profile-link-button" onClick={(e) => { e.stopPropagation(); if (job.creator_username) navigate(`/profiles/${job.creator_username}`) }}>
                                                         {(`${job.creator_first || ""} ${job.creator_last || ""}`).trim() || job.creator_username || "Noma’lum"}
                                                     </button>
                                                 </span>
                                                 <span className="chip job-worker-chip">
-                                                    👤 Bajaruvchi:
+                                                    Bajaruvchi:
                                                     {job.worker_id ? (
                                                         <button type="button" className="profile-link-button" onClick={(e) => { e.stopPropagation(); if (job.worker_username) navigate(`/profiles/${job.worker_username}`) }}>
                                                             {(`${job.worker_first || ""} ${job.worker_last || ""}`).trim() || job.worker_username || "Noma’lum"}
@@ -989,13 +989,13 @@ export default function Jobs() {
                                     {detailIsParticipant && <button className="btn btn-secondary" onClick={() => navigate(`/chat/${activeJobDetails.id}`, { state: { job: activeJobDetails } })}>Suhbat</button>}
                                     {detailIsParticipant && detailStatus === "finished" && <button className="btn btn-secondary" onClick={() => navigate(`/rating/${activeJobDetails.id}`, { state: { job: activeJobDetails } })}>Baho</button>}
                                     {detailCanPropose && <button className="btn btn-primary" onClick={() => openProposalModal(activeJobDetails)}>{myProposal?.status === "pending" ? "Taklifni tahrirlash" : "Taklif yuborish"}</button>}
-                                    {detailIsMyJob && detailStatus === "payment_pending" && <button className="btn btn-primary" onClick={() => navigate(`/payments/job/${activeJobDetails.id}`)}>💳 To‘lovni amalga oshirish</button>}
+                                    {detailIsMyJob && detailStatus === "payment_pending" && <button className="btn btn-primary" onClick={() => navigate(`/payments/job/${activeJobDetails.id}`)}>To‘lovni amalga oshirish</button>}
                                     {detailCanReport && <button className="btn btn-secondary" onClick={() => setReportJobId(reportJobId === activeJobDetails.id ? null : activeJobDetails.id)}>⚑ Shikoyat</button>}
                                     {detailIsMyJob && detailCanFinish && <button className="btn btn-warn" onClick={() => cancelWorker(activeJobDetails)}>Ishchini almashtirish</button>}
                                     {detailCanFinish && detailIsParticipant && <button className="btn btn-success" disabled={actionJobId === activeJobDetails.id} onClick={() => detailIsWorker ? finishJobWorker(activeJobDetails.id) : finishJobSeeker(activeJobDetails)}>{actionJobId === activeJobDetails.id ? "Yakunlanmoqda..." : "Yakunlash"}</button>}
-                                    {detailIsWorker && detailStatus === "payment_pending" && <span className="chip job-accepted-chip">⏳ Ish egasining to‘lovi kutilmoqda</span>}
-                                    {detailIsWorker && detailStatus === "accepted" && <span className="chip job-accepted-chip">✅ Siz qabul qilgansiz</span>}
-                                    {detailIsParticipant && detailStatus === "accepted" && (activeJobDetails.owner_finished || activeJobDetails.worker_finished) && <span className="chip">⏳ Ikkinchi tomonning yakunlashini kutmoqda</span>}
+                                    {detailIsWorker && detailStatus === "payment_pending" && <span className="chip job-accepted-chip">Ish egasining to‘lovi kutilmoqda</span>}
+                                    {detailIsWorker && detailStatus === "accepted" && <span className="chip job-accepted-chip">Siz qabul qilgansiz</span>}
+                                    {detailIsParticipant && detailStatus === "accepted" && (activeJobDetails.owner_finished || activeJobDetails.worker_finished) && <span className="chip">Ikkinchi tomonning yakunlashini kutmoqda</span>}
                                 </div>
 
                                 {reportJobId === activeJobDetails.id && detailCanReport && (

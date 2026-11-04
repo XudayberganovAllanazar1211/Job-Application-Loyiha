@@ -76,9 +76,9 @@ export default function Login() {
                         Yagona universal profil orqali ish topish va xizmat ko‘rsatish uchun mo‘ljallangan zamonaviy platforma.
                     </p>
                     <div className="hero-points">
-                        <div className="hero-point">⚡ Tezkor kirish va qulay boshqaruv paneli</div>
-                        <div className="hero-point">🔐 Xavfsiz kirish</div>
-                        <div className="hero-point">💬 Suhbat, ish, baholash va reyting jadvali</div>
+                        <div className="hero-point">Tezkor kirish va qulay boshqaruv paneli</div>
+                        <div className="hero-point">Xavfsiz kirish</div>
+                        <div className="hero-point">Suhbat, ish, baholash va reyting jadvali</div>
                     </div>
                 </div>
             </section>

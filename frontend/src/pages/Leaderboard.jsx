@@ -29,15 +29,12 @@ export default function Leaderboard() {
     const currentList = activeTab === "creators" ? data.creators : data.workers
 
     const getRankIcon = (index) => {
-        if (index === 0) return "🥇"
-        if (index === 1) return "🥈"
-        if (index === 2) return "🥉"
         return `#${index + 1}`
     }
 
     return (
         <AppLayout
-            title="Reyting jadvali 🏆"
+            title="Reyting jadvali"
             subtitle="Eng ko‘p ish yaratgan va muvaffaqiyatli yakunlagan foydalanuvchilar (10 talik)"
         >
             {/* TABS (Tugmalar) QISMI */}
@@ -48,14 +45,14 @@ export default function Leaderboard() {
                         style={{ flex: 1 }}
                         onClick={() => setActiveTab("creators")}
                     >
-                        ✍️ Eng ko‘p ish yaratganlar
+                        Eng ko‘p ish yaratganlar
                     </button>
                     <button
                         className={`btn ${activeTab === "workers" ? "btn-primary" : "btn-secondary"}`}
                         style={{ flex: 1 }}
                         onClick={() => setActiveTab("workers")}
                     >
-                        🛠️ Eng ko‘p ish bajarganlar
+                        Eng ko‘p ish bajarganlar
                     </button>
                 </div>
             </div>
@@ -85,7 +82,7 @@ export default function Leaderboard() {
                                         <div className="helper">@{user.username}</div>
                                     </div>
                                 </div>
-                                <div className="leaderboard-count">⭐ {user.count} ta ish</div>
+                                <div className="leaderboard-count">{user.count} ta ish</div>
                             </div>
                         ))
                     ) : (

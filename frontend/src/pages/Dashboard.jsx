@@ -383,13 +383,13 @@ export default function Dashboard() {
                                     <h3 className="job-title">{job.title}</h3>
                                     <p className="job-desc">{job.description || "Tavsif kiritilmagan"}</p>
                                     <div className="meta" style={{ marginBottom: 12 }}>
-                                        <span className="chip job-time-chip">🕒 {formatTimeAgo(job.created_at)}</span>
-                                        <span className="chip">💰 {job.price ?? "-"} {job.currency || "UZS"}</span>
-                                        <span className="chip">📍 {job.location || "-"}</span>
-                                        <span className="chip job-service-chip">🧩 {job.service_name || serviceMap[String(job.service_id)] || job.service_id || "Noma’lum"}</span>
+                                        <span className="chip job-time-chip">{formatTimeAgo(job.created_at)}</span>
+                                        <span className="chip">Narx: {job.price ?? "-"} {job.currency || "UZS"}</span>
+                                        <span className="chip">Manzil: {job.location || "-"}</span>
+                                        <span className="chip job-service-chip">Xizmat: {job.service_name || serviceMap[String(job.service_id)] || job.service_id || "Noma’lum"}</span>
                                         <span className={`chip status-chip status-${status}`}><span className="status-dot" />{statusLabel}</span>
-                                        <span className="chip">📅 {job.created_at || "Sana noma’lum"}</span>
-                                        <span className="chip job-worker-chip">👤 Bajaruvchi: {job.worker_id ? (
+                                        <span className="chip">{job.created_at || "Sana noma’lum"}</span>
+                                        <span className="chip job-worker-chip">Bajaruvchi: {job.worker_id ? (
                                             <button type="button" className="profile-link-button" onClick={(e) => { e.stopPropagation(); navigate(`/profiles/${job.worker_username}`) }}>
                                                 {((job.worker_first || "") + " " + (job.worker_last || "")).trim() || job.worker_username}
                                             </button>
@@ -449,7 +449,7 @@ export default function Dashboard() {
                                             <button className="btn btn-secondary" onClick={(e) => { e.stopPropagation(); setReportJobId(reportJobId === job.id ? null : job.id) }}>⚑ Shikoyat</button>
                                         )}
                                         {isMyJob && status === "payment_pending" && (
-                                            <button className="btn btn-primary" onClick={(e) => { e.stopPropagation(); navigate(`/payments/job/${job.id}`) }}>💳 To‘lovni amalga oshirish</button>
+                                            <button className="btn btn-primary" onClick={(e) => { e.stopPropagation(); navigate(`/payments/job/${job.id}`) }}>To‘lovni amalga oshirish</button>
                                         )}
 
                                         {reportJobId === job.id && (
@@ -473,7 +473,7 @@ export default function Dashboard() {
                                         {/* --- SIZ QABUL QILGANSIS CHIP --- */}
                                         {isIAccepted && status === "accepted" && (
                                             <span className="chip" style={{ background: "rgba(34, 197, 94, 0.2)", color: "#4ade80" }}>
-                                                ✅ Qabul qilgansiz
+                                                Qabul qilgansiz
                                             </span>
                                         )}
 
@@ -518,7 +518,7 @@ export default function Dashboard() {
 
                                         {isParticipant && status === "accepted" && (job.owner_finished || job.worker_finished) && (
                                             <span className="chip">
-                                                ⏳ Ikkinchi tomonning yakunlashini kutmoqda
+                                                Ikkinchi tomonning yakunlashini kutmoqda
                                             </span>
                                         )}
                                     </div>

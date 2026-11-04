@@ -82,7 +82,7 @@ export default function Rating() {
         setLoading(false)
 
         if (result?.msg === "ok") {
-            setNotice("Reyting yuborildi ✅")
+            setNotice("Reyting yuborildi")
             setTimeout(() => navigate("/jobs"), 1200)
             return
         }
@@ -101,7 +101,7 @@ export default function Rating() {
                     <p className="muted">Bajarilgan ish sifatini baholang.</p>
 
                     {notice && (
-                        <div className={notice.includes("✅") ? "notice ok" : "notice warn"} style={{ marginBottom: 14 }}>
+                        <div className={notice.includes("Reyting yuborildi") ? "notice ok" : "notice warn"} style={{ marginBottom: 14 }}>
                             {notice}
                         </div>
                     )}
