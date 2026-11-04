@@ -8,7 +8,7 @@ The script refuses production and refuses a non-empty destination database.
 import argparse
 import datetime
 import os
-import shutil
+import math
 import sqlite3
 import sys
 from pathlib import Path
@@ -52,12 +52,17 @@ def ensure_development_target(confirm_branch):
     return dsn
 
 
-def create_backup(sqlite_path):
+def create_backup(source, sqlite_path):
     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     backup_path = sqlite_path.with_name(
         f"{sqlite_path.stem}.pre-postgres-{stamp}{sqlite_path.suffix}"
     )
-    shutil.copy2(sqlite_path, backup_path)
+    backup = sqlite3.connect(str(backup_path))
+    try:
+        source.backup(backup)
+        backup.commit()
+    finally:
+        backup.close()
     return backup_path
 
 
@@ -159,6 +164,50 @@ def validate_explicit_indexes(target, indexes):
     missing = [name for name, _ in indexes if name not in actual]
     if missing:
         raise RuntimeError("PostgreSQL indekslari yetishmayapti: " + ", ".join(missing))
+
+
+def validate_financial_totals(source, target, tables):
+    financial_columns = {
+        "users": ("balance",),
+        "jobs": ("agreed_price",),
+        "job_proposals": ("price",),
+        "payments": ("amount",),
+        "platform_wallet": ("balance", "escrow_balance"),
+        "wallet_transactions": ("amount", "balance_after"),
+    }
+    existing_tables = {name for name, _ in tables}
+    checked = []
+    for table_name, columns in financial_columns.items():
+        if table_name not in existing_tables:
+            continue
+        source_columns = {
+            row[1] for row in source.execute(
+                f"PRAGMA table_info({quote_identifier(table_name)})"
+            ).fetchall()
+        }
+        for column in columns:
+            if column not in source_columns:
+                continue
+            quoted_table = quote_identifier(table_name)
+            quoted_column = quote_identifier(column)
+            source_total = source.execute(
+                f"SELECT COALESCE(SUM({quoted_column}), 0) FROM {quoted_table}"
+            ).fetchone()[0]
+            target_total = target.execute(
+                f"SELECT COALESCE(SUM({quoted_column}), 0) FROM {quoted_table}"
+            ).fetchone()[0]
+            if not math.isclose(
+                float(source_total or 0),
+                float(target_total or 0),
+                rel_tol=0.0,
+                abs_tol=0.01,
+            ):
+                raise RuntimeError(
+                    f"{table_name}.{column}: moliyaviy yig‘indi mos kelmadi "
+                    f"(SQLite={source_total}, PostgreSQL={target_total})."
+                )
+            checked.append(f"{table_name}.{column}")
+    return checked
 
 
 def copy_table(source, target, table_name, batch_size=500):
@@ -270,7 +319,7 @@ def migrate(sqlite_path, confirm_branch):
         if not tables:
             raise RuntimeError("SQLite bazasida ko‘chiriladigan jadvallar topilmadi.")
 
-        backup_path = create_backup(sqlite_path)
+        backup_path = create_backup(integrity, sqlite_path)
         print(f"SQLite backup yaratildi: {backup_path.name}")
         print(f"Ko‘chiriladigan jadvallar: {len(tables)}")
         print(f"Ko‘chiriladigan explicit indekslar: {len(indexes)}")
@@ -298,6 +347,9 @@ def migrate(sqlite_path, confirm_branch):
                 for index_name, index_sql in indexes:
                     target.execute(translate_sql(index_sql))
                 validate_explicit_indexes(target, indexes)
+                checked_financial_columns = validate_financial_totals(
+                    integrity, target, tables
+                )
 
                 reset_identity_sequences(integrity, target, tables)
                 record_schema_version(target)
@@ -319,6 +371,7 @@ def migrate(sqlite_path, confirm_branch):
         print(f"Jadvallar: {len(copied_counts)}")
         print(f"Indekslar: {len(indexes)}")
         print(f"Jami qatorlar: {sum(copied_counts.values())}")
+        print(f"Tekshirilgan moliyaviy ustunlar: {len(checked_financial_columns)}")
         print("Target: finjob-development (production o‘zgartirilmadi).")
     finally:
         integrity.close()
