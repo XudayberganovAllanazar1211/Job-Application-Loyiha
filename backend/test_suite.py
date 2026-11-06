@@ -1,20 +1,92 @@
 import os
 import unittest
+from unittest.mock import patch
+from concurrent.futures import ThreadPoolExecutor
+import hashlib
 from io import BytesIO
+from pathlib import Path
+from urllib.parse import urlparse
+
+from dotenv import load_dotenv
+
+BACKEND_DIR = Path(__file__).resolve().parent
+PROJECT_DIR = BACKEND_DIR.parent
+load_dotenv(PROJECT_DIR / ".env.local", override=False)
+load_dotenv(BACKEND_DIR / ".env", override=False)
+
+TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "").strip()
+APPLICATION_DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+FINJOB_ENV = os.environ.get("FINJOB_ENV", "development").strip().lower()
+
+if FINJOB_ENV in {"production", "prod"}:
+    raise RuntimeError("Testlar production muhitida ishga tushirilmaydi.")
+if not TEST_DATABASE_URL.startswith(("postgres://", "postgresql://")):
+    raise RuntimeError("TEST_DATABASE_URL alohida PostgreSQL test bazasiga sozlanishi shart.")
+def database_identity(dsn):
+    parsed = urlparse(dsn)
+    hostname = (parsed.hostname or "").lower().replace("-pooler.", ".")
+    return (
+        hostname,
+        parsed.port or 5432,
+        parsed.path.rstrip("/").lower(),
+    )
+
+
+if APPLICATION_DATABASE_URL and database_identity(TEST_DATABASE_URL) == database_identity(APPLICATION_DATABASE_URL):
+    raise RuntimeError("TEST_DATABASE_URL DATABASE_URL bilan bir xil PostgreSQL bazasiga qarata olmaydi.")
+
+# main import vaqtida global DB obyektini yaratadi; uni test DSN'ga yo‘naltiramiz.
+# FINJOB_TEST_MODE prevents a local .env.local from replacing this isolated test DSN.
+os.environ["FINJOB_TEST_MODE"] = "1"
+os.environ["NEON_BRANCH"] = ""
+os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+# The test suite is allowed to bootstrap only its independently validated TEST_DATABASE_URL.
+os.environ["FINJOB_ALLOW_EMPTY_DB_BOOTSTRAP"] = "1"
+
 from main import app, DB, pending_verifications
 import main
+import payments as payments_module
+
 
 class JobPlatformTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.test_db_name = "test_app.db"
         cls.original_db = main.db
-        cls.original_db_name = cls.original_db.db_name
-        if os.path.exists(cls.test_db_name):
-            os.remove(cls.test_db_name)
-        DB(cls.test_db_name)
-        cls.original_db.db_name = cls.test_db_name
-        main.db = cls.original_db
+        if cls.original_db.database_url != TEST_DATABASE_URL:
+            raise RuntimeError("Test DB noto‘g‘ri DSN bilan yaratildi.")
+
+        conn = cls.original_db.get_connection()
+        try:
+            tables = conn.execute(
+                "SELECT tablename FROM pg_tables WHERE schemaname=current_schema() "
+                "AND tablename <> 'schema_migrations' ORDER BY tablename"
+            ).fetchall()
+            if tables:
+                quoted = ", ".join('"' + row[0].replace('"', '""') + '"' for row in tables)
+                conn.execute(f"TRUNCATE TABLE {quoted} RESTART IDENTITY CASCADE")
+            conn.execute(
+                """
+                INSERT INTO platform_settings(key,value)
+                VALUES('commission_percent','10')
+                ON CONFLICT (key) DO NOTHING
+                """
+            )
+            conn.execute(
+                """
+                INSERT INTO platform_wallet(id,balance,escrow_balance)
+                VALUES(1,0,0)
+                ON CONFLICT (id) DO NOTHING
+                """
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+        cls.original_db.seed()
+        pending_verifications.clear()
         cls.original_send_email_code = main.send_email_code
         main.send_email_code = lambda to_email, code: True
         app.config["TESTING"] = True
@@ -22,13 +94,7 @@ class JobPlatformTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        cls.original_db.db_name = cls.original_db_name
         main.send_email_code = cls.original_send_email_code
-        if os.path.exists(cls.test_db_name):
-            try:
-                os.remove(cls.test_db_name)
-            except Exception:
-                pass
 
     def setUp(self):
         # Testlar bir-birining rate-limit holatiga ta’sir qilmasin.
@@ -1556,6 +1622,616 @@ class JobPlatformTestCase(unittest.TestCase):
 
         main.db.q("DELETE FROM payments WHERE payment_uuid=?", (payment_uuid,)).close()
         main.db.q("DELETE FROM jobs WHERE id=?", (job_id,)).close()
+
+    def test_16_postgresql_identity_sequence_and_returning_id(self):
+        before = main.db.q("SELECT COALESCE(MAX(id),0) FROM services").fetchone()[0]
+        result = main.db.q(
+            "INSERT INTO services(name,parent_id,created_by) VALUES(?,?,NULL)",
+            ("PostgreSQL identity regression", None),
+        )
+        inserted_id = result.lastrowid
+        result.close()
+        self.assertIsNotNone(inserted_id)
+        self.assertGreater(inserted_id, before)
+        main.db.q(
+            "DELETE FROM services WHERE id=?",
+            (inserted_id,),
+        ).close()
+
+    def test_17_postgresql_transaction_rollback(self):
+        before = main.db.q(
+            "SELECT balance FROM platform_wallet WHERE id=1"
+        ).fetchone()[0]
+        conn = main.db.get_connection()
+        try:
+            conn.execute(
+                "UPDATE platform_wallet SET balance=balance+123.45 WHERE id=1"
+            )
+            conn.rollback()
+        finally:
+            conn.close()
+        after = main.db.q(
+            "SELECT balance FROM platform_wallet WHERE id=1"
+        ).fetchone()[0]
+        self.assertEqual(after, before)
+
+
+    def test_15_click_provider_transaction_id_is_unique(self):
+        transaction_id = "finjob-click-unique-regression"
+        conn = main.db.get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                INSERT INTO payments(
+                    payment_uuid,job_id,payer_id,payee_id,amount,provider,
+                    status,provider_transaction_id,created_at
+                ) VALUES(?,?,?,?,?,'click','pending',?,?)
+                """,
+                (
+                    "unique-click-test-payment-1",
+                    900000001,
+                    1,
+                    2,
+                    1,
+                    transaction_id,
+                    "2026-11-04T00:00:00+00:00",
+                ),
+            )
+            with self.assertRaises(main.sqlite3.IntegrityError):
+                cur.execute(
+                    """
+                    INSERT INTO payments(
+                        payment_uuid,job_id,payer_id,payee_id,amount,provider,
+                        status,provider_transaction_id,created_at
+                    ) VALUES(?,?,?,?,?,'click','pending',?,?)
+                    """,
+                    (
+                        "unique-click-test-payment-2",
+                        900000002,
+                        1,
+                        2,
+                        1,
+                        transaction_id,
+                        "2026-11-04T00:00:00+00:00",
+                    ),
+                )
+            conn.rollback()
+        finally:
+            conn.close()
+
+
+    def test_25_click_callbacks_are_idempotent_and_keep_transaction_id(self):
+        old_service_id = payments_module.CLICK_SERVICE_ID
+        old_secret_key = payments_module.CLICK_SECRET_KEY
+        payments_module.CLICK_SERVICE_ID = "finjob-test-service"
+        payments_module.CLICK_SECRET_KEY = "finjob-test-click-secret"
+
+        owner = main.db.q(
+            "SELECT id FROM users WHERE username='tester_creator'"
+        ).fetchone()
+        worker = main.db.q(
+            "SELECT id FROM users WHERE username='tester_worker'"
+        ).fetchone()
+        self.assertIsNotNone(owner)
+        self.assertIsNotNone(worker)
+        owner_id, worker_id = owner[0], worker[0]
+
+        payment_uuid = "finjob-click-idempotency-regression"
+        transaction_id = "finjob-click-callback-regression-tx"
+        different_transaction_id = "finjob-click-callback-different-tx"
+        amount_text = "25000.00"
+        now = "2026-11-04T00:00:00+00:00"
+        conn = main.db.get_connection()
+        try:
+            conn.execute(
+                """INSERT INTO jobs(
+                    user_id,service_id,title,description,price,currency,location,
+                    worker_id,status,created_at,custom_service,agreed_price
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    owner_id, 1, "Click callback regression",
+                    "Idempotency test", 25000, "UZS", "Remote",
+                    worker_id, "payment_pending", now, "", 25000,
+                ),
+            )
+            job_id = conn.execute(
+                "SELECT id FROM jobs WHERE title='Click callback regression' ORDER BY id DESC LIMIT 1"
+            ).fetchone()[0]
+            conn.execute(
+                """INSERT INTO payments(
+                    payment_uuid,job_id,payer_id,payee_id,amount,currency,
+                    provider,status,created_at
+                ) VALUES(?,?,?,?,?,'UZS','click','pending',?)""",
+                (payment_uuid, job_id, owner_id, worker_id, 25000, now),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        baseline_escrow = main.db.q(
+            "SELECT escrow_balance FROM platform_wallet WHERE id=1"
+        ).fetchone()[0]
+        previous_notification_id = main.db.q(
+            "SELECT COALESCE(MAX(id),0) FROM notifications"
+        ).fetchone()[0]
+
+        def click_payload(click_trans_id, action):
+            sign_time = "2026-11-04T15:00:00"
+            raw = (
+                f"{click_trans_id}finjob-test-servicefinjob-test-click-secret"
+                f"{payment_uuid}{amount_text}{action}{sign_time}"
+            )
+            return {
+                "click_trans_id": click_trans_id,
+                "service_id": "finjob-test-service",
+                "click_paydoc_id": "test-paydoc-1",
+                "merchant_trans_id": payment_uuid,
+                "amount": amount_text,
+                "action": str(action),
+                "sign_time": sign_time,
+                "sign_string": hashlib.md5(raw.encode("utf-8")).hexdigest(),
+            }
+
+        try:
+            prepare = self.client.post(
+                "/payments/click", data=click_payload(transaction_id, 0)
+            )
+            self.assertEqual(prepare.status_code, 200)
+            self.assertEqual(prepare.get_json()["error"], 0)
+
+            conflicting_prepare = self.client.post(
+                "/payments/click",
+                data=click_payload(different_transaction_id, 0),
+            )
+            self.assertEqual(conflicting_prepare.get_json()["error"], -4)
+
+            confirm = self.client.post(
+                "/payments/click", data=click_payload(transaction_id, 1)
+            )
+            self.assertEqual(confirm.status_code, 200)
+            self.assertEqual(confirm.get_json()["error"], 0)
+
+            repeated_confirm = self.client.post(
+                "/payments/click", data=click_payload(transaction_id, 1)
+            )
+            self.assertEqual(repeated_confirm.get_json()["error"], 0)
+
+            conflicting_confirm = self.client.post(
+                "/payments/click",
+                data=click_payload(different_transaction_id, 1),
+            )
+            self.assertEqual(conflicting_confirm.get_json()["error"], -4)
+
+            payment = main.db.q(
+                "SELECT status,provider_transaction_id FROM payments WHERE payment_uuid=?",
+                (payment_uuid,),
+            ).fetchone()
+            self.assertEqual(payment, ("held", transaction_id))
+
+            job_status = main.db.q(
+                "SELECT status FROM jobs WHERE id=?", (job_id,)
+            ).fetchone()[0]
+            self.assertEqual(job_status, "accepted")
+
+            after_escrow = main.db.q(
+                "SELECT escrow_balance FROM platform_wallet WHERE id=1"
+            ).fetchone()[0]
+            self.assertEqual(after_escrow - baseline_escrow, 25000)
+        finally:
+            cleanup = main.db.get_connection()
+            try:
+                cleanup.execute(
+                    "UPDATE platform_wallet SET escrow_balance=? WHERE id=1",
+                    (baseline_escrow,),
+                )
+                cleanup.execute(
+                    """DELETE FROM notifications
+                       WHERE id>? AND user_id IN (?,?)
+                         AND type IN ('payment_success','payment_received')""",
+                    (previous_notification_id, owner_id, worker_id),
+                )
+                cleanup.execute("DELETE FROM payments WHERE payment_uuid=?", (payment_uuid,))
+                cleanup.execute("DELETE FROM jobs WHERE title='Click callback regression' AND user_id=?", (owner_id,))
+                cleanup.commit()
+            except Exception:
+                cleanup.rollback()
+                raise
+            finally:
+                cleanup.close()
+            payments_module.CLICK_SERVICE_ID = old_service_id
+            payments_module.CLICK_SECRET_KEY = old_secret_key
+
+
+    def test_26_concurrent_wallet_withdrawals_cannot_overdraw_balance(self):
+        login = self.client.post(
+            "/login",
+            json={"username": "tester_creator", "password": "Password123!"},
+        )
+        self.assertEqual(login.status_code, 200)
+        token = login.get_json()["token"]
+        user_id = self.client.get(
+            "/profile", headers={"Authorization": f"Bearer {token}"}
+        ).get_json()["id"]
+
+        original_balance = main.db.q(
+            "SELECT balance FROM users WHERE id=?", (user_id,)
+        ).fetchone()[0]
+        previous_transaction_id = main.db.q(
+            "SELECT COALESCE(MAX(id),0) FROM wallet_transactions"
+        ).fetchone()[0]
+        previous_notification_id = main.db.q(
+            "SELECT COALESCE(MAX(id),0) FROM notifications"
+        ).fetchone()[0]
+
+        setup = main.db.get_connection()
+        try:
+            setup.execute("UPDATE users SET balance=1000 WHERE id=?", (user_id,))
+            setup.commit()
+        finally:
+            setup.close()
+
+        def withdraw():
+            with app.test_client() as client:
+                return client.post(
+                    "/wallet/withdraw",
+                    headers={"Authorization": f"Bearer {token}"},
+                    json={"amount": 800},
+                )
+
+        try:
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                responses = list(executor.map(lambda _: withdraw(), range(2)))
+
+            statuses = [response.status_code for response in responses]
+            self.assertEqual(statuses.count(200), 1)
+            self.assertIn(next(code for code in statuses if code != 200), (400, 409))
+
+            final_balance = main.db.q(
+                "SELECT balance FROM users WHERE id=?", (user_id,)
+            ).fetchone()[0]
+            self.assertEqual(float(final_balance), 200.0)
+
+            new_withdrawals = main.db.q(
+                """SELECT COUNT(*) FROM wallet_transactions
+                   WHERE user_id=? AND type='withdrawal' AND id>?""",
+                (user_id, previous_transaction_id),
+            ).fetchone()[0]
+            self.assertEqual(new_withdrawals, 1)
+        finally:
+            cleanup = main.db.get_connection()
+            try:
+                cleanup.execute(
+                    "UPDATE users SET balance=? WHERE id=?",
+                    (original_balance, user_id),
+                )
+                cleanup.execute(
+                    "DELETE FROM wallet_transactions WHERE user_id=? AND id>?",
+                    (user_id, previous_transaction_id),
+                )
+                cleanup.execute(
+                    "DELETE FROM notifications WHERE user_id=? AND id>?",
+                    (user_id, previous_notification_id),
+                )
+                cleanup.commit()
+            except Exception:
+                cleanup.rollback()
+                raise
+            finally:
+                cleanup.close()
+
+
+    def test_27_concurrent_release_and_refund_are_applied_once(self):
+        owner = main.db.q(
+            "SELECT id FROM users WHERE username='tester_creator'"
+        ).fetchone()
+        worker = main.db.q(
+            "SELECT id FROM users WHERE username='tester_worker'"
+        ).fetchone()
+        self.assertIsNotNone(owner)
+        self.assertIsNotNone(worker)
+        owner_id, worker_id = owner[0], worker[0]
+
+        original_owner_balance = main.db.q(
+            "SELECT balance FROM users WHERE id=?", (owner_id,)
+        ).fetchone()[0]
+        original_worker_balance = main.db.q(
+            "SELECT balance FROM users WHERE id=?", (worker_id,)
+        ).fetchone()[0]
+        original_platform = main.db.q(
+            "SELECT balance,escrow_balance FROM platform_wallet WHERE id=1"
+        ).fetchone()
+        previous_transaction_id = main.db.q(
+            "SELECT COALESCE(MAX(id),0) FROM wallet_transactions"
+        ).fetchone()[0]
+        previous_notification_id = main.db.q(
+            "SELECT COALESCE(MAX(id),0) FROM notifications"
+        ).fetchone()[0]
+
+        now = "2026-11-04T15:00:00+00:00"
+        release_uuid = "finjob-concurrent-release-regression"
+        refund_uuid = "finjob-concurrent-refund-regression"
+        amount = 1000
+        conn = main.db.get_connection()
+        try:
+            release_job_id = conn.execute(
+                """INSERT INTO jobs(
+                    user_id,service_id,title,description,price,currency,location,
+                    worker_id,status,created_at,custom_service,agreed_price
+                ) VALUES(?,1,?,?,?,?,?,?, 'finished',?,'',?)""",
+                (
+                    owner_id, "Concurrent release regression", "Release race test",
+                    amount, "UZS", "Remote", worker_id, now, amount,
+                ),
+            ).lastrowid
+            refund_job_id = conn.execute(
+                """INSERT INTO jobs(
+                    user_id,service_id,title,description,price,currency,location,
+                    worker_id,status,created_at,custom_service,agreed_price
+                ) VALUES(?,1,?,?,?,?,?,?, 'finished',?,'',?)""",
+                (
+                    owner_id, "Concurrent refund regression", "Refund race test",
+                    amount, "UZS", "Remote", worker_id, now, amount,
+                ),
+            ).lastrowid
+            conn.execute(
+                """INSERT INTO payments(
+                    payment_uuid,job_id,payer_id,payee_id,amount,currency,
+                    provider,status,created_at,paid_at
+                ) VALUES(?,?,?, ?,?,'UZS','dummy','held',?,?)""",
+                (release_uuid, release_job_id, owner_id, worker_id, amount, now, now),
+            )
+            conn.execute(
+                """INSERT INTO payments(
+                    payment_uuid,job_id,payer_id,payee_id,amount,currency,
+                    provider,status,created_at,paid_at
+                ) VALUES(?,?,?, ?,?,'UZS','dummy','held',?,?)""",
+                (refund_uuid, refund_job_id, owner_id, worker_id, amount, now, now),
+            )
+            conn.execute(
+                "UPDATE platform_wallet SET escrow_balance=escrow_balance+? WHERE id=1",
+                (amount * 2,),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        try:
+            release_action = app.config["FINJOB_RELEASE_PAYMENT"]
+            refund_action = app.config["FINJOB_REFUND_PAYMENT"]
+
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                list(executor.map(lambda _: release_action(release_job_id), range(2)))
+
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                list(executor.map(lambda _: refund_action(refund_job_id), range(2)))
+
+            release_status = main.db.q(
+                "SELECT status FROM payments WHERE payment_uuid=?", (release_uuid,)
+            ).fetchone()[0]
+            refund_status = main.db.q(
+                "SELECT status FROM payments WHERE payment_uuid=?", (refund_uuid,)
+            ).fetchone()[0]
+            self.assertEqual(release_status, "released")
+            self.assertEqual(refund_status, "refunded")
+
+            owner_after = main.db.q(
+                "SELECT balance FROM users WHERE id=?", (owner_id,)
+            ).fetchone()[0]
+            worker_after = main.db.q(
+                "SELECT balance FROM users WHERE id=?", (worker_id,)
+            ).fetchone()[0]
+            platform_after = main.db.q(
+                "SELECT balance,escrow_balance FROM platform_wallet WHERE id=1"
+            ).fetchone()
+
+            self.assertEqual(float(owner_after - original_owner_balance), 1000.0)
+            self.assertEqual(float(worker_after - original_worker_balance), 900.0)
+            self.assertEqual(float(platform_after[0] - original_platform[0]), 100.0)
+            self.assertEqual(float(platform_after[1] - original_platform[1]), 0.0)
+
+            release_ledger = main.db.q(
+                "SELECT COUNT(*) FROM wallet_transactions WHERE job_id=? AND type='payment_release'",
+                (release_job_id,),
+            ).fetchone()[0]
+            refund_ledger = main.db.q(
+                "SELECT COUNT(*) FROM wallet_transactions WHERE job_id=? AND type='payment_refund'",
+                (refund_job_id,),
+            ).fetchone()[0]
+            self.assertEqual(release_ledger, 1)
+            self.assertEqual(refund_ledger, 1)
+        finally:
+            cleanup = main.db.get_connection()
+            try:
+                cleanup.execute(
+                    "UPDATE users SET balance=? WHERE id=?",
+                    (original_owner_balance, owner_id),
+                )
+                cleanup.execute(
+                    "UPDATE users SET balance=? WHERE id=?",
+                    (original_worker_balance, worker_id),
+                )
+                cleanup.execute(
+                    "UPDATE platform_wallet SET balance=?,escrow_balance=? WHERE id=1",
+                    (original_platform[0], original_platform[1]),
+                )
+                cleanup.execute(
+                    "DELETE FROM wallet_transactions WHERE id>?",
+                    (previous_transaction_id,),
+                )
+                cleanup.execute(
+                    "DELETE FROM notifications WHERE id>?",
+                    (previous_notification_id,),
+                )
+                cleanup.execute(
+                    "DELETE FROM payments WHERE payment_uuid IN (?,?)",
+                    (release_uuid, refund_uuid),
+                )
+                cleanup.execute(
+                    "DELETE FROM jobs WHERE id IN (?,?)",
+                    (release_job_id, refund_job_id),
+                )
+                cleanup.commit()
+            except Exception:
+                cleanup.rollback()
+                raise
+            finally:
+                cleanup.close()
+
+
+    def test_28_development_startup_guard_accepts_the_allowlisted_endpoint(self):
+        with patch.dict(
+            os.environ,
+            {
+                "FINJOB_ENV": "development",
+                "NEON_BRANCH": "finjob-development",
+                "NEON_DEVELOPMENT_DATABASE_HOST": "dev-db.example.neon.tech",
+                "DATABASE_URL": "postgresql://user:password@dev-db.example.neon.tech/finjob",
+            },
+        ):
+            main.verify_development_database_target()
+
+    def test_29_development_startup_guard_rejects_a_different_endpoint(self):
+        with patch.dict(
+            os.environ,
+            {
+                "FINJOB_ENV": "development",
+                "NEON_BRANCH": "finjob-development",
+                "NEON_DEVELOPMENT_DATABASE_HOST": "dev-db.example.neon.tech",
+                "DATABASE_URL": "postgresql://user:password@prod-db.example.neon.tech/finjob",
+            },
+        ):
+            with self.assertRaises(RuntimeError):
+                main.verify_development_database_target()
+
+
+    def test_30_concurrent_dummy_payment_creates_single_hold(self):
+        login = self.client.post(
+            "/login",
+            json={"username": "tester_creator", "password": "Password123!"},
+        )
+        self.assertEqual(login.status_code, 200)
+        token = login.get_json()["token"]
+        owner_id = self.client.get(
+            "/profile", headers={"Authorization": f"Bearer {token}"}
+        ).get_json()["id"]
+        worker_id = main.db.q(
+            "SELECT id FROM users WHERE username='tester_worker'"
+        ).fetchone()[0]
+
+        original_balance = main.db.q(
+            "SELECT balance FROM users WHERE id=?", (owner_id,)
+        ).fetchone()[0]
+        platform_before = main.db.q(
+            "SELECT balance,escrow_balance FROM platform_wallet WHERE id=1"
+        ).fetchone()
+        previous_transaction_id = main.db.q(
+            "SELECT COALESCE(MAX(id),0) FROM wallet_transactions"
+        ).fetchone()[0]
+        previous_notification_id = main.db.q(
+            "SELECT COALESCE(MAX(id),0) FROM notifications"
+        ).fetchone()[0]
+
+        now = "2026-11-04T15:00:00+00:00"
+        amount = 50000
+        setup = main.db.get_connection()
+        try:
+            job_id = setup.execute(
+                """INSERT INTO jobs(
+                    user_id,service_id,title,description,price,currency,location,
+                    worker_id,status,created_at,custom_service,agreed_price
+                ) VALUES(?,1,?,?,?,?,?,?, 'payment_pending',?,'',?)""",
+                (
+                    owner_id, "Concurrent dummy payment regression",
+                    "One escrow hold only", amount, "UZS", "Remote",
+                    worker_id, now, amount,
+                ),
+            ).lastrowid
+            setup.execute(
+                "UPDATE users SET balance=? WHERE id=?",
+                (100000, owner_id),
+            )
+            setup.commit()
+        finally:
+            setup.close()
+
+        def make_payment():
+            with app.test_client() as client:
+                return client.post(
+                    f"/payments/dummy/{job_id}",
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+
+        try:
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                responses = list(executor.map(lambda _: make_payment(), range(2)))
+
+            payloads = [response.get_json() or {} for response in responses]
+            self.assertEqual(
+                sum(
+                    response.status_code == 200 and payload.get("msg") == "ok"
+                    for response, payload in zip(responses, payloads)
+                ),
+                1,
+            )
+            self.assertEqual([response.status_code for response in responses].count(200), 2)
+            self.assertEqual(
+                sorted(payload.get("msg") for payload in payloads),
+                ["already_paid", "ok"],
+            )
+
+            payment_rows = main.db.q(
+                "SELECT COUNT(*),MAX(status) FROM payments WHERE job_id=? AND provider='dummy'",
+                (job_id,),
+            ).fetchone()
+            self.assertEqual(payment_rows, (1, "held"))
+
+            hold_ledger_count = main.db.q(
+                "SELECT COUNT(*) FROM wallet_transactions WHERE job_id=? AND type='payment_hold'",
+                (job_id,),
+            ).fetchone()[0]
+            self.assertEqual(hold_ledger_count, 1)
+
+            final_balance = main.db.q(
+                "SELECT balance FROM users WHERE id=?", (owner_id,)
+            ).fetchone()[0]
+            self.assertEqual(float(final_balance), 50000.0)
+
+            platform_after = main.db.q(
+                "SELECT balance,escrow_balance FROM platform_wallet WHERE id=1"
+            ).fetchone()
+            self.assertEqual(float(platform_after[0] - platform_before[0]), 0.0)
+            self.assertEqual(float(platform_after[1] - platform_before[1]), 50000.0)
+        finally:
+            cleanup = main.db.get_connection()
+            try:
+                cleanup.execute(
+                    "UPDATE users SET balance=? WHERE id=?",
+                    (original_balance, owner_id),
+                )
+                cleanup.execute(
+                    "UPDATE platform_wallet SET balance=?,escrow_balance=? WHERE id=1",
+                    (platform_before[0], platform_before[1]),
+                )
+                cleanup.execute(
+                    "DELETE FROM wallet_transactions WHERE job_id=? AND id>?",
+                    (job_id, previous_transaction_id),
+                )
+                cleanup.execute(
+                    "DELETE FROM notifications WHERE id>? AND user_id IN (?,?)",
+                    (previous_notification_id, owner_id, worker_id),
+                )
+                cleanup.execute(
+                    "DELETE FROM payments WHERE job_id=? AND provider='dummy'",
+                    (job_id,),
+                )
+                cleanup.execute("DELETE FROM jobs WHERE id=?", (job_id,))
+                cleanup.commit()
+            except Exception:
+                cleanup.rollback()
+                raise
+            finally:
+                cleanup.close()
 
 
 if __name__ == "__main__":

@@ -1,0 +1,88 @@
+name: PostgreSQL backend tests
+
+on:
+  push:
+    branches:
+      - feature/postgresql-migration
+  pull_request:
+    branches:
+      - main
+      - feature/postgresql-migration
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt
+
+      - name: Compile backend modules
+        run: |
+          python -m py_compile backend/main.py backend/payments.py backend/pg_compat.py backend/migrate_sqlite_to_postgres.py backend/test_suite.py backend/test_pg_compat.py backend/test_migrate_sqlite_to_postgres.py
+
+      - name: Create separate application and test databases
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE finjob_app"
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE finjob_test"
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE finjob_migration_test"
+
+      - name: Test SQL compatibility layer
+        working-directory: backend
+        run: python -m unittest -v test_pg_compat
+
+      - name: Test SQLite-to-PostgreSQL migration utility
+        working-directory: backend
+        env:
+          FINJOB_ENV: development
+          NEON_BRANCH: finjob-development
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/finjob_migration_test
+          NEON_DEVELOPMENT_DATABASE_HOST: 127.0.0.1
+          DATABASE_SCHEMA: finjob_import_test
+        run: python -m unittest -v test_migrate_sqlite_to_postgres
+
+      - name: Run backend regression suite
+        working-directory: backend
+        env:
+          FINJOB_ENV: development
+          FINJOB_ALLOW_EMPTY_DB_BOOTSTRAP: "1"
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/finjob_app
+          TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/finjob_test
+          SECRET_KEY: finjob-ci-test-secret-not-for-production
+          CORS_ORIGINS: http://localhost:5173
+          CLICK_SERVICE_ID: ""
+          CLICK_MERCHANT_ID: ""
+          CLICK_SECRET_KEY: ""
+        run: python -m unittest -v test_suite

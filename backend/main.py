@@ -3,33 +3,81 @@ import re
 import math
 import time
 import threading
-import sqlite3
+import pg_compat as sqlite3
 import datetime
 import secrets
 import smtplib
 import uuid
 import json
+from decimal import Decimal
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 from urllib.request import Request as URLRequest, urlopen
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from functools import wraps
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
+from flask.json.provider import DefaultJSONProvider
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from PIL import Image, ImageOps, UnidentifiedImageError
-from payments import register_payment_routes
 import jwt
 
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # In local development, the Neon CLI branch file is authoritative. CI/test
+    # suites opt out explicitly so TEST_DATABASE_URL cannot be overwritten.
+    is_test_mode = os.environ.get("FINJOB_TEST_MODE", "0").strip() == "1"
+    load_dotenv(
+        os.path.join(PROJECT_DIR, ".env.local"),
+        override=not is_test_mode,
+    )
+    load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"), override=False)
 except ImportError:
     pass
 
+
+def verify_development_database_target():
+    environment = os.environ.get("FINJOB_ENV", "development").strip().lower()
+    if environment in {"production", "prod"}:
+        return
+
+    branch = os.environ.get("NEON_BRANCH", "").strip()
+    if not branch:
+        return
+    if branch != "finjob-development":
+        raise RuntimeError(
+            "Development ilovasi faqat finjob-development Neon branchidan foydalanishi mumkin."
+        )
+
+    database_url = os.environ.get("DATABASE_URL", "").strip()
+    actual_host = (urlparse(database_url).hostname or "").strip().lower()
+    expected_host = os.environ.get(
+        "NEON_DEVELOPMENT_DATABASE_HOST", ""
+    ).strip().lower()
+    if not expected_host or actual_host != expected_host:
+        raise RuntimeError(
+            "DATABASE_URL hosti NEON_DEVELOPMENT_DATABASE_HOST bilan mos emas. "
+            "Development Neon endpoint hostname'ini tekshiring."
+        )
+
+
+verify_development_database_target()
+
+from payments import register_payment_routes
+
+class FinJobJSONProvider(DefaultJSONProvider):
+    @staticmethod
+    def default(value):
+        if isinstance(value, Decimal):
+            return float(value)
+        return DefaultJSONProvider.default(value)
+
+
 app = Flask(__name__)
+app.json = FinJobJSONProvider(app)
 finjob_env = os.environ.get("FINJOB_ENV", "development").strip().lower()
 is_production = finjob_env in {"production", "prod"}
 raw_cors_origins = os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://localhost:5174")
@@ -239,32 +287,151 @@ def send_email_code(to_email, code):
 
 # -------- DATABASE --------
 class DB:
-    def __init__(self, db_name="app.db"):
-        self.db_name = db_name
+    def __init__(self, database_url=None):
+        self.database_url = (database_url or os.environ.get("DATABASE_URL", "")).strip()
+        self.db_name = self.database_url
+        if not self.database_url.startswith(("postgres://", "postgresql://")):
+            raise RuntimeError(
+                "DATABASE_URL PostgreSQL DSN majburiy. Ilova SQLite rejimida ishga tushmaydi."
+            )
         self.init()
         self.seed()
 
     def get_connection(self):
-        conn = sqlite3.connect(self.db_name, check_same_thread=False, timeout=15.0)
-        conn.execute("PRAGMA journal_mode = WAL;")
-        conn.execute("PRAGMA synchronous = NORMAL;")
-        conn.execute("PRAGMA busy_timeout = 5000;")
-        conn.execute("PRAGMA cache_size = -32768;")
-        conn.execute("PRAGMA temp_store = MEMORY;")
-        conn.execute("PRAGMA mmap_size = 268435456;")
-        conn.execute("PRAGMA foreign_keys = ON;")
-        return conn
+        return sqlite3.connect(self.database_url, check_same_thread=False, timeout=15.0)
 
     def _query_connection(self):
         local = getattr(threading.current_thread(), "_finjob_db", None)
-        if local is None or local.get("db_name") != self.db_name:
-            local = {"db_name": self.db_name, "conn": self.get_connection()}
+        if local is None or local.get("database_url") != self.database_url:
+            local = {"database_url": self.database_url, "conn": self.get_connection()}
             setattr(threading.current_thread(), "_finjob_db", local)
         return local["conn"]
 
     def init(self):
         conn = self.get_connection()
         cursor = conn.cursor()
+
+        existing_table_count = cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM information_schema.tables
+            WHERE table_schema = current_schema()
+              AND table_type = 'BASE TABLE'
+              AND table_name <> 'schema_migrations'
+            """
+        ).fetchone()[0]
+        if (
+            not existing_table_count
+            and os.environ.get("FINJOB_ALLOW_EMPTY_DB_BOOTSTRAP", "0").strip() != "1"
+        ):
+            conn.close()
+            raise RuntimeError(
+                "PostgreSQL bazasi bo‘sh. Avval migrate_sqlite_to_postgres.py bilan "
+                "SQLite ma’lumotlarini ko‘chiring. Faqat yangi, bo‘sh loyiha uchun "
+                "FINJOB_ALLOW_EMPTY_DB_BOOTSTRAP=1 ni ataylab o‘rnating."
+            )
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS schema_migrations(
+                version BIGINT PRIMARY KEY,
+                name TEXT NOT NULL,
+                applied_at TEXT NOT NULL
+            )
+        """)
+        applied_versions = {
+            row[0] for row in cursor.execute(
+                "SELECT version FROM schema_migrations"
+            ).fetchall()
+        }
+        if 1 in applied_versions:
+            if 2 not in applied_versions:
+                compatibility_migrations = [
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT ''",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS skills TEXT DEFAULT ''",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TEXT",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS average_rating DOUBLE PRECISION DEFAULT 0.0",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user'",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT DEFAULT ''",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS balance NUMERIC(18,2) DEFAULT 0",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at TEXT DEFAULT ''",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_blocked INTEGER NOT NULL DEFAULT 0",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider TEXT DEFAULT 'password'",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub TEXT DEFAULT ''",
+                    "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS currency TEXT DEFAULT 'UZS'",
+                    "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS custom_service TEXT DEFAULT ''",
+                    "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS agreed_price NUMERIC(18,2)",
+                    "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS finished_at TEXT",
+                    "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS owner_finished INTEGER NOT NULL DEFAULT 0",
+                    "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS worker_finished INTEGER NOT NULL DEFAULT 0",
+                    "ALTER TABLE ratings ADD COLUMN IF NOT EXISTS created_at TEXT",
+                    "ALTER TABLE messages ADD COLUMN IF NOT EXISTS read_at TEXT",
+                    "ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_url TEXT DEFAULT ''",
+                    "ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_name TEXT DEFAULT ''",
+                    "ALTER TABLE messages ADD COLUMN IF NOT EXISTS attachment_type TEXT DEFAULT ''",
+                    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS message_id INTEGER",
+                    "ALTER TABLE portfolio_items ADD COLUMN IF NOT EXISTS file_url TEXT DEFAULT ''",
+                    "ALTER TABLE portfolio_items ADD COLUMN IF NOT EXISTS file_name TEXT DEFAULT ''",
+                ]
+                for migration_sql in compatibility_migrations:
+                    cursor.execute(migration_sql)
+                cursor.execute(
+                    "INSERT INTO schema_migrations(version,name,applied_at) VALUES(2,?,?)",
+                    (
+                        "legacy_schema_columns",
+                        datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    ),
+                )
+                applied_versions.add(2)
+            if 3 not in applied_versions:
+                cursor.execute(
+                    "ALTER TABLE jobs ALTER COLUMN price TYPE NUMERIC(18,2) "
+                    "USING price::NUMERIC(18,2)"
+                )
+                cursor.execute(
+                    "INSERT INTO schema_migrations(version,name,applied_at) VALUES(3,?,?)",
+                    (
+                        "exact_money_columns",
+                        datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    ),
+                )
+                applied_versions.add(3)
+            if 4 not in applied_versions:
+                duplicate_click_ids = cursor.execute(
+                    """
+                    SELECT provider_transaction_id, COUNT(*)
+                    FROM payments
+                    WHERE provider='click'
+                      AND provider_transaction_id IS NOT NULL
+                      AND provider_transaction_id <> ''
+                    GROUP BY provider_transaction_id
+                    HAVING COUNT(*) > 1
+                    """
+                ).fetchall()
+                if duplicate_click_ids:
+                    raise RuntimeError(
+                        "Click tranzaksiya ID'lari takrorlangan. "
+                        "Unique index yaratilmadi; avval duplicate yozuvlarni tekshiring."
+                    )
+                cursor.execute(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_click_transaction
+                    ON payments(provider_transaction_id)
+                    WHERE provider='click'
+                      AND provider_transaction_id IS NOT NULL
+                      AND provider_transaction_id <> ''
+                    """
+                )
+                cursor.execute(
+                    "INSERT INTO schema_migrations(version,name,applied_at) VALUES(4,?,?)",
+                    (
+                        "click_transaction_idempotency",
+                        datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    ),
+                )
+            conn.commit()
+            conn.close()
+            return
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users(
@@ -283,7 +450,10 @@ class DB:
                 avatar_url TEXT DEFAULT '',
                 token_version INTEGER NOT NULL DEFAULT 0,
                 balance REAL DEFAULT 0,
-                last_seen_at TEXT DEFAULT ''
+                last_seen_at TEXT DEFAULT '',
+                is_blocked INTEGER NOT NULL DEFAULT 0,
+                auth_provider TEXT DEFAULT 'password',
+                google_sub TEXT DEFAULT ''
             )
         """)
 
@@ -303,7 +473,7 @@ class DB:
                 service_id INTEGER,
                 title TEXT,
                 description TEXT,
-                price INTEGER,
+                price NUMERIC(18,2),
                 currency TEXT DEFAULT 'UZS',
                 location TEXT,
                 worker_id INTEGER,
@@ -311,15 +481,11 @@ class DB:
                 created_at TEXT,
                 finished_at TEXT,
                 custom_service TEXT DEFAULT '',
-                agreed_price REAL
+                agreed_price REAL,
+                owner_finished INTEGER NOT NULL DEFAULT 0,
+                worker_finished INTEGER NOT NULL DEFAULT 0
             )
         """)
-
-        job_columns = [row[1] for row in cursor.execute("PRAGMA table_info(jobs)").fetchall()]
-        if "owner_finished" not in job_columns:
-            cursor.execute("ALTER TABLE jobs ADD COLUMN owner_finished INTEGER NOT NULL DEFAULT 0")
-        if "worker_finished" not in job_columns:
-            cursor.execute("ALTER TABLE jobs ADD COLUMN worker_finished INTEGER NOT NULL DEFAULT 0")
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS job_services(
@@ -364,7 +530,8 @@ class DB:
                 reason TEXT NOT NULL,
                 details TEXT DEFAULT '',
                 status TEXT DEFAULT 'open',
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                message_id INTEGER
             )
         """)
 
@@ -376,7 +543,10 @@ class DB:
                 job_id INTEGER,
                 message TEXT,
                 sent_at TEXT,
-                read_at TEXT
+                read_at TEXT,
+                attachment_url TEXT DEFAULT '',
+                attachment_name TEXT DEFAULT '',
+                attachment_type TEXT DEFAULT ''
             )
         """)
 
@@ -533,116 +703,55 @@ class DB:
         """)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_appeals_status_created ON appeals(status,created_at)")
 
-        # Dynamic migrations for any existing tables missing new columns
-        cursor.execute("PRAGMA table_info(users)")
-        existing_user_cols = [row[1] for row in cursor.fetchall()]
-        migrations = [
-            ("bio", "ALTER TABLE users ADD COLUMN bio TEXT DEFAULT ''"),
-            ("skills", "ALTER TABLE users ADD COLUMN skills TEXT DEFAULT ''"),
-            ("created_at", "ALTER TABLE users ADD COLUMN created_at TEXT"),
-            ("average_rating", "ALTER TABLE users ADD COLUMN average_rating REAL DEFAULT 0.0"),
-            ("role", "ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'"),
-            ("avatar_url", "ALTER TABLE users ADD COLUMN avatar_url TEXT DEFAULT ''"),
-            ("token_version", "ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0"),
-            ("balance", "ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0"),
-            ("last_seen_at", "ALTER TABLE users ADD COLUMN last_seen_at TEXT DEFAULT ''"),
-            ("is_blocked", "ALTER TABLE users ADD COLUMN is_blocked INTEGER NOT NULL DEFAULT 0"),
-            ("auth_provider", "ALTER TABLE users ADD COLUMN auth_provider TEXT DEFAULT 'password'"),
-            ("google_sub", "ALTER TABLE users ADD COLUMN google_sub TEXT DEFAULT ''"),
-        ]
-        for col_name, sql in migrations:
-            if col_name not in existing_user_cols:
-                try:
-                    cursor.execute(sql)
-                except Exception:
-                    pass
+        # The base schema above contains all supported columns.
+        cursor.execute(
+            "UPDATE jobs SET worker_id=NULL WHERE status='active' AND worker_id IS NOT NULL"
+        )
 
-        cursor.execute("PRAGMA table_info(jobs)")
-        existing_job_cols = [row[1] for row in cursor.fetchall()]
-        if "currency" not in existing_job_cols:
-            try:
-                cursor.execute("ALTER TABLE jobs ADD COLUMN currency TEXT DEFAULT 'UZS'")
-            except Exception:
-                pass
-
-        if "custom_service" not in existing_job_cols:
-            try:
-                cursor.execute("ALTER TABLE jobs ADD COLUMN custom_service TEXT DEFAULT ''")
-            except Exception:
-                pass
-
-        if "agreed_price" not in existing_job_cols:
-            try:
-                cursor.execute("ALTER TABLE jobs ADD COLUMN agreed_price REAL")
-            except Exception:
-                pass
-
-        if "finished_at" not in existing_job_cols:
-            try:
-                cursor.execute("ALTER TABLE jobs ADD COLUMN finished_at TEXT")
-            except Exception:
-                pass
-
-        # Active ish hech qachon biriktirilgan bajaruvchiga ega bo‘lmasligi kerak.
-        # Eski bazadagi active + worker_id holatini avtomatik tiklaymiz.
-        try:
-            cursor.execute(
-                "UPDATE jobs SET worker_id=NULL WHERE status='active' AND worker_id IS NOT NULL"
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS disputes(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id INTEGER NOT NULL,
+                opened_by INTEGER NOT NULL,
+                against_user_id INTEGER NOT NULL,
+                category TEXT NOT NULL,
+                description TEXT NOT NULL,
+                evidence TEXT DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'open',
+                admin_response TEXT DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT,
+                resolved_at TEXT,
+                resolved_by INTEGER,
+                decision TEXT,
+                decision_for_user_id INTEGER,
+                payment_action TEXT,
+                job_action TEXT,
+                sanction_user_id INTEGER,
+                sanction_type TEXT,
+                sanction_duration_minutes INTEGER
             )
-        except Exception:
-            pass
-
-        cursor.execute("PRAGMA table_info(ratings)")
-        existing_rating_cols = [row[1] for row in cursor.fetchall()]
-        cursor.execute("PRAGMA table_info(messages)")
-        existing_message_cols = [row[1] for row in cursor.fetchall()]
-        if "read_at" not in existing_message_cols:
-            try:
-                cursor.execute("ALTER TABLE messages ADD COLUMN read_at TEXT")
-            except Exception:
-                pass
-        if "attachment_url" not in existing_message_cols:
-            try:
-                cursor.execute("ALTER TABLE messages ADD COLUMN attachment_url TEXT DEFAULT ''")
-            except Exception:
-                pass
-        if "attachment_name" not in existing_message_cols:
-            try:
-                cursor.execute("ALTER TABLE messages ADD COLUMN attachment_name TEXT DEFAULT ''")
-            except Exception:
-                pass
-        if "attachment_type" not in existing_message_cols:
-            try:
-                cursor.execute("ALTER TABLE messages ADD COLUMN attachment_type TEXT DEFAULT ''")
-            except Exception:
-                pass
-
-        cursor.execute("PRAGMA table_info(reports)")
-        existing_report_cols = [row[1] for row in cursor.fetchall()]
-        if "message_id" not in existing_report_cols:
-            try:
-                cursor.execute("ALTER TABLE reports ADD COLUMN message_id INTEGER")
-            except Exception:
-                pass
-
-        if "created_at" not in existing_rating_cols:
-            try:
-                cursor.execute("ALTER TABLE ratings ADD COLUMN created_at TEXT")
-            except Exception:
-                pass
-
-        cursor.execute("PRAGMA table_info(portfolio_items)")
-        existing_portfolio_cols = [row[1] for row in cursor.fetchall()]
-        portfolio_migrations = [
-            ("file_url", "ALTER TABLE portfolio_items ADD COLUMN file_url TEXT DEFAULT ''"),
-            ("file_name", "ALTER TABLE portfolio_items ADD COLUMN file_name TEXT DEFAULT ''"),
-        ]
-        for col_name, sql in portfolio_migrations:
-            if col_name not in existing_portfolio_cols:
-                try:
-                    cursor.execute(sql)
-                except Exception:
-                    pass
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS recently_viewed(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                job_id INTEGER NOT NULL,
+                viewed_at TEXT NOT NULL,
+                UNIQUE(user_id,job_id)
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS saved_searches(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                filters TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(user_id,name)
+            )
+        """)
 
         # Database Indexes
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);")
@@ -664,6 +773,13 @@ class DB:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_payments_payer_status ON payments(payer_id,status,created_at);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_payments_payee_status ON payments(payee_id,status,created_at);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_payments_job_status ON payments(job_id,status);")
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_click_transaction
+            ON payments(provider_transaction_id)
+            WHERE provider='click'
+              AND provider_transaction_id IS NOT NULL
+              AND provider_transaction_id <> ''
+        """)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_wallet_transactions_user ON wallet_transactions(user_id,created_at);")
         duplicate_ratings = cursor.execute(
             """SELECT job_id,from_user,MIN(id)
@@ -687,7 +803,36 @@ class DB:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_ratings_job ON ratings(job_id);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read, created_at);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status, created_at);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_location_status_created ON jobs(location,status,created_at DESC,id DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_job_services_service_job ON job_services(service_id,job_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_disputes_job_status ON disputes(job_id,status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_disputes_opened_by ON disputes(opened_by,created_at DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_recently_viewed_user_viewed ON recently_viewed(user_id,viewed_at DESC,id DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_saved_searches_user_updated ON saved_searches(user_id,updated_at DESC,id DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_rating ON users(average_rating DESC)")
 
+
+        cursor.execute(
+            "UPDATE payments SET status='released',released_at=COALESCE(released_at,paid_at) "
+            "WHERE provider='dummy' AND status='paid' AND released_at IS NULL"
+        )
+        migration_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        cursor.execute(
+            "INSERT INTO schema_migrations(version,name,applied_at) VALUES(1,?,?)",
+            ("initial_postgresql_schema", migration_time),
+        )
+        cursor.execute(
+            "INSERT INTO schema_migrations(version,name,applied_at) VALUES(2,?,?)",
+            ("legacy_schema_columns", migration_time),
+        )
+        cursor.execute(
+            "INSERT INTO schema_migrations(version,name,applied_at) VALUES(3,?,?)",
+            ("exact_money_columns", migration_time),
+        )
+        cursor.execute(
+            "INSERT INTO schema_migrations(version,name,applied_at) VALUES(4,?,?)",
+            ("click_transaction_idempotency", migration_time),
+        )
         conn.commit()
         conn.close()
 
@@ -927,7 +1072,10 @@ class DB:
                 "INSERT INTO services(name,parent_id,created_by) VALUES(?,?,NULL)",
                 (name, parent_id)
             )
-            return cursor.lastrowid
+            inserted_row = cursor.fetchone()
+            if not inserted_row:
+                raise RuntimeError("PostgreSQL INSERT qaytargan ID topilmadi.")
+            return inserted_row[0]
 
         for root_name, groups in catalog.items():
             translated_root = service_translations.get(root_name, root_name)
@@ -948,9 +1096,10 @@ class DB:
         try:
             cursor.execute(sql, args)
             first_keyword = sql.lstrip().split(None, 1)[0].upper() if sql.strip() else ""
-            if first_keyword not in {"SELECT", "PRAGMA", "EXPLAIN"}:
+            is_read_query = first_keyword in {"SELECT", "PRAGMA", "EXPLAIN"}
+            if not is_read_query:
                 conn.commit()
-            return QueryResult(conn, cursor)
+            return QueryResult(conn, cursor, commit_on_close=is_read_query)
         except Exception:
             conn.rollback()
             cursor.close()
@@ -958,9 +1107,10 @@ class DB:
 
 
 class QueryResult:
-    def __init__(self, conn, cursor):
+    def __init__(self, conn, cursor, commit_on_close=False):
         self.conn = conn
         self.cursor = cursor
+        self.commit_on_close = commit_on_close
 
     def fetchone(self):
         row = self.cursor.fetchone()
@@ -983,6 +1133,8 @@ class QueryResult:
     def close(self):
         if self.cursor is not None:
             self.cursor.close()
+        if self.conn is not None and self.commit_on_close:
+            self.conn.commit()
         self.cursor = None
         self.conn = None
 
