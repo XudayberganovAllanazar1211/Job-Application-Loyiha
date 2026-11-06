@@ -160,8 +160,8 @@ class SQLiteToPostgreSQLMigrationTests(unittest.TestCase):
                     (199500, 199500.25),
                 )
                 source.execute(
-                    "INSERT INTO payments(id,job_id,amount,created_at) VALUES(39,26,?,?)",
-                    (199500.25, "2026-11-04T00:00:00+00:00"),
+                    "INSERT INTO payments(id,payment_uuid,job_id,amount,created_at) VALUES(39,?,26,?,?)",
+                    ("migration-payment-39", 199500.25, "2026-11-04T00:00:00+00:00"),
                 )
                 source.execute(
                     "INSERT INTO platform_wallet(id,balance,escrow_balance) VALUES(1,?,?)",
