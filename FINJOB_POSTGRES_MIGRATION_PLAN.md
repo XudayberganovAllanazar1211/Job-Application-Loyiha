@@ -52,7 +52,7 @@ Status meanings:
 - [~] Remove silent schema migration exception swallowing and move legacy columns into explicit schema versions.
 - [~] Add a guard against accidental empty-database bootstrap before the SQLite import.
 - [ ] Complete static review of all complex filters, aggregates, and transaction boundaries.
-- [~] Add PostgreSQL CI workflow and expand regression tests (including SQL translation and Click callback idempotency); the workflow run result has not yet been confirmed.
+- [x] Add PostgreSQL CI workflow and expand regression tests (including SQL translation and Click callback idempotency); PostgreSQL 16 integration CI and FinJob CI both passed on commit `bdaec0f`.
 
 ## 6. Payments, wallet, and escrow
 - [~] Remove runtime CREATE/ALTER TABLE statements from `payments.py`.
@@ -86,7 +86,7 @@ Status meanings:
 ## 9. Development deployment and end-to-end verification
 - [ ] Install dependencies in the local virtual environment.
 - [ ] Configure a separate PostgreSQL test database.
-- [~] Add a GitHub Actions workflow for syntax checks and PostgreSQL 16 integration tests; no completed run has been observed.
+- [x] Add a GitHub Actions workflow for syntax checks and PostgreSQL 16 integration tests; verified successful runs on commit `bdaec0f`.
 - [ ] Run the SQLite data migration against `finjob-development`.
 - [ ] Start Flask against Neon development.
 - [ ] Verify registration, login, jobs, proposals, chat, moderation, legal/community rules, Click callback, wallet, escrow, release, refund, and receipts.
@@ -109,4 +109,4 @@ Status meanings:
 - [x] Add concurrent release/refund regression tests that verify escrow and wallet ledgers are updated only once.
 - [x] Serialize dummy escrow payment attempts with a job-row lock and test that parallel requests create only one debit, escrow hold, and ledger row.
 - [x] Keep one canonical PostgreSQL 16 GitHub Actions workflow; it runs the dedicated SQL compatibility tests, importer fixture plus post-import schema migrations, and application regression suite.
-- [ ] Observe a successful CI run and fix any resulting failures before calling the implementation verified.
+- [x] Observe successful CI runs and fix the migration fixture and legacy CI PostgreSQL configuration; PostgreSQL integration CI and FinJob CI passed on commit `bdaec0f`.
