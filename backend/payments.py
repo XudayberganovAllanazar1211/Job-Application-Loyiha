@@ -91,7 +91,7 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
             value TEXT NOT NULL
         )""")
         conn.execute(
-            "INSERT OR IGNORE INTO platform_settings(key,value) VALUES('commission_percent','10')"
+            "INSERT OR IGNORE INTO platform_settings(key,value) VALUES('commission_percent','2')"
         )
         platform_columns = [row[1] for row in conn.execute("PRAGMA table_info(platform_wallet)").fetchall()]
         if "escrow_balance" not in platform_columns:
@@ -384,9 +384,9 @@ def register_payment_routes(app, db, auth, admin_required, create_notification, 
     def _commission_percent():
         try:
             row = db.q("SELECT value FROM platform_settings WHERE key='commission_percent'").fetchone()
-            value = float(row[0]) if row else 10
+            value = float(row[0]) if row else 2
         except (TypeError, ValueError):
-            value = 10
+            value = 2
         return max(0, min(100, value))
 
     def release_payment(job_id):

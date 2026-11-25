@@ -417,7 +417,7 @@ class JobPlatformTestCase(unittest.TestCase):
             headers={"Authorization": f"Bearer {token_admin}"}
         )
         self.assertEqual(overview.status_code, 200)
-        self.assertEqual(float(overview.get_json()["settings"]["commission_percent"]), 10.0)
+        self.assertEqual(float(overview.get_json()["settings"]["commission_percent"]), 2.0)
 
         updated = self.client.patch(
             "/admin/settings/commission",
@@ -511,7 +511,7 @@ class JobPlatformTestCase(unittest.TestCase):
         self.client.patch(
             "/admin/settings/commission",
             headers={"Authorization": f"Bearer {token_admin}"},
-            json={"commission_percent": 10}
+            json={"commission_percent": 2}
         )
 
     def test_07_notifications_read_flow(self):
@@ -1556,6 +1556,690 @@ class JobPlatformTestCase(unittest.TestCase):
 
         main.db.q("DELETE FROM payments WHERE payment_uuid=?", (payment_uuid,)).close()
         main.db.q("DELETE FROM jobs WHERE id=?", (job_id,)).close()
+
+
+# ---------------------------------------------------------------------------
+# Payme wallet top-up tests. Payme is always mocked: no network, no real credentials.
+# ---------------------------------------------------------------------------
+import json as _json
+import threading
+from unittest import mock
+
+import payme
+
+PAYME_TEST_ENV = {
+    "FINJOB_ENV": "development",
+    "PAYME_ENABLED": "1",
+    "PAYME_TEST_MODE": "1",
+    "PAYME_MERCHANT_ID": "4056281",
+    "PAYME_MERCHANT_KEY": "unit-test-secret-key",
+    "PAYME_CHECKOUT_BASE_URL": "https://pay.payme.uz",
+    "PAYME_CALLBACK_URL": "https://api.example.test/payments/payme/callback",
+    "PAYME_RESPONSE_URL": "https://api.example.test/wallet/deposits/return",
+    "PAYME_FRONTEND_RETURN_URL": "https://app.example.test/profile",
+}
+PAYME_KEY = PAYME_TEST_ENV["PAYME_MERCHANT_KEY"]
+
+
+class PaymeWalletTopUpTests(unittest.TestCase):
+    _seq = 0
+
+    _payment_counter = 700000000
+
+    @classmethod
+    def _next_payment_id(cls):
+        cls._payment_counter += 1
+        return cls._payment_counter
+
+    @classmethod
+    def setUpClass(cls):
+        cls.test_db_name = "test_payme.db"
+        cls.original_db = main.db
+        cls.original_db_name = cls.original_db.db_name
+        for suffix in ("", "-wal", "-shm"):
+            if os.path.exists(cls.test_db_name + suffix):
+                os.remove(cls.test_db_name + suffix)
+        DB(cls.test_db_name)
+        cls.original_db.db_name = cls.test_db_name
+        cls.original_send_email_code = main.send_email_code
+        main.send_email_code = lambda to_email, code: True
+        app.config["TESTING"] = True
+        cls.client = app.test_client()
+        cls.make_user("payme_first_admin")
+        main.db.q("UPDATE users SET role='admin' WHERE username='payme_first_admin'").close()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.original_db.db_name = cls.original_db_name
+        main.send_email_code = cls.original_send_email_code
+        for suffix in ("", "-wal", "-shm"):
+            try:
+                os.remove(cls.test_db_name + suffix)
+            except OSError:
+                pass
+
+    @classmethod
+    def make_user(cls, name):
+        email = f"{name}@example.com"
+        res = cls.client.post("/register/send-code", json={
+            "username": name, "password": "Password123!", "first_name": "T", "last_name": "U",
+            "birthday": "1999-01-01", "email": email,
+        })
+        assert res.status_code == 200, res.get_json()
+        code = pending_verifications[email]["code"]
+        assert cls.client.post("/register/verify", json={"email": email, "code": code}).status_code == 200
+        token = cls.client.post("/login", json={"username": name, "password": "Password123!"}).get_json()["token"]
+        uid = cls.client.get("/profile", headers={"Authorization": f"Bearer {token}"}).get_json()["id"]
+        return token, uid
+
+    def setUp(self):
+        with main._rate_lock:
+            main._rate_buckets.clear()
+        env = mock.patch.dict(os.environ, PAYME_TEST_ENV)
+        env.start()
+        self.addCleanup(env.stop)
+        self.sent = []
+        self.status_answer = None
+
+        def fake_post(url, body, timeout=15):
+            self.sent.append((url, body))
+            if url.endswith("/api/checkout/url"):
+                order_id = body["request"]["order_id"]
+                return {"response": {
+                    "response_status": "success", "payment_id": str(PaymeWalletTopUpTests._next_payment_id()),
+                    "checkout_url": f"https://pay.payme.uz/merchants/abc/default/index.html?token={order_id}",
+                }}
+            if self.status_answer:
+                return self.status_answer(body["request"]["order_id"])
+            return {"response": {"response_status": "failure", "error_code": 1002}}
+
+        patcher = mock.patch.object(payme, "_http_post_json", side_effect=fake_post)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        PaymeWalletTopUpTests._seq += 1
+        self.token, self.uid = self.make_user(f"payme_user_{PaymeWalletTopUpTests._seq}")
+
+    # ---- helpers
+    def auth(self, token=None):
+        return {"Authorization": f"Bearer {token or self.token}"}
+
+    def create_deposit(self, amount=250000, token=None, **extra):
+        return self.client.post("/wallet/deposits", headers=self.auth(token), json={"amount": amount, **extra})
+
+    def callback_payload(self, deposit_id, amount_uzs=250000, status="approved", sign=True, **override):
+        body = {
+            "rrn": "111111111111", "masked_card": "444455XXXXXX1111", "currency": "UZS", "fee": "",
+            "actual_amount": str(amount_uzs * 100) if status == "approved" else "",
+            "actual_currency": "UZS" if status == "approved" else "",
+            "order_status": status, "response_status": "success", "order_id": deposit_id,
+            "merchant_id": 4056281, "payment_id": 805243692, "amount": str(amount_uzs * 100),
+            "tran_type": "purchase", "response_description": "", "response_code": "",
+        }
+        body.update(override)
+        if sign:
+            body["signature"] = payme.payme_signature(PAYME_KEY, body)
+        return body
+
+    def send_callback(self, body):
+        return self.client.post("/payments/payme/callback", json=body)
+
+    def balance(self, uid=None):
+        return float(main.db.q("SELECT COALESCE(balance,0) FROM users WHERE id=?", (uid or self.uid,)).fetchone()[0])
+
+    def deposit_txs(self, uid=None):
+        return main.db.q(
+            "SELECT amount,balance_after FROM wallet_transactions WHERE user_id=? AND type='deposit'", (uid or self.uid,)
+        ).fetchall()
+
+    def deposit_status(self, deposit_id):
+        return main.db.q("SELECT status FROM wallet_deposits WHERE deposit_uuid=?", (deposit_id,)).fetchone()[0]
+
+    def pay(self, amount=250000, **override):
+        """Create a deposit and build the signed 'approved' callback Payme would send for it."""
+        dep = self.create_deposit(amount).get_json()
+        override.setdefault("payment_id", self._next_payment_id())
+        return dep["deposit_id"], self.callback_payload(dep["deposit_id"], amount, **override)
+
+    # ---- creation and validation
+    def test_create_deposit_builds_signed_payme_order_without_crediting(self):
+        res = self.create_deposit(250000)
+        self.assertEqual(res.status_code, 201, res.get_json())
+        data = res.get_json()
+        self.assertEqual(data["status"], "pending")
+        self.assertTrue(data["checkout_url"].startswith("https://pay.payme.uz/"))
+        url, body = self.sent[0]
+        self.assertTrue(url.endswith("/api/checkout/url"))
+        req = body["request"]
+        self.assertEqual(req["order_id"], data["deposit_id"])
+        self.assertEqual(req["amount"], 25000000)  # 250 000 UZS = 25 000 000 tiyin
+        self.assertEqual(req["currency"], "UZS")
+        self.assertEqual(req["merchant_id"], 4056281)
+        self.assertTrue(payme.verify_signature(PAYME_KEY, req))
+        self.assertEqual(self.balance(), 0)
+        row = main.db.q("SELECT user_id,amount_uzs,amount_minor,provider,status FROM wallet_deposits WHERE deposit_uuid=?",
+                        (data["deposit_id"],)).fetchone()
+        self.assertEqual(tuple(row), (self.uid, 250000, 25000000, "payme", "pending"))
+
+    def test_uzs_tiyin_conversion_is_explicit_and_single_step(self):
+        self.assertEqual(payme.TIYIN_PER_UZS, 100)
+        self.assertEqual(payme.uzs_to_tiyin(1000), 100000)  # docs: 100020 = 1000 UZS 20 tiyin
+        self.assertEqual(payme.uzs_to_tiyin(100000), 10000000)
+        dep = self.create_deposit(100000).get_json()
+        self.assertEqual(dep["amount"], 100000)  # API/UI stay in UZS
+        self.assertEqual(self.sent[0][1]["request"]["amount"], 10000000)  # Payme gets tiyin
+        row = main.db.q("SELECT amount_uzs,amount_minor FROM wallet_deposits WHERE deposit_uuid=?", (dep["deposit_id"],)).fetchone()
+        self.assertEqual(tuple(row), (100000, 10000000))
+        # Payme echoing UZS instead of tiyin (no x100) is a mismatch, never a credit
+        wrong_unit = self.callback_payload(dep["deposit_id"], 100000, amount="100000", actual_amount="100000", payment_id=11)
+        self.assertEqual(self.send_callback(wrong_unit).get_json()["status"], "amount_mismatch")
+        # double conversion (x10 000) is also rejected
+        double = self.callback_payload(dep["deposit_id"], 100000, amount="1000000000", actual_amount="1000000000", payment_id=11)
+        self.assertEqual(self.send_callback(double).get_json()["status"], "amount_mismatch")
+        # actual_amount must equal the stored tiyin amount too
+        bad_actual = self.callback_payload(dep["deposit_id"], 100000, actual_amount="9999999", payment_id=11)
+        self.assertEqual(self.send_callback(bad_actual).get_json()["status"], "actual_amount_mismatch")
+        self.assertEqual(self.balance(), 0)
+        ok = self.callback_payload(dep["deposit_id"], 100000, amount="10000000", actual_amount="10000000", payment_id=11)
+        self.assertEqual(self.send_callback(ok).status_code, 200)
+        self.assertEqual(self.balance(), 100000)  # exactly 100 000 UZS, not 10 000 000
+        self.assertEqual(float(self.deposit_txs()[0][0]), 100000.0)
+
+    def test_amount_limit_must_fit_payme_integer_12(self):
+        with mock.patch.dict(os.environ, {"PAYME_MAX_AMOUNT_UZS": "20000000000"}):
+            self.assertFalse(payme.load_config()["enabled"])
+
+    # ---- final callback-contract checks (HTTP codes, audit trail, retries)
+    def events(self, dep):
+        return main.db.q("SELECT source,order_status,outcome,http_status,flagged FROM wallet_deposit_events "
+                         "WHERE deposit_uuid=? ORDER BY id", (dep,)).fetchall()
+
+    def test_final_every_handled_callback_is_200_and_audited(self):
+        dep, body = self.pay(100000)
+        first = self.send_callback(body)
+        dup = self.send_callback(body)
+        self.assertEqual((first.status_code, dup.status_code), (200, 200))
+        self.assertEqual(len(self.deposit_txs()), 1)  # duplicate callback -> no second wallet transaction
+        rows = [tuple(r) for r in self.events(dep)]
+        self.assertEqual([(r[2], r[3], r[4]) for r in rows], [("credited", 200, 0), ("already_credited", 200, 0)])
+
+    def test_final_flagged_callbacks_are_persisted_and_answer_200(self):
+        dep, body = self.pay(100000)
+        self.send_callback(self.callback_payload(dep, 100000, status="declined", payment_id=body["payment_id"]))
+        late = self.send_callback(body)  # late approved after declined
+        self.assertEqual((late.status_code, late.get_json()["flagged"]), (200, True))
+        row = main.db.q("SELECT review_required,review_note FROM wallet_deposits WHERE deposit_uuid=?", (dep,)).fetchone()
+        self.assertEqual(row[0], 1)
+        self.assertIn("invalid_transition", row[1])
+        flagged = [tuple(r) for r in self.events(dep) if r[4] == 1]
+        self.assertEqual(len(flagged), 1)
+        self.assertEqual(flagged[0][2], "invalid_transition")
+        self.assertEqual(self.balance(), 0)
+        # the audit row holds no card data / secrets
+        cols = [c[1] for c in main.db.q("PRAGMA table_info(wallet_deposit_events)").fetchall()]
+        self.assertFalse({"masked_card", "signature", "payload", "card"} & set(cols))
+
+    def test_final_config_problems_and_db_errors_stay_retryable(self):
+        dep, body = self.pay(100000)
+        wrong_merchant = self.callback_payload(dep, 100000, merchant_id=999, payment_id=body["payment_id"])
+        self.assertEqual(self.send_callback(wrong_merchant).status_code, 400)  # operator-fixable: keep retries
+        with mock.patch.dict(os.environ, {"PAYME_ENABLED": "0"}):
+            self.assertEqual(self.send_callback(body).status_code, 503)
+        self.assertEqual(self.balance(), 0)
+        self.assertEqual(self.deposit_status(dep), "pending")
+
+    def test_final_partial_reversal_after_credit_is_flagged_without_debit(self):
+        dep, body = self.pay(100000)
+        self.assertEqual(self.send_callback(body).status_code, 200)
+        partial = self.callback_payload(dep, 100000, payment_id=body["payment_id"], reversal_amount="500000")
+        for _ in range(2):  # idempotent
+            res = self.send_callback(partial)
+            self.assertEqual((res.status_code, res.get_json()["status"]), (200, "reversal_flagged"))
+        self.assertEqual(self.balance(), 100000)
+        self.assertEqual(len(self.deposit_txs()), 1)
+        self.assertEqual(self.deposit_status(dep), "credited")
+        self.assertEqual(main.db.q("SELECT review_required FROM wallet_deposits WHERE deposit_uuid=?", (dep,)).fetchone()[0], 1)
+
+    def test_final_stale_processing_after_credit_is_harmless(self):
+        dep, body = self.pay(100000)
+        self.send_callback(body)
+        stale = self.callback_payload(dep, 100000, status="processing", payment_id=body["payment_id"])
+        res = self.send_callback(stale)
+        self.assertEqual((res.status_code, res.get_json()["status"]), (200, "stale_ignored"))
+        self.assertEqual(self.deposit_status(dep), "credited")
+        self.assertEqual(main.db.q("SELECT review_required FROM wallet_deposits WHERE deposit_uuid=?", (dep,)).fetchone()[0], 0)
+
+    def test_final_callback_never_redirects(self):
+        dep, body = self.pay(100000)
+        res = self.send_callback(body)
+        self.assertNotIn(res.status_code, (301, 302, 303, 307, 308))
+        self.assertNotIn("Location", res.headers)
+
+    def test_signature_follows_documented_algorithm(self):
+        # docs.payme.uz/api/building-signature documents this exact string for this request.
+        params = {"server_callback_url": "http://myshop/callback/", "order_id": "TestOrder2", "currency": "UZS",
+                  "merchant_id": 4056281, "order_desc": "Test payment", "amount": 1000}
+        self.assertEqual(payme.payme_signature_string("test", params),
+                         "test|1000|UZS|4056281|Test payment|TestOrder2|http://myshop/callback/")
+        # NOTE: the digest printed in the docs (91ea7da4...) does not equal sha1 of that string; we follow the
+        # documented algorithm and the documented string layout and must confirm against the test merchant.
+        self.assertEqual(payme.payme_signature("test", params), "e93ea1bf30004ce83308ccd390d12bc39bb10c37")
+        # empty / null values are skipped, signature fields are excluded
+        self.assertEqual(payme.payme_signature_string("k", {"b": "", "a": 1, "c": None, "signature": "x"}), "k|1")
+
+    def test_signature_string_layout_matches_documented_callback_sample(self):
+        # Callback sample from docs.payme.uz/api/callbacks (key masked as ********** in the docs).
+        sample = {
+            "rrn": "111111111111", "masked_card": "444455XXXXXX1111", "sender_cell_phone": "", "sender_account": "",
+            "currency": "UZS", "fee": "", "reversal_amount": "0", "settlement_amount": "0", "actual_amount": "200",
+            "response_description": "", "sender_email": "test@test.com", "order_status": "approved",
+            "response_status": "success", "order_time": "13.07.2024 01:23:59", "actual_currency": "UZS",
+            "order_id": "test33694502191", "tran_type": "purchase", "eci": "5", "settlement_date": "",
+            "payment_system": "card", "approval_code": "123456", "merchant_id": 4056281, "settlement_currency": "",
+            "payment_id": 805243692, "card_bin": 444455, "response_code": "", "card_type": "VISA", "amount": "200",
+            "signature": "b7884b5c4906956fbac4d20390388d913a78c0b0", "product_id": "", "merchant_data": "Test merchant data",
+            "rectoken": "", "rectoken_lifetime": "", "verification_status": "", "parent_order_id": "", "fee_oplata": "0",
+            "additional_info": "{\"capture_status\": null, \"is_test\": true}",
+        }
+        docs_string = ("KEY|200|UZS|{\"capture_status\": null, \"is_test\": true}|200|123456|444455|VISA|UZS|5|0|"
+                       "444455XXXXXX1111|Test merchant data|4056281|test33694502191|approved|13.07.2024 01:23:59|"
+                       "805243692|card|success|0|111111111111|test@test.com|0|purchase")
+        self.assertEqual(payme.payme_signature_string("KEY", sample), docs_string)
+
+    def test_unauthenticated_deposit_rejected(self):
+        res = self.client.post("/wallet/deposits", json={"amount": 100000})
+        self.assertEqual(res.status_code, 401)
+        self.assertEqual(self.sent, [])
+
+    def test_invalid_amounts_rejected(self):
+        for bad in (0, -1000, 1.5, "abc", "12.5", 999, 50_000_001, True, None, [], {}, "1e9"):
+            with main._rate_lock:
+                main._rate_buckets.clear()
+            res = self.create_deposit(bad)
+            self.assertEqual(res.status_code, 400, f"{bad!r} -> {res.status_code}")
+        self.assertEqual(self.client.post("/wallet/deposits", headers=self.auth(), json={}).status_code, 400)
+        self.assertEqual(self.sent, [])
+        self.assertEqual(main.db.q("SELECT COUNT(*) FROM wallet_deposits WHERE user_id=?", (self.uid,)).fetchone()[0], 0)
+
+    def test_cannot_deposit_into_or_read_another_users_wallet(self):
+        other_token, other_uid = self.make_user(f"payme_other_{PaymeWalletTopUpTests._seq}")
+        res = self.create_deposit(100000, user_id=other_uid)
+        self.assertEqual(res.status_code, 403)
+        self.assertEqual(main.db.q("SELECT COUNT(*) FROM wallet_deposits WHERE user_id=?", (other_uid,)).fetchone()[0], 0)
+        mine, body = self.pay(100000)
+        self.assertEqual(self.client.get(f"/wallet/deposits/{mine}", headers=self.auth(other_token)).status_code, 404)
+        self.assertEqual(self.client.get(f"/wallet/deposits/{mine}", headers=self.auth()).status_code, 200)
+        self.assertEqual(len(self.client.get("/wallet/deposits", headers=self.auth(other_token)).get_json()), 0)
+        self.send_callback(body)
+        self.assertEqual(self.balance(other_uid), 0)
+        self.assertEqual(self.balance(), 100000)
+
+    def test_integration_fails_safe_without_explicit_configuration(self):
+        for removal in ("PAYME_ENABLED", "PAYME_MERCHANT_KEY", "PAYME_TEST_MODE", "PAYME_CALLBACK_URL"):
+            with mock.patch.dict(os.environ, PAYME_TEST_ENV):
+                os.environ.pop(removal, None)
+                self.assertEqual(self.create_deposit().status_code, 503, removal)
+        self.assertEqual(self.sent, [])
+
+    def test_test_mode_and_test_merchant_refused_in_production(self):
+        with mock.patch.dict(os.environ, {"FINJOB_ENV": "production"}):
+            self.assertFalse(payme.load_config()["enabled"])
+            self.assertEqual(self.create_deposit().status_code, 503)
+        with mock.patch.dict(os.environ, {"FINJOB_ENV": "production", "PAYME_TEST_MODE": "0"}):
+            self.assertFalse(payme.load_config()["enabled"])  # public test merchant id in live mode
+        live_ok = {"FINJOB_ENV": "production", "PAYME_TEST_MODE": "0", "PAYME_MERCHANT_ID": "123456"}
+        with mock.patch.dict(os.environ, live_ok):
+            self.assertTrue(payme.load_config()["enabled"])
+
+    def test_test_deposit_cannot_be_completed_in_live_mode(self):
+        dep = self.create_deposit(100000).get_json()["deposit_id"]
+        with mock.patch.dict(os.environ, {"PAYME_TEST_MODE": "0", "PAYME_MERCHANT_ID": "123456"}):
+            res = self.send_callback(self.callback_payload(dep, 100000, merchant_id=123456))
+            self.assertEqual(res.status_code, 400)
+        self.assertEqual(self.balance(), 0)
+
+    # ---- callback authentication / validation
+    def test_callback_authentication_failures(self):
+        dep = self.create_deposit(100000).get_json()["deposit_id"]
+        self.assertEqual(self.send_callback(self.callback_payload(dep, 100000, sign=False)).status_code, 403)
+        wrong_sig = self.callback_payload(dep, 100000)
+        wrong_sig["signature"] = "0" * 40
+        self.assertEqual(self.send_callback(wrong_sig).status_code, 403)
+        tampered = self.callback_payload(dep, 100000)
+        tampered["amount"] = "1"  # tampered after signing
+        self.assertEqual(self.send_callback(tampered).status_code, 403)
+        wrong_key = self.callback_payload(dep, 100000, sign=False)
+        wrong_key["signature"] = payme.payme_signature("some-other-key", wrong_key)
+        self.assertEqual(self.send_callback(wrong_key).status_code, 403)
+        self.assertEqual(self.client.post("/payments/payme/callback", data="not json",
+                                          content_type="application/json").status_code, 400)
+        self.assertEqual(self.client.post("/payments/payme/callback", json=[1, 2]).status_code, 400)
+        self.assertEqual(self.balance(), 0)
+        self.assertEqual(self.deposit_status(dep), "pending")
+
+    def test_callback_rejected_when_integration_disabled(self):
+        dep, body = self.pay(100000)
+        with mock.patch.dict(os.environ, {"PAYME_ENABLED": "0"}):
+            self.assertEqual(self.send_callback(body).status_code, 503)
+        self.assertEqual(self.balance(), 0)
+
+    def test_callback_rejects_incorrect_amount_merchant_currency_and_payment_id(self):
+        dep = self.create_deposit(100000).get_json()["deposit_id"]
+        cases = [
+            self.callback_payload(dep, 100000, amount="9999999"),
+            self.callback_payload(dep, 100000, amount="10000000", actual_amount="1"),
+            self.callback_payload(dep, 100000, actual_currency="USD"),  # (wrong merchant_id stays 400/retryable: see final tests)
+            self.callback_payload(dep, 100000, currency="USD"),
+            self.callback_payload(dep, 100000, payment_id="not-a-number"),
+            self.callback_payload(dep, 100000, order_status="mystery"),
+        ]
+        for body in cases:
+            res = self.send_callback(body)
+            self.assertEqual(res.status_code, 200, body)  # signed + handled: 200 stops Payme retries
+            self.assertTrue(res.get_json()["flagged"], body)
+        self.assertEqual(self.balance(), 0)
+        self.assertEqual(self.deposit_status(dep), "pending")
+
+    def test_callback_rejects_unknown_merchant_transaction_id(self):
+        for order_id in ("a" * 32, "unknown-order", "", "1' OR '1'='1"):
+            res = self.send_callback(self.callback_payload(order_id, 100000))
+            self.assertEqual(res.status_code, 200, order_id)
+            self.assertTrue(res.get_json()["flagged"])
+            self.assertEqual(res.get_json()["status"], "unknown_order")
+        self.assertEqual(self.balance(), 0)
+
+    def test_callback_rejects_mismatching_provider_payment_id(self):
+        dep, body = self.pay(100000)
+        processing = self.callback_payload(dep, 100000, status="processing", payment_id=body["payment_id"])
+        self.assertEqual(self.send_callback(processing).status_code, 200)  # first signed event fixes the id
+        res = self.send_callback(self.callback_payload(dep, 100000, payment_id=1))
+        self.assertEqual((res.status_code, res.get_json()["status"]), (200, "payment_id_mismatch"))
+        self.assertEqual(self.balance(), 0)
+
+    def test_audit_non_ascii_signature_is_rejected_not_500(self):
+        dep, body = self.pay(100000)
+        res = self.send_callback(dict(body, signature="\u00e9\u4e2d" * 10))
+        self.assertEqual(res.status_code, 403)
+        self.assertEqual(self.balance(), 0)
+
+    def test_audit_response_status_must_be_success(self):
+        dep, body = self.pay(100000)
+        for bad in ("failure", "", "weird"):
+            res = self.send_callback(self.callback_payload(dep, 100000, payment_id=body["payment_id"], response_status=bad))
+            self.assertEqual((res.status_code, res.get_json()["flagged"]), (200, True), bad)
+        self.assertEqual(self.balance(), 0)
+        self.assertEqual(self.deposit_status(dep), "pending")
+
+    def test_audit_approved_with_reversal_amount_is_not_credited(self):
+        dep, body = self.pay(100000, reversal_amount="500")
+        res = self.send_callback(body)
+        self.assertEqual((res.status_code, res.get_json()["status"]), (200, "reversal_present"))
+        self.assertEqual(self.balance(), 0)
+        self.assertEqual(main.db.q("SELECT review_required FROM wallet_deposits WHERE deposit_uuid=?", (dep,)).fetchone()[0], 1)
+        # "0" reversal (as in the documented sample) is normal
+        dep2, body2 = self.pay(100000, reversal_amount="0")
+        self.assertEqual(self.send_callback(body2).status_code, 200)
+        self.assertEqual(self.balance(), 100000)
+
+    def test_audit_order_request_has_no_version_and_payment_id_not_stored_at_creation(self):
+        dep, _ = self.pay(100000)
+        req = self.sent[0][1]["request"]
+        self.assertNotIn("version", req)
+        self.assertEqual(req["delayed"], "N")
+        self.assertIsNone(main.db.q("SELECT provider_payment_id FROM wallet_deposits WHERE deposit_uuid=?", (dep,)).fetchone()[0])
+
+    # ---- success path, idempotency
+    def test_successful_callback_credits_wallet_exactly_once_with_history(self):
+        dep, body = self.pay(250000)
+        res = self.send_callback(body)
+        self.assertEqual(res.status_code, 200, res.get_json())
+        self.assertEqual(res.get_json()["status"], "credited")
+        self.assertEqual(self.balance(), 250000)
+        txs = self.deposit_txs()
+        self.assertEqual(len(txs), 1)
+        self.assertEqual(float(txs[0][0]), 250000.0)
+        self.assertEqual(float(txs[0][1]), 250000.0)
+        self.assertEqual(self.deposit_status(dep), "credited")
+        wallet = self.client.get("/wallet", headers=self.auth()).get_json()
+        self.assertEqual(wallet["balance"], 250000)
+        self.assertEqual([t["type"] for t in wallet["transactions"]], ["deposit"])
+        status = self.client.get(f"/wallet/deposits/{dep}", headers=self.auth()).get_json()
+        self.assertEqual(status["status"], "credited")
+        self.assertIsNotNone(status["credited_at"])
+
+    def test_duplicate_callbacks_are_idempotent(self):
+        dep, body = self.pay(100000)
+        results = [self.send_callback(body) for _ in range(4)]
+        self.assertTrue(all(r.status_code == 200 for r in results))
+        self.assertEqual([r.get_json()["status"] for r in results], ["credited"] + ["already_credited"] * 3)
+        self.assertEqual(self.balance(), 100000)
+        self.assertEqual(len(self.deposit_txs()), 1)
+
+    def test_concurrent_callbacks_credit_once(self):
+        dep, body = self.pay(300000)
+        codes = []
+
+        def hit():
+            with app.test_client() as c:
+                codes.append(c.post("/payments/payme/callback", json=body).status_code)
+
+        threads = [threading.Thread(target=hit) for _ in range(6)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertTrue(all(code in (200, 500) for code in codes), codes)
+        self.assertIn(200, codes)
+        self.assertEqual(self.balance(), 300000)
+        self.assertEqual(len(self.deposit_txs()), 1)
+
+    def test_processing_then_approved_flow(self):
+        dep, body = self.pay(120000)
+        processing = self.callback_payload(dep, 120000, status="processing", payment_id=body["payment_id"])
+        self.assertEqual(self.send_callback(processing).status_code, 200)
+        self.assertEqual(self.deposit_status(dep), "processing")
+        self.assertEqual(self.balance(), 0)
+        self.assertEqual(self.send_callback(body).status_code, 200)
+        self.assertEqual(self.balance(), 120000)
+
+    def test_two_deposits_are_independent(self):
+        dep1, body1 = self.pay(100000)
+        dep2, body2 = self.pay(150000)
+        self.send_callback(body1)
+        self.send_callback(body2)
+        self.send_callback(body1)
+        self.assertEqual(self.balance(), 250000)
+        self.assertEqual(len(self.deposit_txs()), 2)
+
+    # ---- invalid transitions, cancel, expiry
+    def test_declined_deposits_never_credit(self):
+        dep, body = self.pay(100000)
+        declined = self.callback_payload(dep, 100000, status="declined", payment_id=body["payment_id"],
+                                         response_description="General decline", response_code=1000)
+        self.assertEqual(self.send_callback(declined).status_code, 200)
+        self.assertEqual(self.send_callback(declined).status_code, 200)  # idempotent
+        self.assertEqual(self.deposit_status(dep), "declined")
+        self.assertEqual(self.balance(), 0)
+        self.assertEqual(self.deposit_txs(), [])
+        row = main.db.q("SELECT cancelled_at,cancel_reason FROM wallet_deposits WHERE deposit_uuid=?", (dep,)).fetchone()
+        self.assertTrue(row[0] and row[1])
+
+    def test_invalid_state_transitions_are_rejected_and_flagged(self):
+        dep, body = self.pay(100000)  # declined -> approved
+        self.send_callback(self.callback_payload(dep, 100000, status="declined", payment_id=body["payment_id"]))
+        res = self.send_callback(body)
+        self.assertEqual((res.status_code, res.get_json()["status"]), (200, "invalid_transition"))
+        self.assertEqual(self.balance(), 0)
+        self.assertEqual(main.db.q("SELECT review_required FROM wallet_deposits WHERE deposit_uuid=?", (dep,)).fetchone()[0], 1)
+        dep2, body2 = self.pay(50000)  # credited -> declined/expired must not alter the credit
+        self.assertEqual(self.send_callback(body2).status_code, 200)
+        for late in ("declined", "expired"):
+            res = self.send_callback(self.callback_payload(dep2, 50000, status=late, payment_id=body2["payment_id"]))
+            self.assertEqual((res.status_code, res.get_json()["status"]), (200, "invalid_transition"))
+        self.assertEqual(self.deposit_status(dep2), "credited")
+        self.assertEqual(self.balance(), 50000)
+
+    def test_expired_order_cannot_be_completed_afterwards(self):
+        dep, body = self.pay(100000)
+        expired = self.callback_payload(dep, 100000, status="expired", payment_id=body["payment_id"])
+        self.assertEqual(self.send_callback(expired).status_code, 200)
+        self.assertEqual(self.deposit_status(dep), "expired")
+        res = self.send_callback(body)  # late approved after expired: not credited, flagged, 200 (no endless retries)
+        self.assertEqual((res.status_code, res.get_json()["status"]), (200, "invalid_transition"))
+        self.assertEqual(self.balance(), 0)
+        self.assertEqual(self.deposit_txs(), [])
+        self.assertEqual(main.db.q("SELECT review_required FROM wallet_deposits WHERE deposit_uuid=?", (dep,)).fetchone()[0], 1)
+
+    def test_reversal_after_credit_is_flagged_not_auto_debited(self):
+        dep, body = self.pay(100000)
+        self.send_callback(body)
+        rev = self.callback_payload(dep, 100000, status="reversed", payment_id=body["payment_id"])
+        self.assertEqual(self.send_callback(rev).status_code, 200)
+        self.assertEqual(self.deposit_status(dep), "reversed")
+        self.assertEqual(self.balance(), 100000)
+        self.assertEqual(main.db.q("SELECT review_required FROM wallet_deposits WHERE deposit_uuid=?", (dep,)).fetchone()[0], 1)
+        self.assertEqual(len(self.deposit_txs()), 1)
+
+    # ---- atomicity
+    def test_credit_is_atomic_and_rolls_back_on_failure(self):
+        dep, body = self.pay(100000)
+        conn = main.db.get_connection()
+        conn.execute("""CREATE TRIGGER fail_deposit_tx BEFORE INSERT ON wallet_transactions
+                        WHEN NEW.type='deposit' BEGIN SELECT RAISE(ABORT,'boom'); END""")
+        conn.commit()
+        try:
+            with self.assertLogs(app.logger, level="ERROR"):
+                res = self.send_callback(body)
+            self.assertEqual(res.status_code, 500)
+            self.assertEqual(self.balance(), 0)
+            self.assertEqual(self.deposit_status(dep), "pending")
+        finally:
+            conn.execute("DROP TRIGGER fail_deposit_tx")
+            conn.commit()
+            conn.close()
+        self.assertEqual(self.send_callback(body).status_code, 200)  # Payme's retry succeeds
+        self.assertEqual(self.balance(), 100000)
+        self.assertEqual(len(self.deposit_txs()), 1)
+
+    # ---- browser return / status reconciliation
+    def test_browser_return_never_credits(self):
+        dep = self.create_deposit(100000).get_json()["deposit_id"]
+        res = self.client.post(f"/wallet/deposits/return?deposit={dep}", data={"order_status": "approved", "amount": "10000000"})
+        self.assertEqual(res.status_code, 303)
+        self.assertEqual(res.headers["Location"], f"https://app.example.test/profile?payme_deposit={dep}")
+        res = self.client.get("/wallet/deposits/return?deposit=https://evil.example")
+        self.assertEqual(res.headers["Location"], "https://app.example.test/profile")
+        self.assertEqual(self.balance(), 0)
+        self.assertEqual(self.deposit_status(dep), "pending")
+
+    def test_status_endpoint_reconciles_with_signed_payme_status_response(self):
+        dep, body = self.pay(100000)
+
+        def answer(order_id):
+            resp = {k: v for k, v in body.items() if k != "signature"}
+            resp["signature"] = payme.payme_signature(PAYME_KEY, resp)
+            return {"response": resp}
+
+        self.status_answer = answer
+        status = self.client.get(f"/wallet/deposits/{dep}", headers=self.auth()).get_json()
+        self.assertEqual(status["status"], "credited")
+        self.assertEqual(self.balance(), 100000)
+        self.client.get(f"/wallet/deposits/{dep}", headers=self.auth())
+        self.assertEqual(len(self.deposit_txs()), 1)
+
+    def test_status_endpoint_ignores_unsigned_payme_status_response(self):
+        dep, body = self.pay(100000)
+        forged = {k: v for k, v in body.items() if k != "signature"}
+        forged["signature"] = "f" * 40
+        self.status_answer = lambda order_id: {"response": forged}
+        status = self.client.get(f"/wallet/deposits/{dep}", headers=self.auth()).get_json()
+        self.assertEqual(status["status"], "pending")
+        self.assertEqual(self.balance(), 0)
+
+    def test_payme_failure_marks_deposit_failed_and_credits_nothing(self):
+        with mock.patch.object(payme, "_http_post_json", side_effect=OSError("network down")):
+            res = self.create_deposit(100000)
+        self.assertEqual(res.status_code, 502)
+        row = main.db.q("SELECT status FROM wallet_deposits WHERE user_id=?", (self.uid,)).fetchone()
+        self.assertEqual(row[0], "failed")
+        self.assertEqual(self.balance(), 0)
+
+    def test_checkout_url_on_unexpected_host_is_refused(self):
+        evil = {"response": {"response_status": "success", "checkout_url": "https://evil.example/pay", "payment_id": "1"}}
+        with mock.patch.object(payme, "_http_post_json", return_value=evil):
+            self.assertEqual(self.create_deposit(100000).status_code, 502)
+
+    def test_open_deposit_limit(self):
+        for _ in range(5):
+            self.assertEqual(self.create_deposit(100000).status_code, 201)
+        self.assertEqual(self.create_deposit(100000).status_code, 429)
+
+    def test_unique_provider_payment_id_constraint(self):
+        dep1, body1 = self.pay(100000)
+        self.assertEqual(self.send_callback(body1).status_code, 200)  # signed callback stores the id
+        dep2 = self.create_deposit(100000).get_json()["deposit_id"]
+        with self.assertRaises(Exception):
+            main.db.q("UPDATE wallet_deposits SET provider_payment_id=? WHERE deposit_uuid=?",
+                      (str(body1["payment_id"]), dep2)).close()
+
+    def test_deposit_config_exposes_no_secrets(self):
+        data = self.client.get("/wallet/deposit-config", headers=self.auth()).get_json()
+        self.assertTrue(data["enabled"])
+        self.assertNotIn(PAYME_KEY, _json.dumps(data))
+        self.assertNotIn("merchant_key", data)
+
+    def test_invalid_signature_log_contains_no_secrets(self):
+        dep, body = self.pay(100000)
+        with self.assertLogs(app.logger, level="WARNING") as captured:
+            self.send_callback(dict(body, signature="0" * 40))
+        joined = "\n".join(captured.output)
+        self.assertNotIn(PAYME_KEY, joined)
+        self.assertNotIn("0" * 40, joined)
+
+    # ---- existing wallet / escrow / refund behaviour on top of a Payme deposit
+    def test_deposit_then_job_payment_release_refund_and_history(self):
+        creator_token, creator_id = self.token, self.uid
+        worker_token, worker_id = self.make_user(f"payme_worker_{PaymeWalletTopUpTests._seq}")
+        dep, body = self.pay(1000000)
+        self.assertEqual(self.send_callback(body).status_code, 200)
+
+        def make_job(title, price):
+            self.client.post("/job", headers=self.auth(creator_token), json={
+                "service_id": 1, "title": title, "description": "Payme E2E job", "price": price, "location": "Remote"})
+            jobs = self.client.get("/jobs", headers=self.auth(creator_token)).get_json()
+            job_id = [j["id"] for j in jobs if j["title"] == title][0]
+            self.assertEqual(self.client.post("/accept_job", headers=self.auth(worker_token), json={"job_id": job_id}).status_code, 200)
+            return job_id
+
+        # job paid from wallet balance (escrow hold), then released to the worker at the configured commission
+        job_id = make_job("Payme E2E release", 500000)
+        pay = self.client.post(f"/payments/dummy/{job_id}", headers=self.auth(creator_token))
+        self.assertEqual(pay.status_code, 200, pay.get_json())
+        self.assertEqual(self.balance(creator_id), 500000)
+        self.client.post("/finish_job", headers=self.auth(creator_token), json={"job_id": job_id})
+        fin = self.client.post("/finish_job", headers=self.auth(worker_token), json={"job_id": job_id})
+        self.assertTrue(fin.get_json()["finished"])
+        commission = float(main.db.q("SELECT value FROM platform_settings WHERE key='commission_percent'").fetchone()[0])
+        self.assertEqual(commission, 2.0)  # fresh-install default
+        self.assertAlmostEqual(self.balance(worker_id), 500000 * (1 - commission / 100), places=2)
+
+        # refund path returns held funds to the payer
+        job2 = make_job("Payme E2E refund", 200000)
+        self.assertEqual(self.client.post(f"/payments/dummy/{job2}", headers=self.auth(creator_token)).status_code, 200)
+        self.assertEqual(self.balance(creator_id), 300000)
+        admin_token = self.client.post("/login", json={"username": "payme_first_admin", "password": "Password123!"}).get_json()["token"]
+        refund = self.client.post(f"/payments/refund/{job2}", headers=self.auth(admin_token))
+        self.assertEqual(refund.status_code, 200, refund.get_json())
+        self.assertEqual(self.balance(creator_id), 500000)
+
+        # history: deposit + hold + refund for the creator, nothing lost
+        types = [t["type"] for t in self.client.get("/wallet", headers=self.auth(creator_token)).get_json()["transactions"]]
+        for expected in ("deposit", "payment_hold", "payment_refund"):
+            self.assertIn(expected, types)
+        self.assertEqual(types.count("deposit"), 1)
+
+    def test_non_admin_cannot_top_up_wallets_directly(self):
+        self.assertEqual(self.client.post("/admin/wallet/1", headers=self.auth(), json={"amount": 1000}).status_code, 403)
+        self.assertEqual(self.balance(), 0)
 
 
 if __name__ == "__main__":
