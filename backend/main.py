@@ -1195,7 +1195,7 @@ def notify_matching_users(job_id, job_title, creator_id):
 
 
 register_payment_routes(app, db, auth, admin_required, create_notification, admin_audit, enforce_block)
-register_payme_routes(app, db, auth, create_notification, enforce_block)
+register_payme_routes(app, db, auth, create_notification, enforce_block, admin_required=admin_required)
 
 @app.route("/notifications")
 @auth
@@ -1963,6 +1963,18 @@ def admin_delete_user(user_id):
     if held_payment:
         return jsonify({"msg": "Bu foydalanuvchiga tegishli waiting to‘lovi mavjud. Avval ishni refund yoki yakunlash orqali hal qiling."}), 409
 
+    # Payme deposits reference users(id). Keep every record where money moved, may still move, or needs review.
+    has_deposit_table = bool(db.q(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='wallet_deposits'"
+    ).fetchone())
+    if has_deposit_table and db.q(
+        """SELECT 1 FROM wallet_deposits
+           WHERE user_id=? AND (status IN ('pending','processing','credited','reversed') OR review_required=1)
+           LIMIT 1""",
+        (user_id,),
+    ).fetchone():
+        return jsonify({"msg": "Bu foydalanuvchida Payme orqali to‘ldirish tarixi yoki kutilayotgan to‘lov bor. Moliyaviy yozuvlarni saqlash uchun hisobni o‘chirish o‘rniga bloklang."}), 409
+
     profile_files_to_remove = []
     profile_row = db.q("SELECT avatar_url FROM users WHERE id=?", (user_id,)).fetchone()
     if profile_row and profile_row[0]:
@@ -2001,6 +2013,12 @@ def admin_delete_user(user_id):
         cur.execute("DELETE FROM job_services WHERE job_id IN (SELECT id FROM jobs WHERE user_id=? OR worker_id=?)", (user_id, user_id))
         cur.execute("DELETE FROM jobs WHERE user_id=? OR worker_id=?", (user_id, user_id))
         cur.execute("UPDATE services SET created_by=NULL WHERE created_by=?", (user_id,))
+        if has_deposit_table:  # only deposits where no money moved (failed/expired/declined/cancelled) remain here
+            cur.execute(
+                "DELETE FROM wallet_deposits WHERE user_id=? AND status IN ('failed','expired','declined','cancelled') "
+                "AND review_required=0",
+                (user_id,),
+            )
         cur.execute("DELETE FROM users WHERE id=?", (user_id,))
         conn.commit()
     except Exception:

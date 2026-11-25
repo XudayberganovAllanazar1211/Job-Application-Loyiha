@@ -28,4 +28,6 @@ Thumbs.db
 
 # Local SQLite databases
 **/*.db
+**/*.db-wal
+**/*.db-shm
 **/uploads/

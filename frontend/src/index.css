@@ -1479,10 +1479,16 @@ html[data-theme="dark"] .notification-head>div>span{
 .profile-deposit-method small,.profile-deposit-test{color:#64748b;font-weight:500}
 .profile-deposit-error{display:block;margin-top:8px;color:#b91c1c;font-weight:700}
 .profile-deposit-status{position:relative;z-index:1;margin-top:14px;padding:12px 14px;border-radius:12px;font-weight:700;background:#eff6ff;color:#1e3a8a}
-.profile-deposit-status.credited{background:#ecfdf5;color:#065f46}
-.profile-deposit-status.declined,.profile-deposit-status.expired,.profile-deposit-status.cancelled,.profile-deposit-status.failed,.profile-deposit-status.error,.profile-deposit-status.reversed{background:#fef2f2;color:#991b1b}
+.profile-deposit-status.success{background:#ecfdf5;color:#065f46}
+.profile-deposit-status.warning{background:#fffbeb;color:#92400e}
+.profile-deposit-status.error{background:#fef2f2;color:#991b1b}
+.profile-deposit-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.profile-deposit-disabled{color:#64748b;font-weight:600}
 html[data-theme="dark"] .profile-deposit-status{background:rgba(37,99,235,.18);color:#bfdbfe}
-html[data-theme="dark"] .profile-deposit-status.credited{background:rgba(16,185,129,.16);color:#a7f3d0}
+html[data-theme="dark"] .profile-deposit-status.success{background:rgba(16,185,129,.16);color:#a7f3d0}
+html[data-theme="dark"] .profile-deposit-status.warning{background:rgba(245,158,11,.16);color:#fde68a}
+html[data-theme="dark"] .profile-deposit-status.error{background:rgba(239,68,68,.16);color:#fecaca}
+html[data-theme="dark"] .profile-deposit-disabled{color:#94a3b8}
 html[data-theme="dark"] .profile-deposit-method small,html[data-theme="dark"] .profile-deposit-test{color:#94a3b8}
 @media (max-width:640px){.profile-wallet-deposit-btn{width:100%}}
 .profile-withdraw-box{

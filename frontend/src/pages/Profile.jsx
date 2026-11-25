@@ -1,6 +1,16 @@
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import AppLayout from "../components/AppLayout"
 import { api } from "../api"
+import {
+    DEPOSIT_ID_RE,
+    depositStatusMessage,
+    isOpenDeposit,
+    isSafeCheckoutUrl,
+    normalizeDepositResponse,
+    pickResumableDeposit,
+    trackDeposit,
+    validateDepositAmount,
+} from "../paymeDeposit"
 
 function buildServiceTree(services) {
     const nodes = Object.fromEntries(services.map((service) => [
@@ -102,6 +112,12 @@ export default function Profile() {
     const [depositError, setDepositError] = useState("")
     const [depositConfig, setDepositConfig] = useState(null)
     const [depositTracking, setDepositTracking] = useState(null)
+    const depositRunRef = useRef(0)
+    // Read once, so React StrictMode's second effect run (dev) still sees the id after the URL is cleaned.
+    const [returnDepositId] = useState(() => {
+        const id = new URLSearchParams(window.location.search).get("payme_deposit") || ""
+        return DEPOSIT_ID_RE.test(id) ? id : ""
+    })
     const cropImageRef = useRef(null)
     const cropAreaRef = useRef(null)
     const cropDragRef = useRef({ x: 0, y: 0, startX: 0, startY: 0 })
@@ -172,44 +188,47 @@ export default function Profile() {
         loadDepositConfig()
     }, [])
 
-    // Returning from Payme: ?payme_deposit=<id>. The URL is never trusted; we ask the backend for the real status.
-    useEffect(() => {
-        const params = new URLSearchParams(window.location.search)
-        const depositId = params.get("payme_deposit") || ""
-        if (!/^[0-9a-f]{32}$/.test(depositId)) return undefined
-        window.history.replaceState({}, "", window.location.pathname)
-        let cancelled = false
-        let attempts = 0
-        let timer = null
-        const poll = async () => {
-            const token = localStorage.getItem("token") || ""
-            const result = await api(`/wallet/deposits/${depositId}`, { token })
-            if (cancelled) return
-            if (!result?.ok) {
-                setDepositTracking({ status: "error", amount: 0, message: result?.msg || "To‘lov holatini tekshirib bo‘lmadi" })
-                return
-            }
-            setDepositTracking({ status: result.status, amount: Number(result.amount) || 0 })
-            if (result.status === "credited") {
-                const wallet = await api("/wallet", { token })
-                if (cancelled) return
-                if (wallet?.ok) {
-                    setForm((current) => ({ ...current, balance: Number(wallet.balance) || 0 }))
-                    setWalletTransactions(Array.isArray(wallet.transactions) ? wallet.transactions : [])
-                }
-                return
-            }
-            if ((result.status === "pending" || result.status === "processing") && attempts < 40) {
-                attempts += 1
-                timer = setTimeout(poll, 3000)
-            }
-        }
-        poll()
-        return () => {
-            cancelled = true
-            if (timer) clearTimeout(timer)
+    const refreshWallet = useCallback(async () => {
+        const wallet = await api("/wallet", { token: localStorage.getItem("token") || "" })
+        if (wallet?.ok) {
+            setForm((current) => ({ ...current, balance: Number(wallet.balance) || 0 }))
+            setWalletTransactions(Array.isArray(wallet.transactions) ? wallet.transactions : [])
         }
     }, [])
+
+    // Follows one deposit using ONLY the backend's status (which itself asks Payme). The browser never decides
+    // that a payment succeeded; the wallet is refreshed once the backend reports a final state.
+    const followDeposit = useCallback(async (depositId, { resumed = false, maxAttempts = 40 } = {}) => {
+        const run = ++depositRunRef.current
+        const token = localStorage.getItem("token") || ""
+        const reason = await trackDeposit({
+            depositId,
+            maxAttempts,
+            fetchStatus: async (id) => normalizeDepositResponse(await api(`/wallet/deposits/${id}`, { token })),
+            isCancelled: () => depositRunRef.current !== run,
+            onUpdate: (update) => setDepositTracking({ ...update, deposit_id: depositId, resumed, polling: true }),
+        })
+        if (depositRunRef.current !== run) return
+        setDepositTracking((current) => (current ? { ...current, polling: false } : current))
+        if (reason === "final") await refreshWallet()
+    }, [refreshWallet])
+
+    // Returning from Payme (?payme_deposit=<id>, never trusted) or coming back later with an unfinished deposit.
+    useEffect(() => {
+        if (window.location.search.includes("payme_deposit")) {
+            window.history.replaceState({}, "", window.location.pathname)
+        }
+        if (returnDepositId) {
+            followDeposit(returnDepositId)
+        } else {
+            const runAtStart = depositRunRef.current
+            api("/wallet/deposits", { token: localStorage.getItem("token") || "" }).then((list) => {
+                const open = pickResumableDeposit(Array.isArray(list) ? list : [])
+                if (open && depositRunRef.current === runAtStart) followDeposit(open.deposit_id, { resumed: true, maxAttempts: 1 })
+            })
+        }
+        return () => { depositRunRef.current += 1 }
+    }, [returnDepositId, followDeposit])
     useEffect(() => {
         const loadServices = async () => {
             const result = await api("/services", { token: localStorage.getItem("token") || "" })
@@ -248,25 +267,20 @@ export default function Profile() {
     const submitDeposit = async (event) => {
         event.preventDefault()
         setDepositError("")
-        const raw = String(depositAmount).trim()
-        if (!/^\d+$/.test(raw)) { setDepositError("Summani butun son (UZS) ko‘rinishida kiriting"); return }
-        const amount = Number(raw)
-        const min = Number(depositConfig?.min_amount || 1000)
-        const max = Number(depositConfig?.max_amount || 50000000)
-        if (amount < min || amount > max) {
-            setDepositError(`Summa ${min.toLocaleString("uz-UZ")} dan ${max.toLocaleString("uz-UZ")} UZS gacha bo‘lishi kerak`)
-            return
-        }
+        const checked = validateDepositAmount(depositAmount, depositConfig)
+        if (!checked.ok) { setDepositError(checked.error); return }
         setDepositLoading(true)
         const token = localStorage.getItem("token") || ""
-        const result = await api("/wallet/deposits", { method: "POST", body: { amount, provider: "payme" }, token })
-        if (result?.ok && typeof result.checkout_url === "string" && result.checkout_url.startsWith("https://")) {
+        const result = await api("/wallet/deposits", { method: "POST", body: { amount: checked.amount, provider: "payme" }, token })
+        if (result?.ok && isSafeCheckoutUrl(result.checkout_url)) {
             window.location.assign(result.checkout_url)
             return
         }
-        setDepositError(result?.msg || "To‘ldirishni boshlab bo‘lmadi. Keyinroq urinib ko‘ring")
+        if (result?.status === 503) setDepositConfig((current) => ({ ...(current || {}), enabled: false }))
+        setDepositError(result?.ok ? "Payme to‘lov sahifasini ochib bo‘lmadi. Keyinroq urinib ko‘ring" : (result?.msg || "To‘ldirishni boshlab bo‘lmadi. Keyinroq urinib ko‘ring"))
         setDepositLoading(false)
     }
+    const depositMessage = depositStatusMessage(depositTracking)
     const startEditing = () => {
         setSavedForm({ ...form })
         setSavedSkills([...skills])
@@ -672,13 +686,17 @@ export default function Profile() {
                                 <small>UZS</small>
                             </div>
                         </div>
-                        {depositTracking && (
-                            <div className={`profile-deposit-status ${depositTracking.status}`} role="status">
-                                {depositTracking.status === "credited" && `To‘lov tasdiqlandi: ${depositTracking.amount.toLocaleString("uz-UZ")} UZS hamyoningizga qo‘shildi.`}
-                                {(depositTracking.status === "pending" || depositTracking.status === "processing") && "To‘lov Payme tomonidan tasdiqlanishi kutilmoqda. Hamyon faqat tasdiqdan keyin to‘ldiriladi."}
-                                {["declined", "expired", "cancelled", "failed"].includes(depositTracking.status) && "To‘lov amalga oshmadi yoki bekor qilindi. Hamyoningiz to‘ldirilmadi."}
-                                {depositTracking.status === "reversed" && "To‘lov Payme tomonidan qaytarilgan. Administrator bilan bog‘laning."}
-                                {depositTracking.status === "error" && depositTracking.message}
+                        {depositMessage && (
+                            <div className={`profile-deposit-status ${depositMessage.tone}`} role="status" aria-live="polite">
+                                <span>{depositMessage.text}</span>
+                                {depositTracking.deposit_id && !depositTracking.polling && (isOpenDeposit(depositTracking) || depositTracking.status === "error") && (
+                                    <div className="profile-deposit-actions">
+                                        {isOpenDeposit(depositTracking) && isSafeCheckoutUrl(depositTracking.checkout_url) && (
+                                            <button type="button" className="btn btn-secondary" onClick={() => window.location.assign(depositTracking.checkout_url)}>To‘lovni davom ettirish</button>
+                                        )}
+                                        <button type="button" className="btn btn-secondary" onClick={() => followDeposit(depositTracking.deposit_id)}>Holatni yangilash</button>
+                                    </div>
+                                )}
                             </div>
                         )}
                         <div className="profile-wallet-controls">
@@ -686,6 +704,9 @@ export default function Profile() {
                                 <button type="button" className="profile-wallet-deposit-btn" onClick={() => { setDepositOpen((current) => !current); setDepositError("") }}>
                                     {depositOpen ? "Yopish" : "Walletni to‘ldirish"}
                                 </button>
+                            )}
+                            {depositConfig && !depositConfig.enabled && (
+                                <span className="profile-deposit-disabled">Payme orqali to‘ldirish hozircha mavjud emas.</span>
                             )}
                             <button type="button" className="profile-wallet-withdraw-btn" onClick={() => setWithdrawOpen((current) => !current)} disabled={walletLoading || Number(form.balance) <= 0}>
                                 {withdrawOpen ? "Yopish" : "Yechib olish"}
