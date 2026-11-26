@@ -31,7 +31,9 @@ frontend --GET /wallet/deposits/<id>--> backend (optionally asks Payme /api/stat
 Rules enforced by the code:
 
 * A wallet is credited **only** from an order with `order_status = approved` whose signature verifies, delivered
-  by the server callback or by a signed answer to our own status request. The browser return URL never changes state.
+  by the server callback or by a signed answer to our own status request, and only if it is a `purchase` whose
+  `amount` and `actual_amount` equal the stored tiyin amount in `UZS` (full list: "Callback validation rules").
+  The browser return URL never changes state.
 * Crediting is one database transaction (`BEGIN IMMEDIATE`): conditional `UPDATE wallet_deposits ... WHERE status IN
   ('pending','processing') AND credited_at IS NULL`, balance update, `wallet_transactions` row (`type='deposit'`),
   back-reference. Any failure rolls everything back; Payme then retries and the retry succeeds.
@@ -72,7 +74,7 @@ must look at it; the UI stops polling and never shows success for it.
 
 | Payme `order_status` | Local transition |
 |---|---|
-| `approved` | `pending/processing` -> `credited` (+wallet, +history). Already `credited` -> 200 idempotent. Any other state -> deposit flagged `review_required`, answered 200, **no credit** |
+| `approved` | Only after **all** checks in "Callback validation rules" pass (incl. `tran_type = purchase`, `actual_amount` = stored tiyin amount, `actual_currency = UZS`): `pending/processing` -> `credited` (+wallet, +history). Already `credited` -> 200 idempotent. Any other state -> deposit flagged `review_required`, answered 200, **no credit** |
 | `declined`, `expired` | `pending/processing` -> same status. Repeats -> 200. After `credited` -> flagged, 200, no change |
 | `created`, `processing` | informational |
 | `reversed` | `credited` -> `reversed`, flagged `review_required`; wallet is **not** auto-debited. `pending/processing` -> `reversed` (nothing was credited, nothing to undo) |
@@ -85,7 +87,7 @@ redirects are not followed, we never redirect):
 | Situation | Answer | Why |
 |---|---|---|
 | Credited, duplicate/already credited, declined/expired noted, stale `created`/`processing` | 200 | processed |
-| Signed callback we handled but did not apply: late `approved` after declined/expired/cancelled, `approved` with non-zero `reversal_amount`, partial reversal after credit, amount/actual_amount/currency/payment_id mismatch, unknown order, unknown status, `response_status != success` | **200** with `"flagged": true` | retrying the identical callback can never succeed; the deposit is set `review_required=1` with a note and an audit row is written |
+| Signed callback we handled but did not apply: late `approved` after declined/expired/cancelled, `approved` with non-zero `reversal_amount`, partial reversal after credit, amount/currency/payment_id mismatch, missing/invalid/mismatching `actual_amount` or `actual_currency` on `approved`, missing or wrong `tran_type`, unknown order, unknown status, `response_status != success` | **200** with `"flagged": true` | retrying the identical callback can never succeed; the deposit is set `review_required=1` with a note and an audit row is written |
 | Wrong `merchant_id`, test/live mode mismatch | 400 | operator-fixable configuration; keep Payme retrying |
 | Temporary database failure while crediting (rolled back) | 500 | Payme retries and the retry credits once |
 | Integration disabled / misconfigured | 503 | retry after configuration is fixed |
@@ -97,6 +99,59 @@ Audit trail: table `wallet_deposit_events` gets one row per callback/status-API 
 signature or raw payload is stored. Review queue: `SELECT * FROM wallet_deposits WHERE review_required=1`.
 A flagged deposit still in `pending` can still be credited by a later correct callback.
 Orders are created with `delayed=N` so each order has one terminal result.
+
+### Callback validation rules
+
+The same rules apply to the server callback (`POST /payments/payme/callback`) and to signed answers of our own
+status request (`/api/status/order_id`, used by `GET /wallet/deposits/<id>`). They run in this order; the first
+failure stops processing. Code: `_apply()`, `tran_type_problem()` and `approved_payment_problem()` in
+`backend/payme.py`.
+
+1. **Origin.** Integration enabled (else 503); optional IP allowlist (else 403); body is a JSON object (else 400).
+2. **Signature.** `signature` must be 40 hex chars and equal `sha1(key|values sorted by name)` over every
+   non-empty field Payme sent (constant-time compare). Anything else -> **403, nothing is read or written** (no
+   audit row, no review flag: unsigned data cannot even flag a deposit).
+3. **Deposit.** `order_id` must be a FinJob deposit id (32 hex) that exists. The wallet to credit is always
+   `wallet_deposits.user_id` of that row; any user/account field inside the callback is ignored.
+4. **Merchant and mode.** `merchant_id` = our `PAYME_MERCHANT_ID`; deposit test/live flag = current mode; in live mode
+   `additional_info.is_test` must not be true.
+5. **Order amount and currency.** `currency` must be `UZS` (missing -> rejected); `amount` must be an integer (or
+   digit string) exactly equal to the stored `amount_minor` (tiyin). Floats, signs, exponents -> rejected.
+6. **`response_status`** must be `success`.
+7. **`tran_type`** (documented values: `purchase`, `verification`, `p2p credit`, `p2p transfer`, `settlement`,
+   `reverse`; FinJob only creates `purchase` orders; compared case-insensitively after trimming):
+   * `approved`: **required** and must be `purchase` (missing -> `tran_type_missing`, other -> `tran_type_mismatch`).
+   * `reversed`: if present, `purchase` or `reverse` (the docs do not say which one a reversed order reports).
+   * `created` / `processing` / `declined` / `expired`: if present, must be `purchase`; absent is tolerated because
+     these never move money.
+8. **`payment_id`** digits only, and equal to the id already bound to the deposit (unique per provider).
+9. **`approved` only** (the only status that can credit):
+   * `actual_amount` **required**; must parse as a non-negative integer and equal the stored `amount_minor`
+     (`actual_amount_missing` / `actual_amount_invalid` / `actual_amount_mismatch`).
+   * `actual_currency` **required**; must be the string `UZS` (`actual_currency_missing` / `actual_currency_mismatch`).
+   * `reversal_amount`, if present, must be `0`.
+   * These checks run *before* the idempotent "already credited" answer, so an inconsistent approval for an
+     already-credited deposit is still flagged (and never credits twice).
+10. Only then the state machine runs and the atomic `BEGIN IMMEDIATE` credit transaction (conditional update on
+    `status IN ('pending','processing') AND credited_at IS NULL`, balance, `wallet_transactions` row) executes once.
+
+**Why `actual_amount` / `actual_currency` / `tran_type` are required for crediting although Payme marks no response
+field as mandatory.** docs.payme.uz/api/order-parameters has no "mandatory" column for response fields. It defines
+`approved` as funds being held on the payer's account, `actual_amount` as the amount actually held or charged and
+`actual_currency` as the currency actually authorized; every documented `approved` example (callbacks page,
+order-parameters, create-order) carries `tran_type: "purchase"`, `actual_amount` equal to `amount`, and
+`actual_currency: "UZS"`. Empty `actual_*` values appear in the docs only for non-approved orders (e.g. `expired`),
+which never credit and are not affected. A genuine approval therefore always has these values; if one ever arrives
+without them, FinJob does **not** guess: the deposit is held for review instead of being credited or silently lost.
+
+**How invalid callbacks are handled.** Invalid signature -> 403, ignored. Wrong merchant / mode, database error,
+integration disabled -> non-200 so Payme retries after the operator fixes it. Every other *signed but inconsistent*
+callback -> HTTP 200 `{"status": "<reason>", "flagged": true}` (so Payme stops retrying an identical payload that can
+never succeed), the deposit gets `review_required=1` and `review_note="callback not applied: <reason>"`, an audit row
+with `flagged=1` is written to `wallet_deposit_events`, an `ERROR` log line names the reason and deposit id (never the
+key, signature or card data), the wallet is **not** changed, and the UI shows the deposit as "under review" and stops
+polling Payme for it. Operators find them via `GET /admin/wallet-deposits?review=1`. A later fully valid callback for
+a still-pending flagged deposit can still credit it once.
 
 ## Configuration
 
@@ -133,6 +188,42 @@ test needs **test credentials from your own Payme merchant cabinet** (or from Pa
 5. Expect: redirect back to `/profile`, status "tasdiqlandi", balance +10 000, one `deposit` history row, one
    `credited` row in `wallet_deposit_events`.
 6. Automated tests (`python -m unittest test_suite`, `npm test` in `frontend/`) never contact Payme.
+
+### Automated (mock) tests vs. real Payme sandbox tests
+
+**Mock tests** (`backend/test_suite.py`, class `PaymeWalletTopUpTests`) replace `payme._http_post_json`, so no
+request ever leaves the machine. Callbacks are built and signed locally with the test key and posted to the Flask
+test client against a throw-away SQLite file (`test_payme.db`, deleted afterwards). They prove FinJob's own logic:
+signature algorithm, validation rules, state machine, idempotency, SQLite atomicity and concurrency. They **cannot**
+prove that Payme's servers accept our signature, send the fields we expect, or use the units we assume.
+
+```
+cd backend
+python -m unittest test_suite                                  # whole backend suite
+python -m unittest test_suite.PaymeWalletTopUpTests            # all Payme tests (mock)
+python -m unittest test_suite -k strict                        # only the strict callback-validation tests
+cd ../frontend && npm ci && npm test                           # frontend unit tests (deposit polling, mock)
+```
+
+The strict callback-validation tests (`test_strict_*`) cover: a valid purchase credits exactly once (string and integer
+amounts), duplicate approvals via callback and status-API path credit once, every non-`purchase`/missing/garbage
+`tran_type` is refused, missing `actual_amount` (absent, empty, null, blank) is held for review and a later complete
+callback still credits, wrong/invalid `actual_amount` values, missing/wrong `currency` and `actual_currency`, invalid
+signatures leave no trace, injected user fields cannot redirect a credit and a payment id cannot be reused for another
+user's deposit, 16 concurrent valid + invalid callbacks credit once, inconsistent approvals after a credit are flagged
+without a second credit, declined/expired/reversed handling with and without `tran_type`, and no secrets in logs.
+
+**Real Payme sandbox testing is still required** (needs test credentials from the FinJob merchant cabinet; the public
+test merchant rejects signatures, see above). Not yet done:
+
+* `payme_sandbox_check.py` passing (Payme accepts our signature on create-order and signs the status answer).
+* One full test-card payment with a reachable HTTPS callback: confirm the real `approved` callback contains
+  `tran_type: "purchase"`, `actual_amount` equal to `amount` in tiyin and `actual_currency: "UZS"`, and is credited
+  (not flagged). If a real approval is flagged `actual_amount_missing`, `actual_currency_missing` or
+  `tran_type_missing`, stop and ask Payme before relaxing any rule.
+* A declined test card (`declined` callback, no credit), an expired order, and a reversal from the cabinet: record
+  which `tran_type` the reversed order reports.
+* Duplicate delivery: let Payme retry (e.g. answer one callback with 500 once) and confirm a single credit.
 
 ## Before going live (merchant-side checklist)
 
@@ -214,6 +305,18 @@ Second audit (2026-11-25), confirmed and fixed:
 17. UI: added "continue payment" / "refresh status" for unfinished deposits, a delayed-callback state, network-error
     retries, a disabled-service note, and a review state. Success is still shown only for backend `credited`.
 
+Third review (2026-11-26), confirmed and fixed:
+
+18. An `approved` callback without `actual_amount` was credited (the check only ran when the field was present), and
+    a missing `actual_currency` was accepted. Both are now required for crediting and must equal the stored tiyin
+    amount and `UZS`; missing, malformed or different values are flagged for review, never credited.
+19. `tran_type` was not checked: a validly signed `approved` with `tran_type` `verification`, `p2p transfer`,
+    `reverse`, etc. (or none) would have credited the wallet. Crediting now requires `tran_type = purchase`; other
+    statuses refuse a present but unrelated `tran_type`.
+20. Hardening (no exploitable case found): non-string JSON values for enum fields (`order_status`, `tran_type`,
+    `actual_currency`: lists, objects, booleans) are now treated explicitly as missing/invalid instead of relying on
+    their stringified form never matching.
+
 Verified in code: signature string = key + non-empty params sorted by name, `|`-joined, excluding `signature` and
 `response_signature_string`, null/empty skipped, lowercase hex, constant-time compare; deposit status endpoints are
 owner-only (404 otherwise); `CREATE TABLE IF NOT EXISTS` migration leaves existing users, balances and
@@ -232,3 +335,7 @@ owner-only (404 otherwise); `CREATE TABLE IF NOT EXISTS` migration leaves existi
 9. Is the checkout host always `*.payme.uz`? (We refuse other hosts.)
 10. Do the contract and merchant category permit wallet top-ups (stored value), holding funds in escrow, and later payouts? What are per-transaction limits and settlement timing?
 11. How are test mode and live mode selected (merchant status only, or different base URLs)?
+12. Are `tran_type`, `actual_amount` and `actual_currency` always present in an `approved` callback and status answer
+    for a `purchase` order? (FinJob refuses to credit without them.) Can `actual_currency` ever be a numeric code (`860`)?
+13. Which `tran_type` does a fully reversed order report in its callback/status: `purchase` or `reverse`? Is a
+    reversal ever delivered as a separate order with `parent_order_id` set?

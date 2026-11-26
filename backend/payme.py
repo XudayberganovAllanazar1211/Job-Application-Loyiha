@@ -345,6 +345,65 @@ def _parse_amount(value):
     return None
 
 
+# Transaction types (docs.payme.uz/api/order-parameters, `tran_type`, "Supported values"): purchase, verification,
+# p2p credit, p2p transfer, settlement, reverse. FinJob only ever creates `purchase` orders.
+PAYME_PURCHASE_TRAN_TYPE = "purchase"
+# For a `reversed` order the docs do not say whether the original order keeps tran_type `purchase` or reports
+# `reverse`; both are accepted there (a reversal never adds money, it only closes or flags a deposit).
+_REVERSED_TRAN_TYPES = frozenset({"purchase", "reverse"})
+
+
+def _norm(value):
+    """Lower-cased, stripped string for enum-like fields; '' for missing/None or for non-scalar JSON values."""
+    if value is None or isinstance(value, (dict, list, bool)):
+        return ""
+    return str(value).strip().lower()
+
+
+def tran_type_problem(payload, order_status):
+    """Outcome name if `tran_type` is wrong for this order status, else None.
+
+    `approved` (the only status that credits a wallet) requires tran_type to be present and equal to "purchase"
+    (trimmed, case-insensitive).
+    Other statuses never credit; there a missing tran_type is tolerated, but a present value that does not fit a
+    FinJob purchase order (e.g. "verification", "p2p transfer") is inconsistent and is refused.
+    """
+    tran_type = _norm(payload.get("tran_type"))
+    if order_status == "approved":
+        if not tran_type:
+            return "tran_type_missing"
+        return None if tran_type == PAYME_PURCHASE_TRAN_TYPE else "tran_type_mismatch"
+    if not tran_type:
+        return None
+    allowed = _REVERSED_TRAN_TYPES if order_status == "reversed" else {PAYME_PURCHASE_TRAN_TYPE}
+    return None if tran_type in allowed else "tran_type_mismatch"
+
+
+def approved_payment_problem(payload, expected_minor):
+    """Outcome name if an `approved` order's charged amount/currency is not exactly what FinJob expects, else None.
+
+    docs.payme.uz/api/order-parameters: `approved` = "funds are held on the payer's account"; `actual_amount` =
+    "The actual amount held or charged from card"; `actual_currency` = "The actual currency authorized from card".
+    The docs mark no response field as mandatory, but every documented approved example carries both fields and a
+    payment that was really held has a held amount. So for crediting they are REQUIRED: missing, malformed or
+    different values never credit and are flagged for manual review (a later correct callback can still credit).
+    """
+    actual_raw = payload.get("actual_amount")
+    if actual_raw is None or (isinstance(actual_raw, str) and not actual_raw.strip()):
+        return "actual_amount_missing"
+    actual = _parse_amount(actual_raw)
+    if actual is None:
+        return "actual_amount_invalid"
+    if actual != expected_minor:
+        return "actual_amount_mismatch"
+    actual_cur = payload.get("actual_currency")
+    if actual_cur is None or (isinstance(actual_cur, str) and not actual_cur.strip()):
+        return "actual_currency_missing"
+    if not isinstance(actual_cur, str) or actual_cur.strip().upper() != "UZS":
+        return "actual_currency_mismatch"
+    return None
+
+
 def _payload_says_test(payload):
     """True when Payme marks the transaction as a test one (additional_info is a JSON *string* per the docs)."""
     info = payload.get("additional_info")
@@ -480,7 +539,10 @@ def register_payme_routes(app, db, auth, create_notification, enforce_block=None
 
         if str(payload.get("response_status", "")).strip().lower() != "success":
             return 400, {"status": "response_status_not_success"}
-        new_status = str(payload.get("order_status", "")).strip().lower()
+        new_status = _norm(payload.get("order_status"))
+        tran_problem = tran_type_problem(payload, new_status)
+        if tran_problem:
+            return 400, {"status": tran_problem}
         payment_id = str(payload.get("payment_id", "") or "").strip()
         stored_payment_id = row[6] or ""
         if payment_id and not _DIGITS_RE.match(payment_id):
@@ -490,12 +552,11 @@ def register_payme_routes(app, db, auth, create_notification, enforce_block=None
         now = _iso(_now())
 
         if new_status == "approved":
-            actual = payload.get("actual_amount")
-            if actual not in (None, "") and _parse_amount(actual) != amount_minor:
-                return 400, {"status": "actual_amount_mismatch"}
-            actual_cur = str(payload.get("actual_currency", "") or "").upper()
-            if actual_cur not in ("", "UZS"):
-                return 400, {"status": "actual_currency_mismatch"}
+            # Checked before the idempotent "already_credited" answer on purpose: an inconsistent approval is
+            # always surfaced for review, even for a deposit that is already credited.
+            payment_problem = approved_payment_problem(payload, amount_minor)
+            if payment_problem:
+                return 400, {"status": payment_problem}
             reversal = payload.get("reversal_amount")
             if reversal not in (None, "") and _parse_amount(reversal) != 0:
                 # approved but (partially) reversed: do not credit, a human must decide.

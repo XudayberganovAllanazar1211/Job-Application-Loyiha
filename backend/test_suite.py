@@ -2757,6 +2757,290 @@ class PaymeWalletTopUpTests(unittest.TestCase):
         self.assertEqual(self.balance(uid2), 100000)
         self.assertEqual(main.db.q("SELECT status FROM wallet_deposits WHERE deposit_uuid=?", (dep,)).fetchone()[0], "credited")
 
+    # =====================================================================================================
+    # Strict approved-callback validation: tran_type, actual_amount, actual_currency (2026-11-26)
+    # All of these are MOCK tests: signed payloads built locally, no request ever reaches Payme.
+    # =====================================================================================================
+    @staticmethod
+    def resign(body, drop=(), **changes):
+        """Copy of a callback with fields changed/removed, then *validly* signed (models a genuine Payme
+        signature over inconsistent data, i.e. the worst case: the signature check alone cannot catch it)."""
+        out = {k: v for k, v in body.items() if k != "signature" and k not in drop}
+        out.update(changes)
+        out["signature"] = payme.payme_signature(PAYME_KEY, out)
+        return out
+
+    def review_state(self, dep):
+        return tuple(main.db.q("SELECT status,review_required,review_note FROM wallet_deposits WHERE deposit_uuid=?",
+                               (dep,)).fetchone())
+
+    def assert_flagged_not_credited(self, res, dep, outcome, label="", balance=0, txs=0):
+        self.assertEqual(res.status_code, 200, label)  # signed + handled: 200 so Payme stops retrying
+        data = res.get_json()
+        self.assertEqual((data["status"], data.get("flagged")), (outcome, True), label)
+        status, review, note = self.review_state(dep)
+        self.assertEqual((status, review), ("pending", 1), label)
+        self.assertIn(outcome, note, label)
+        self.assertEqual(self.balance(), balance, label)
+        self.assertEqual(len(self.deposit_txs()), txs, label)
+
+    def test_strict_valid_purchase_callback_credits_exactly_once(self):
+        dep = self.create_deposit(5000).get_json()["deposit_id"]
+        payload = _docs_shaped_callback(dep, 500000, self._next_payment_id())  # documented field set, tiyin
+        payload["signature"] = payme.payme_signature(PAYME_KEY, payload)
+        self.assertEqual((payload["tran_type"], payload["actual_amount"], payload["actual_currency"]),
+                         ("purchase", "500000", "UZS"))
+        res = self.post_raw_json(payload)
+        self.assertEqual((res.status_code, res.get_json()["status"]), (200, "credited"))
+        self.assertEqual(self.balance(), 5000)
+        self.assertEqual(len(self.deposit_txs()), 1)
+        self.assertEqual(self.review_state(dep)[:2], ("credited", 0))
+        # actual_amount as a JSON integer (documented type integer(12)) is accepted too
+        dep2 = self.create_deposit(1000).get_json()["deposit_id"]
+        as_int = self.resign(_docs_shaped_callback(dep2, 100000, self._next_payment_id()), amount=100000, actual_amount=100000)
+        self.assertEqual(self.post_raw_json(as_int).get_json()["status"], "credited")
+        self.assertEqual(self.balance(), 6000)
+
+    def test_strict_duplicate_approved_via_callback_and_status_api_credits_once(self):
+        dep, body = self.pay(100000)
+        self.assertEqual(self.send_callback(body).get_json()["status"], "credited")
+        for _ in range(3):
+            self.assertEqual(self.send_callback(body).get_json()["status"], "already_credited")
+        # The status endpoint does not reconcile a credited deposit, so feed the same signed order data through the
+        # status-API code path directly: that path is idempotent too.
+        apply = app.config["FINJOB_PAYME_APPLY"]
+        code, data = apply(dict(body), "status_api", payme.load_config())
+        self.assertEqual((code, data["status"]), (200, "already_credited"))
+        self.assertEqual(self.balance(), 100000)
+        self.assertEqual(len(self.deposit_txs()), 1)
+
+    def test_strict_wrong_tran_type_never_credits(self):
+        for i, bad in enumerate(("verification", "p2p credit", "p2p transfer", "settlement", "reverse", "refund",
+                                 "purchase2", "purchas", "", None, 1, ["purchase"], {"t": "purchase"}, True)):
+            with main._rate_lock:
+                main._rate_buckets.clear()
+            dep, body = self.pay(100000)
+            res = self.send_callback(self.resign(body, tran_type=bad))
+            expected = "tran_type_missing" if bad in ("", None) or isinstance(bad, (list, dict, bool)) else "tran_type_mismatch"
+            self.assert_flagged_not_credited(res, dep, expected, repr(bad))
+            # leave room under the open-deposit limit: close this one as declined (genuine purchase decline)
+            self.send_callback(self.callback_payload(dep, 100000, status="declined", payment_id=body["payment_id"]))
+        dep, body = self.pay(100000)
+        res = self.send_callback(self.resign(body, drop=("tran_type",)))  # field absent altogether
+        self.assert_flagged_not_credited(res, dep, "tran_type_missing")
+        # a later genuine purchase callback for the same deposit still credits (legitimate flow not broken)
+        self.assertEqual(self.send_callback(body).get_json()["status"], "credited")
+        self.assertEqual(self.balance(), 100000)
+        self.assertEqual(len(self.deposit_txs()), 1)
+
+    def test_strict_tran_type_case_and_whitespace_are_normalised(self):
+        dep, body = self.pay(100000)
+        self.assertEqual(self.send_callback(self.resign(body, tran_type=" Purchase ")).get_json()["status"], "credited")
+        self.assertEqual(self.balance(), 100000)
+
+    def test_strict_missing_actual_amount_is_not_credited_and_flagged(self):
+        # docs.payme.uz marks no response field mandatory, but `approved` means funds are held and every
+        # documented approved example carries actual_amount: FinJob requires it for crediting.
+        variants = ({"drop": ("actual_amount",)}, {"actual_amount": ""}, {"actual_amount": None}, {"actual_amount": "   "})
+        for i, variant in enumerate(variants):
+            with main._rate_lock:
+                main._rate_buckets.clear()
+            dep, body = self.pay(100000)
+            res = self.send_callback(self.resign(body, **variant))
+            self.assert_flagged_not_credited(res, dep, "actual_amount_missing", repr(variant), balance=100000 * i, txs=i)
+            # the genuine, complete callback afterwards credits exactly once
+            self.assertEqual(self.send_callback(body).get_json()["status"], "credited", repr(variant))
+            self.assertEqual(self.balance(), 100000 * (i + 1), repr(variant))
+            self.assertEqual(len(self.deposit_txs()), i + 1)
+
+    def test_strict_missing_actual_amount_from_status_api_is_not_credited(self):
+        dep, body = self.pay(100000)
+        incomplete = self.resign(body, drop=("actual_amount", "actual_currency"))
+        self.status_answer = lambda order_id: self.signed_status(incomplete)
+        view = self.client.get(f"/wallet/deposits/{dep}", headers=self.auth()).get_json()
+        self.assertEqual(view["status"], "pending")
+        self.assertTrue(view["under_review"])
+        self.assertEqual(self.balance(), 0)
+        self.assertEqual(self.review_state(dep)[1], 1)
+
+    def test_strict_incorrect_actual_amount_is_rejected(self):
+        cases = {
+            "actual_amount_mismatch": ("9999999", "10000001", "100000", "1000000000", "0", 9999999, 0),
+            "actual_amount_invalid": ("-10000000", "10000000.0", "1e7", "10 000 000", "abc", 10000000.0, -1,
+                                      True, False, [10000000], {"v": 10000000}),
+        }
+        for outcome, values in cases.items():
+            for value in values:
+                with main._rate_lock:
+                    main._rate_buckets.clear()
+                dep, body = self.pay(100000)
+                res = self.send_callback(self.resign(body, actual_amount=value))
+                self.assert_flagged_not_credited(res, dep, outcome, repr(value))
+                self.send_callback(self.callback_payload(dep, 100000, status="declined", payment_id=body["payment_id"]))
+        # amount right but actual_amount wrong, and the reverse: both refused
+        dep, body = self.pay(100000)
+        self.assert_flagged_not_credited(self.send_callback(self.resign(body, amount="10000000", actual_amount="5000000")),
+                                         dep, "actual_amount_mismatch")
+        dep2, body2 = self.pay(100000)
+        res = self.send_callback(self.resign(body2, amount="5000000", actual_amount="10000000"))
+        self.assertEqual((res.status_code, res.get_json()["status"]), (200, "amount_mismatch"))
+        self.assertEqual(self.balance(), 0)
+
+    def test_strict_missing_or_incorrect_currency_is_rejected(self):
+        cases = [
+            ({"drop": ("currency",)}, "currency_mismatch"),
+            ({"currency": ""}, "currency_mismatch"),
+            ({"currency": "USD"}, "currency_mismatch"),
+            ({"currency": "860"}, "currency_mismatch"),  # ISO numeric code is not what Payme documents
+            ({"drop": ("actual_currency",)}, "actual_currency_missing"),
+            ({"actual_currency": ""}, "actual_currency_missing"),
+            ({"actual_currency": None}, "actual_currency_missing"),
+            ({"actual_currency": "USD"}, "actual_currency_mismatch"),
+            ({"actual_currency": "860"}, "actual_currency_mismatch"),
+            ({"actual_currency": "UZS2"}, "actual_currency_mismatch"),
+            ({"actual_currency": 860}, "actual_currency_mismatch"),
+            ({"actual_currency": ["UZS"]}, "actual_currency_mismatch"),
+        ]
+        for variant, outcome in cases:
+            with main._rate_lock:
+                main._rate_buckets.clear()
+            dep, body = self.pay(100000)
+            self.assert_flagged_not_credited(self.send_callback(self.resign(body, **variant)), dep, outcome, repr(variant))
+            self.send_callback(self.callback_payload(dep, 100000, status="declined", payment_id=body["payment_id"]))
+        dep, body = self.pay(100000)  # lower-case "uzs" is the same currency
+        self.assertEqual(self.send_callback(self.resign(body, currency="uzs", actual_currency="uzs")).get_json()["status"],
+                         "credited")
+        self.assertEqual(self.balance(), 100000)
+
+    def test_strict_invalid_signature_never_credits_or_changes_state(self):
+        dep, body = self.pay(100000)
+        events_before = len(self.events(dep))
+        for forged in (dict(body, signature="0" * 40),
+                       dict(body, signature=payme.payme_signature("wrong-key", body)),
+                       {k: v for k, v in body.items() if k != "signature"},
+                       dict(body, actual_amount="1")):  # tampered after a valid signature
+            self.assertEqual(self.send_callback(forged).status_code, 403)
+        self.assertEqual(self.review_state(dep)[:2], ("pending", 0))  # unsigned data cannot even flag a deposit
+        self.assertEqual(len(self.events(dep)), events_before)
+        self.assertEqual(self.balance(), 0)
+        self.assertEqual(self.send_callback(body).get_json()["status"], "credited")
+
+    def test_strict_callback_cannot_credit_another_users_wallet(self):
+        victim_token, victim_uid = self.make_user(f"payme_victim_{PaymeWalletTopUpTests._seq}")
+        dep, body = self.pay(100000)  # deposit owned by self.uid
+        # extra, validly signed fields naming another user are ignored: the owner comes from wallet_deposits only
+        injected = self.resign(body, user_id=victim_uid, account={"user_id": victim_uid}, merchant_data=str(victim_uid))
+        self.assertEqual(self.send_callback(injected).get_json()["status"], "credited")
+        self.assertEqual(self.balance(), 100000)
+        self.assertEqual(self.balance(victim_uid), 0)
+        # a callback signed for the victim's deposit, re-pointed at ours, fails the signature
+        victim_dep = self.create_deposit(100000, token=victim_token).get_json()["deposit_id"]
+        victim_cb = self.callback_payload(victim_dep, 100000, payment_id=self._next_payment_id())
+        self.assertEqual(self.send_callback(dict(victim_cb, order_id=dep)).status_code, 403)
+        # the victim's own genuine callback credits the victim, never the attacker, and only once
+        self.assertEqual(self.send_callback(victim_cb).get_json()["status"], "credited")
+        self.assertEqual((self.balance(), self.balance(victim_uid)), (100000, 100000))
+        # reusing the payment_id already bound to our deposit on the victim's deposit is refused (unique per provider)
+        other_victim_dep = self.create_deposit(50000, token=victim_token).get_json()["deposit_id"]
+        reuse = self.callback_payload(other_victim_dep, 50000, payment_id=body["payment_id"])
+        self.assertEqual(self.send_callback(reuse).get_json()["status"], "payment_id_conflict")
+        self.assertEqual((self.balance(), self.balance(victim_uid)), (100000, 100000))
+
+    def test_strict_concurrent_duplicate_and_invalid_callbacks_credit_once(self):
+        dep, body = self.pay(300000)
+        bad = [self.resign(body, tran_type="verification"), self.resign(body, drop=("actual_amount",)),
+               self.resign(body, actual_amount="1"), self.resign(body, actual_currency="USD")]
+        payloads = [body] * 8 + bad * 2
+        results = []
+        lock = threading.Lock()
+
+        def hit(p):
+            with app.test_client() as c:
+                r = c.post("/payments/payme/callback", json=p)
+                with lock:
+                    results.append((r.status_code, (r.get_json(silent=True) or {}).get("status")))
+
+        threads = [threading.Thread(target=hit, args=(p,)) for p in payloads]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertTrue(all(code in (200, 500) for code, _ in results), results)
+        self.assertLessEqual(sum(1 for r in results if r == (200, "credited")), 1, results)
+        if not any(r == (200, "credited") for r in results):  # every genuine attempt hit a transient lock: retry
+            self.assertEqual(self.send_callback(body).get_json()["status"], "credited")
+        self.assertEqual(self.send_callback(body).get_json()["status"], "already_credited")
+        self.assertEqual(self.balance(), 300000)
+        self.assertEqual(len(self.deposit_txs()), 1)
+        self.assertEqual(self.review_state(dep)[:2], ("credited", 1))  # the invalid ones were surfaced for review
+
+    def test_strict_inconsistent_approval_after_credit_is_flagged_without_second_credit(self):
+        dep, body = self.pay(100000)
+        self.assertEqual(self.send_callback(body).get_json()["status"], "credited")
+        res = self.send_callback(self.resign(body, actual_amount="20000000"))
+        self.assertEqual((res.status_code, res.get_json()["status"], res.get_json()["flagged"]),
+                         (200, "actual_amount_mismatch", True))
+        self.assertEqual(self.review_state(dep)[:2], ("credited", 1))
+        self.assertEqual(self.balance(), 100000)
+        self.assertEqual(len(self.deposit_txs()), 1)
+
+    def test_strict_existing_decline_expiry_reversal_and_review_still_work(self):
+        # declined / expired without actual_amount (as documented) and with or without tran_type
+        for status, drop in (("declined", ()), ("expired", ()), ("declined", ("tran_type",)), ("expired", ("tran_type",))):
+            with main._rate_lock:
+                main._rate_buckets.clear()
+            dep, body = self.pay(100000)
+            p = self.resign(_docs_shaped_callback(dep, 10000000, body["payment_id"], status=status), drop=drop)
+            self.assertEqual(p.get("actual_amount", ""), "")
+            res = self.post_raw_json(p)
+            self.assertEqual((res.status_code, res.get_json()["status"]), (200, status), (status, drop))
+            self.assertEqual(self.review_state(dep)[:2], (status, 0))
+        # a decline that is not for a purchase is inconsistent for a FinJob order: flagged, deposit left open
+        dep, body = self.pay(100000)
+        res = self.send_callback(self.callback_payload(dep, 100000, status="declined", payment_id=body["payment_id"],
+                                                       tran_type="verification"))
+        self.assertEqual((res.status_code, res.get_json()["status"], res.get_json()["flagged"]), (200, "tran_type_mismatch", True))
+        self.assertEqual(self.review_state(dep)[:2], ("pending", 1))
+        self.send_callback(self.callback_payload(dep, 100000, status="declined", payment_id=body["payment_id"]))
+        # reversal: accepted with tran_type "purchase", "reverse" or absent, before and after credit, never a debit
+        for tran in ("purchase", "reverse", None):
+            with main._rate_lock:
+                main._rate_buckets.clear()
+            dep, body = self.pay(100000)
+            rev = self.callback_payload(dep, 100000, status="reversed", payment_id=body["payment_id"],
+                                        actual_amount="10000000", reversal_amount="10000000")
+            rev = self.resign(rev, drop=("tran_type",)) if tran is None else self.resign(rev, tran_type=tran)
+            self.assertEqual(self.send_callback(rev).get_json()["status"], "reversed", tran)
+            self.assertEqual(self.send_callback(body).get_json()["status"], "invalid_transition")  # never credits later
+            dep2, body2 = self.pay(100000)
+            self.assertEqual(self.send_callback(body2).get_json()["status"], "credited")
+            rev2 = self.callback_payload(dep2, 100000, status="reversed", payment_id=body2["payment_id"])
+            rev2 = self.resign(rev2, drop=("tran_type",)) if tran is None else self.resign(rev2, tran_type=tran)
+            self.assertEqual(self.send_callback(rev2).get_json()["status"], "reversed_flagged", tran)
+            self.assertEqual(self.review_state(dep2)[:2], ("reversed", 1))
+        # balance = the three credited deposits; reversals after credit are flagged, never auto-debited
+        self.assertEqual(self.balance(), 300000)
+        self.assertEqual(len(self.deposit_txs()), 3)
+        # a reversal with an unrelated tran_type is refused
+        dep, body = self.pay(100000)
+        res = self.send_callback(self.callback_payload(dep, 100000, status="reversed", payment_id=body["payment_id"],
+                                                       tran_type="p2p transfer"))
+        self.assertEqual(res.get_json()["status"], "tran_type_mismatch")
+        self.assertEqual(self.review_state(dep)[:2], ("pending", 1))
+        # review queue lists the flagged deposits for an operator
+        listed = self.client.get("/admin/wallet-deposits?review=1", headers=self.auth(self.admin_token())).get_json()
+        self.assertIn(dep, [d["deposit_id"] for d in listed])
+
+    def test_strict_validation_logs_and_responses_contain_no_secrets(self):
+        dep, body = self.pay(100000)
+        with self.assertLogs(app.logger, level="ERROR") as logs:
+            res = self.send_callback(self.resign(body, drop=("actual_amount",)))
+        text = "\n".join(logs.output) + res.get_data(as_text=True)
+        self.assertNotIn(PAYME_KEY, text)
+        self.assertNotIn(body["signature"], text)
+        self.assertNotIn("444455XXXXXX1111", text)
+        self.assertIn("actual_amount_missing", text)
+
 
 def urlencode_body(body):
     from urllib.parse import urlencode
