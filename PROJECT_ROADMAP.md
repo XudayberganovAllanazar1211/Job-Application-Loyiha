@@ -86,3 +86,8 @@ Status: implemented and regression-tested.
 - CI/CD.
 - HTTPS, domain, CDN/object storage.
 - Staging and production deployment.
+
+## Payments status (wallet top-ups)
+- Implemented: Payme hosted-checkout wallet deposits (`backend/payme.py`, test mode verified only against mocks).
+- Not implemented: real bank-card withdrawals (`/wallet/withdraw` is still a simulated balance debit), automatic handling of Payme reversals, legal/contract approval of stored balances and escrow.
+- Details: `docs/PAYME_INTEGRATION.md`.
